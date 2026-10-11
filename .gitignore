@@ -1,0 +1,18 @@
+# Personal info: never publish
+identity.py
+
+# What the agent did and fetched on MY machine
+audit.log
+downloads/
+sandbox/
+
+# Python and editor clutter
+__pycache__/
+*.pyc
+*.part
+
+# Old backup copies (git keeps history instead)
+*_v[0-9]*.py
+*_pre_*.py
+*_backup*.py
+*_before_*.py
