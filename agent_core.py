@@ -3,6 +3,7 @@ import time
 from datetime import datetime
 from ollama import chat
 from pathlib import Path
+import fetch
 from fetch import fetch_page
 from download import download_file
 
@@ -148,7 +149,18 @@ def compact(messages, model, log=print):
     return True
 
 
-def run_turn(messages, user_text, ask_approval, log=print, model=MODEL):
+def forget_sites():
+    """New chat: forget every website you allowed during the old one."""
+    fetch.session_hosts.clear()
+
+
+def stopped(stop_event):
+    """True once the person pressed Stop. Checked BETWEEN steps: a step that is
+    already running (a model reply, a fetch) finishes, then nothing new starts."""
+    return stop_event is not None and stop_event.is_set()
+
+
+def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_event=None):
     """Run one user message through the model/tool loop.
 
     messages:      the conversation so far (this function adds to it)
@@ -165,6 +177,9 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL):
     total = 0.0
 
     for _ in range(MAX_ROUNDS):
+        if stopped(stop_event):
+            audit("stopped", "-", {}, model, note="before asking the model again")
+            return "(stopped by you)", total
         compact(messages, model, log)      # squeeze old messages if the conversation is too long
         t0 = time.perf_counter()
         response = chat(model=model, messages=messages,
@@ -180,16 +195,50 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL):
             name = tc.function.name
             args = tc.function.arguments
 
+            if stopped(stop_event):        # the model asked, but you pressed Stop: do not run it
+                audit("stopped", name, args, model, note="tool not run")
+                messages.append({'role': 'tool', 'tool_name': name,
+                                 'content': "Error: stopped by the user"})
+                continue
+
             if name not in available_functions:
                 audit("unknown_tool", name, args, model)
+                log(f"[blocked] {name}: not a tool the agent is allowed to use")
                 messages.append({'role': 'tool', 'tool_name': name,
                                  'content': "Error: unknown tool"})
                 continue
 
-            if name in NEEDS_APPROVAL and not ask_approval(name, args):
+            site_ok_now = False
+            url = str(args.get("url", "")) if isinstance(args, dict) else ""
+            if name == "fetch_page" and not fetch.is_allowed(url):
+                host, problem = fetch.check_new_site(url)    # code reads the site name, not the model
+                if problem:
+                    audit("site_refused", name, args, model, note=problem)
+                    log(f"[blocked] {name} {url[:120]}: {problem}")
+                    messages.append({'role': 'tool', 'tool_name': name,
+                                     'content': f"Error: {problem}"})
+                    continue
+                if not ask_approval("new_site", {"host": host, "url": url}):
+                    audit("site_denied", name, args, model, note=host)
+                    log(f"[blocked] {name} {host}: you clicked No")
+                    messages.append({'role': 'tool', 'tool_name': name,
+                                     'content': "Error: the user did not allow this website"})
+                    continue
+                fetch.session_hosts.add(host)
+                audit("site_allowed", name, args, model, note=host)
+                site_ok_now = True          # that popup already covered this one fetch
+
+            if name in NEEDS_APPROVAL and not site_ok_now and not ask_approval(name, args):
                 audit("denied", name, args, model)
+                log(f"[blocked] {name}: you clicked No")
                 messages.append({'role': 'tool', 'tool_name': name,
                                  'content': "Error: user denied this action"})
+                continue
+
+            if stopped(stop_event):        # last check, right before the tool runs
+                audit("stopped", name, args, model, note="tool not run")
+                messages.append({'role': 'tool', 'tool_name': name,
+                                 'content': "Error: stopped by the user"})
                 continue
 
             audit("approved" if name in NEEDS_APPROVAL else "ran_without_asking", name, args, model)

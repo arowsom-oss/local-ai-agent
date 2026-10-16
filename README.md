@@ -40,6 +40,18 @@ Anything risky (reading a file, contacting the internet, saving a download) show
   authority would be privilege escalation.
 - **No network exposure.** Ollama has no login, so its port stays on `127.0.0.1`.
 
+- **Stop button.** Pressing Stop (or Esc) sets a flag that the loop checks before every model call and right
+  before every tool runs, so a reply that asks for several tools can't sneak the rest through.
+- **New websites need a popup.** A site that is not on the allowlist can be approved read-only, for this chat only.
+  The site name in the popup is read by code from the URL, never written by the model, and the list of approved
+  sites is not a tool parameter, so the model has no way to add one itself. Raw IP addresses, `localhost`, `.local`
+  and similar names are refused before any popup (that attack is called SSRF).
+- **DNS rebinding blocked.** Before fetching or downloading, the code looks the site up once, refuses it if *any*
+  address is private or local, then connects to the exact IP it checked while still verifying the HTTPS certificate
+  against the real site name.
+- **Refusals show in the chat.** When code blocks something, an orange "Blocked:" line says so, so a code refusal
+  can't be mistaken for the model refusing on its own.
+
 ## Run it
 
 1. Install [Ollama](https://ollama.com) and pull a model: `ollama pull gemma4:e2b`

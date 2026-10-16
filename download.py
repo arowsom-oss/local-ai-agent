@@ -1,8 +1,9 @@
-﻿import re
+import re
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 import httpx
+from fetch import safe_ip   # same DNS check fetch uses: one lookup, all IPs public
 
 # ---- the rules (all enforced in code, not in a prompt) ------------------
 DOWNLOAD_DIR = Path("C:/dev/agent/downloads")   # the ONLY place this tool writes
@@ -75,12 +76,21 @@ def download_file(url: str, filename: str) -> str:
     if Path(name).suffix.lower() not in ALLOWED_EXTENSIONS:
         return "Error: that file type is not allowed"
 
-    # 3. Download, counting bytes as they arrive
+    # 3. Look the name up ONCE and check every IP (see fetch.safe_ip)
+    try:
+        ip = safe_ip(host)
+    except ValueError as e:
+        return f"Error: {e}"
+    ip_text = f"[{ip}]" if ip.version == 6 else str(ip)
+    pinned = parsed._replace(netloc=ip_text).geturl()   # connect to the IP we checked
+
+    # 4. Download, counting bytes as they arrive
     written = 0
     try:
         DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
-        with httpx.stream("GET", str(url), follow_redirects=False, timeout=10,
-                          headers={"User-Agent": USER_AGENT}) as r:
+        with httpx.Client(follow_redirects=False, timeout=10) as client, \
+             client.stream("GET", pinned, headers={"User-Agent": USER_AGENT, "Host": host},
+                           extensions={"sni_hostname": host}) as r:
             if r.status_code == 403:
                 return ("Error: the server answered 403 (forbidden). Some sites, like Wikipedia, "
                         "want a User-Agent with contact info: check identity.py")
