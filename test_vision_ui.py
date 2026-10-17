@@ -17,6 +17,7 @@ def buttons(parent):
 
 
 if __name__ == "__main__":
+    ui.build_window()
     data = BytesIO()
     Image.new("RGB", (1200, 800), "navy").save(data, format="PNG")
     image = vision_input.prepare_image(data.getvalue())
@@ -33,7 +34,7 @@ if __name__ == "__main__":
                 child.destroy()
 
     ui.root.report_callback_exception = callback_error
-    for text in ("Screenshot", "Attach image", "Clear image", "Free VRAM"):
+    for text in ("Screenshot", "Attach image", "Clear image", "Free VRAM", "Practice", "Attach clip", "Model check"):
         button = next(b for b in buttons(ui.root) if b.cget("text") == text)
         assert button.winfo_ismapped() and button.winfo_width() > 10
 
@@ -52,6 +53,29 @@ if __name__ == "__main__":
             ui.root.after(250, lambda value=action: act(value))
             assert ui.preview_image(image) is expected
             assert not errors, errors
+        # Redaction/crop changes the payload delivered by approval, not merely
+        # an overlay painted on top of the original image.
+        accepted = []
+
+        def edit_and_accept():
+            win = next(w for w in ui.root.winfo_children() if isinstance(w, ui.tk.Toplevel))
+            canvas = next(w for w in win.winfo_children() if isinstance(w, ui.tk.Canvas))
+            canvas.event_generate("<ButtonPress-1>", x=10, y=10)
+            canvas.event_generate("<ButtonRelease-1>", x=30, y=30)
+            next(b for b in buttons(win) if b.cget("text") == "Use this image").invoke()
+
+        ui.root.after(250, edit_and_accept)
+        assert ui.preview_image(image, on_approve=accepted.append) is True
+        assert accepted and accepted[0].png != image.png
+        with Image.open(BytesIO(accepted[0].png)) as redacted:
+            assert redacted.getpixel((40, 40)) == (0, 0, 0)
+        # The independent emergency watcher must close a modal wait loop even
+        # when the ordinary event poll is waiting for approval.
+        ui.pending_image = image
+        ui.root.after(250, lambda: (ui.stop_event.set(), ui.emergency_ui.set()))
+        assert ui.preview_image(image) is False
+        assert ui.pending_image is None
+        ui.stop_event.clear()
         ui.pending_image = image
         ui.clear_image()
         assert ui.pending_image is None

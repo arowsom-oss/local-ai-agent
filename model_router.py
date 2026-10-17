@@ -14,6 +14,7 @@ IDLE_KEEP_ALIVE = "60s"
 _lock = threading.RLock()
 _client = None
 _active = None
+_reasoning_hold = 0  # Reuse a reasoning model for two follow-ups; avoid classifier load churn.
 _SCHEMA = {"type": "object", "properties": {"task": {
     "type": "string", "enum": ["general", "reasoning"]}},
     "required": ["task"], "additionalProperties": False}
@@ -63,8 +64,9 @@ def chat(*, model, **kwargs):
 
 def release_models() -> str:
     """Unload the model this manager last used; do not delete its weights from disk."""
-    global _active
+    global _active, _reasoning_hold
     with _lock:
+        _reasoning_hold = 0
         if _active is None:
             return "No managed model is loaded."
         try:
@@ -77,9 +79,15 @@ def release_models() -> str:
 
 def choose_model(text: str, *, has_image=False, log=lambda line: None) -> str:
     """A small classifier suggests a role; code validates it and chooses the model."""
+    global _reasoning_hold
     if has_image:
         log(f"[route] image -> {VISION_MODEL} (fixed vision route)")
         return VISION_MODEL
+    with _lock:
+        if _active == REASONING_MODEL and _reasoning_hold > 0:
+            _reasoning_hold -= 1
+            log(f"[route] reuse {REASONING_MODEL}; {_reasoning_hold} follow-up holds remain")
+            return REASONING_MODEL
     task = "general"
     try:
         response = chat(model=FAST_MODEL, tools=[], think=False, format=_SCHEMA,
@@ -102,5 +110,7 @@ def choose_model(text: str, *, has_image=False, log=lambda line: None) -> str:
     except Exception:
         log("[route] classifier unavailable or invalid; using the small local model")
     model = REASONING_MODEL if task == "reasoning" else FAST_MODEL
+    with _lock:
+        _reasoning_hold = 2 if model == REASONING_MODEL else 0
     log(f"[route] {task} -> {model}")
     return model

@@ -1,0 +1,10 @@
+-r requirements.txt
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.11.0+cu128
+comtypes==1.4.17
+av==19.0.1
+faster-whisper==1.2.1
+diffusers==0.41.0
+transformers==5.20.1
+accelerate==1.15.0
+safetensors==0.8.0

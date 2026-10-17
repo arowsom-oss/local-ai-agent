@@ -1,134 +1,69 @@
-# Validation
+# Validation of the practice and media build
 
-Checked on Windows with Python 3.12.10, Playwright 1.64.0, HTTPX 0.28.1 and
-Ollama's Python package 0.6.3. The existing installed Chromium was used.
+Windows, Python 3.12.10, Playwright 1.64.0, HTTPX 0.28.1, Ollama package 0.6.3,
+Pillow 12.3.0. An isolated development venv adds the versions pinned in
+requirements-computer.txt. PyTorch 2.11.0+cu128 recognized the RTX 5070 Ti Laptop GPU.
+No server configuration, security settings, original Downloads files or
+C:/dev/agent source files were changed.
 
-## Current vision and model-routing checks
+## Automated checks
 
-- 95 offline plain-assert tests passed: the prior 72 plus 23 model/vision tests.
-  The new suite needs Pillow but uses fake inference, networking and capture.
-- Cases cover fixed local endpoint despite OLLAMA_HOST/proxies, model allowlist,
-  malformed/extra-key routing output, missing models, unload ordering/failure,
-  serialized caller threads, vision capability checks, exact-URL consent after
-  auto routing, image dimensions/metadata stripping, invalid/oversize/animated
-  image refusal, stop behavior, no image-tool execution, no pixel history/audit,
-  capture consent and No-default preview behavior.
-- Real Windows/Tk fixture passed: new controls visible, synthetic image displayed,
-  No focused and visible, Enter/Escape denied, explicit Use approved, Clear removed
-  the pending image. No actual desktop capture was performed.
-- Live local Ollama: two classifier examples selected expected roles; synthetic
-  vision read TEST SCREEN and STATUS: READY; switching to 12b returned 42 for
-  17 + 25; explicit unloading left no models in Ollama ps. Full core auto-image
-  flow also read both labels, retained text-only history, and unloaded cleanly.
-  See MODEL_ROUTING.md for individual timings and their limits.
-- Real headed Chromium fixture passed again with mocked HTTPX; existing request
-  limits, third-party rejection, redirects and separate caller threads passed.
-- All Python files parse; git diff --check passes. No model downloads, no changes
-  to server configuration or original installation, and no real screenshots used.
+- 115 offline plain-assert tests: 38 browser/search/core, 24 browser network,
+  10 direct fetch, 23 model/vision and 20 new computer/media cases.
+- New cases cover exact desktop approval during plans, denial/stale previews,
+  unknown app/PID/coordinate/boolean arguments, callback mutation, hidden tokens,
+  Stop during approval, direct facade refusal, generation prompt approval,
+  local/safetensors loading and exclusive completed output, missing weights,
+  redacted persistent audit, actual pixel edits, malformed crops, tool-free audio,
+  clip size/duration/protocol/frame bounds and two-follow-up routing retention.
+- Real Windows fixture: a blocked worker can be killed without waiting for its
+  request lock. Global hotkey registration and its owned-thread message path
+  passed without injecting keyboard input into other applications.
+- Real native UIA fixture: read, type, RAM save, undo, replay/stale-number refusal,
+  human edit after preview, multiline text, owned-window capture, and termination
+  of both worker and practice app passed. No real application was controlled.
+- Real Tk fixture: controls visible, No focused, Enter/Escape deny, explicit Use
+  approves; edited payload contains black pixels; Clear removes it. An emergency
+  event during the modal preview closes it and revokes the staged image.
+- Real visible Chromium against fake HTTPX: offline route fulfillment, fixed DOM
+  extraction with page JS disabled, form/password/hidden exclusion, encoding,
+  POST/name refusal, stale references, redirect refusal, distinct caller threads,
+  same-host CSS/frames, third-party refusal and shared request-budget reset passed.
 
-This stage is screenshot observation and constrained model selection, not desktop
-control or real-time video. Actual screen capture is tested using a fake provider;
-we did not capture the person's desktop as a test. The idle-60-second API setting
-was tested in fakes; wall-clock idle expiration was not separately timed. Explicit
-unload was verified against the real server. Routing quality and public website
-compatibility were not benchmarked, and text can hallucinate or copy sensitive
-information from an image.
+## Live local inference and codecs
 
-## Previous page containment checks
+- Actual Ollama auto workflow started/read only the owned practice app and
+  proposed SYNTHETIC TEST for the draft. A test callback allowed only those
+  synthetic actions. UIA confirmed draft=SYNTHETIC TEST, saved=empty. 32.73 s.
+  Test-only approval callbacks are not installed in the production UI.
+- Actual CUDA SD-Turbo produced a 512x512 PNG in 32.89 s. The generated sample was
+  viewed. Actual experimental video pipeline produced a 256x256 MP4, 16 frames
+  at 8 fps, in 37.93 s. These are single runs, not latency/quality guarantees.
+- PyAV sampled a synthetic three-second MP4 at 0, 0.75, 1.50 and 2.25 seconds.
+  Local Whisper transcribed a synthetic 4.64-second English WAV as
+  "This is a local audio test. The number is 42."
+- Fixed synthetic text evaluation: 7/8 exact matches; the small model failed
+  strict one-word classification output. Model checks do not establish broad
+  reasoning ability, safe planning or routing accuracy.
+- Runtime snapshots used: audio 0d3d19a32d3338f10357c0889762bd8d64bbdeba;
+  image b261bac6fd2cf515557d5d0707481eafa0485ec2;
+  video 8227dddca75a8561bf858d604cc5dae52b954d01. Manifests record local snapshots.
 
-- 72 offline plain-assert tests passed: 38 core/search/approval, 24 browser-network
-  and 10 direct-fetch tests.
-- New network cases cover no page scope, approved/session third-party and sibling
-  subdomain refusal before DNS, allowed same-host CSS/frames with IP pinning,
-  exact default 100-request exhaustion before DNS/HTTP, blocked requests and
-  WebSockets sharing the count, aggregate byte limits across frames/responses,
-  declared/streamed overflow, failed-response byte accounting, navigation/read
-  preserving budgets, explicit open renewal, and 4,000-character read output.
-- Real headed Chromium with fake HTTPX passed the existing integration suite plus
-  same-host stylesheet/frame loading, denial of another independently approved
-  host before DNS, and an over-budget page of stylesheets. A 4-request fixture
-  admitted exactly the document plus 3 stylesheets; reading did not renew it,
-  and an explicit new open did. Default 100 is exercised in the offline suite.
-- All Python files parse; git diff --check passes. No new packages required.
+## Limits and unverified claims
 
-The defaults are 100 intercepted requests and 10,000,000 streamed body bytes per
-explicit open. Per-response 5,000,000 bytes remains. One body chunk may cross the
-aggregate limit on arrival and is rejected without buffering or fulfillment.
-These limits do not cover headers/TLS overhead, total chat traffic, Chromium
-process memory, or background browser egress. No public-site compatibility or
-latency benchmark was performed for this step. Older audit reports describe
-the previous revision's resource policy, which this step intentionally tightens.
+This is not a new exhaustive security audit, a VM, a least-privilege OS sandbox
+or a proof of no remaining bugs. UIA state rechecks are not atomic against a
+simultaneous human edit. Desktop mutations are confined to a RAM-only app to
+limit the impact of that uncertainty. Job RAM limits do not cap VRAM. Stop kills
+owned process workers but does not forcibly cancel browser/Ollama requests.
+Browser background egress has not been proven isolated at the OS layer. Browser
+redirects remain refused; service-worker blocking/offline routing are application
+settings, not a guarantee about every Chromium background subsystem.
 
-## Previous consent hardening checks
-
-- 62 offline tests passed: 38 core/search/approval tests, 14 browser-network
-  tests, and 10 direct-fetch tests. Fakes require no Internet.
-- Regression cases cover raw URLs containing query/path/encoded data, mandatory
-  per-URL approval during plans and after site approval, callback exceptions,
-  literal-True approval, approved-URL mutation, and malformed URL refusal.
-- Fetch tests cover streaming limits, exact 5 MB boundary, Host/SNI/IP pinning,
-  proxy disabling, redirects, compression, attachments, errors and DNS rejection.
-- Real headed Chromium with fake HTTPX responses passed again after the changes.
-- Syntax parsing and diff whitespace checks passed.
-
-The scoped security review found the privacy approval bypass in both URL tools
-and a pre-existing unbounded response buffer in fetch_page. Both are addressed
-in this package. Review does not prove that no further vulnerabilities exist.
-
-## Earlier integration checks
-
-- 30 plain-assert offline search, approval, plan, argument-validation and
-  stale-element tests in `test_browser_search.py`.
-- 14 plain-assert offline interception, DNS rejection, IP/Host/SNI pinning,
-  resource blocking, size-limit, error and worker-timeout tests in
-  `test_browser_network.py`.
-- Real headed Chromium integration with fake HTTPX responses: fixed DOM
-  extraction with page JavaScript off; visible form/link enumeration; password
-  and hidden-element exclusion; GET search URL construction; POST and nameless
-  form refusal; stale-number refusal; blocked redirects; and commands from
-  separate caller threads. The context was offline throughout.
-- Real Windows/Tk dialog check with Computer Use: red header and full search
-  details visible, buttons visible at the current display scaling, No focused,
-  Enter returned False, explicit Yes click returned True, Escape returned False.
-  This was a local dialog fixture; no search was submitted by those clicks.
-- Live Internet check using the existing fetch policy: the Wikipedia Dog article
-  opened and readable article text was returned. Its search box resolved to
-  `https://en.wikipedia.org/w/index.php?search=dog`.
-- Live Ollama smoke check using the existing `gemma4:e2b`: the updated core
-  executed `add(a=17, b=25)`, logged it as low risk, and returned 42.
-
-## Expected refusal found during live testing
-
-The Wikipedia `dog` search returned a redirect. It was blocked and returned:
-
-`Error: Redirects are blocked; no redirected request was sent.`
-
-The full Wikipedia search workflow is therefore NOT a passing acceptance test
-under the existing redirect policy. Direct-result GET search passed in the real
-Chromium integration fixture. No exception to redirect checks was added.
-
-## Problems found and fixed while testing
-
-- Chromium could still be navigating to its error page after an aborted
-  redirect, interrupting the next navigation. A failed navigation now disposes
-  of the context, so the next open starts cleanly.
-- At the current display scaling, the approval text could consume space meant
-  for the buttons. The dialog now reserves button space before allocating the
-  scrolling text area and is centered within the available screen dimensions.
-
-## Not established by these tests
-
-- Full browser workflows chosen by an actual Ollama model were not tested.
-  Browser enforcement was exercised with scripted model replies; the actual
-  model smoke check covered the math tool and core/schema integration only.
-- Compatibility with every public website is not established.
-- No claim of OS-level network isolation or a hard interruptible DNS deadline.
-- The full existing attach/compaction application was not exhaustively retested.
-
-The earlier Internet, Ollama and Windows dialog results above apply to the
-previous integration build; those external checks were not repeated for this
-hardening patch. The new exact-URL dialog content is checked with a fake widget
-harness; its shared No-default dialog implementation is unchanged.
-
-The original files in Downloads and the working `C:/dev/agent` installation were
-left unchanged. The GitHub update is proposed separately for review.
+MP4 analysis samples frames, omits its audio and can miss brief events. WAV support
+is limited to English 16-bit PCM, without a microphone. Video generation uses an
+older experimental pipeline and is low-resolution; no broad stability or output
+quality claim is made. Interpretation may hallucinate or quote private information.
+New persistent audit entries omit payloads; old logs and visible chat are separate.
+Weights and the development runtime are excluded from the distributable source.
+A blocked cleanup left an unused partial video-model cache on this machine.

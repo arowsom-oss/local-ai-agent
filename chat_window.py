@@ -9,17 +9,22 @@ from urllib.parse import urlparse
 
 import attach
 from model_router import release_models
-from vision_input import load_image, capture_primary_screen
+from vision_input import load_image
+from desktop_tools import desktop_start, close_desktop, capture_practice, start_practice
+from process_guard import stop_all
+from media_input import prepare_media
 from browser_tool import close_browser
 from agent_core import run_turn, MODEL_CHOICES, SAFE, AUDIT_LOG, forget_sites
 
 # ---- shared state -------------------------------------------------------
 messages = []            # the conversation; lives as long as the window is open
 stop_event = threading.Event()   # set by the Stop button, checked by the worker between steps
+emergency_ui = threading.Event()  # Separate watcher also runs inside modal Tk wait loops.
 events = queue.Queue()   # worker thread -> window: things to show or ask about
 busy = False             # True while the model is working on a question
 last_answer = ""         # the newest agent reply, for the "Copy last answer" button
 pending_image = None     # immutable preview-approved bytes, for one turn only
+pending_media = None
 
 # Reading settings. Change these and re-run if they don't feel right for you.
 FONT_NAME = "Verdana"    # wide letters, ships with Windows
@@ -61,6 +66,7 @@ WHAT_IT_DOES = {
     "browser_click": "CLICKS A LINK in the read-only browser",
     "browser_search": "SUBMITS A SEARCH on a website",
     "outbound_request": "SENDS THIS EXACT ADDRESS TO A WEBSITE",
+    "desktop_start": "OPENS AN OWNED PRACTICE WINDOW (RAM-only draft; no real applications)",
 }
 
 
@@ -72,12 +78,12 @@ def ask_approval(name, args):
     return answer_box.get() is True   # blocks until the window answers; only True means yes
 
 
-def worker(text, model, image=None):
+def worker(text, model, image=None, observation=None):
     try:
         answer, seconds = run_turn(
             messages, text, ask_approval,
             log=lambda line: events.put(("log", line)),
-            model=model, stop_event=stop_event, image=image)
+            model=model, stop_event=stop_event, image=image, observation_text=observation)
         events.put(("answer", answer, seconds))
     except Exception as e:            # top of the thread: show the error instead of dying silently
         events.put(("error", str(e)))
@@ -88,6 +94,7 @@ def high_risk_confirm(title, lines):
     """Modal red approval dialog. No starts focused; Enter, Escape and close deny."""
     answer = False
     win = tk.Toplevel(root)
+    win._approval_dialog = True
     win.title(title)
     win.transient(root)
     win.configure(bg=T("window"))
@@ -127,6 +134,22 @@ def high_risk_confirm(title, lines):
 
 def confirm(name, args):
     """Pop up the approval question. Returns True only if the person clicks Yes."""
+    if name == "desktop_action":
+        return high_risk_confirm("Approve exact practice change", [
+            "PRACTICE APP ONLY - THIS CHANGE NEEDS ITS OWN APPROVAL", "",
+            f"Control: {args.get('control')}", f"Action: {args.get('action')}", "",
+            "Before:", json.dumps(args.get("before"), ensure_ascii=False, indent=2), "",
+            "After (exact proposed values):", json.dumps(args.get("after"), ensure_ascii=False, indent=2), "",
+            "Code rechecks the target and verifies the result. Allow this one action?"])
+    if name == "generation":
+        return high_risk_confirm("Approve local generation", [
+            "GENERATES A NEW LOCAL FILE USING GPU/RAM", "", f"Kind: {args.get('kind')}",
+            "Exact prompt:", args.get("prompt", ""), "", f"Limits: {args.get('limits')}",
+            f"Output: {args.get('output')}", "", "No cloud inference or automatic weight download. Allow?"])
+    if name == "desktop_start":
+        return high_risk_confirm("Open practice app", [WHAT_IT_DOES[name], "",
+            "Desktop actions are restricted to that owned window. F12 stops owned workers.",
+            "This is a practice boundary, not an OS security sandbox. Open it?"])
     if name == "plan":
         lines = ["WANTS TO FOLLOW THIS PLAN (open approved sites and click links only)", "",
                  f"Goal: {args.get('goal')}", ""]
@@ -295,14 +318,29 @@ def start_spin():
 
 
 def stop_agent():
-    """Stop button (or Esc): the step already running finishes, then nothing new runs."""
-    if not busy or stop_event.is_set():
-        return
+    """Kill owned automation workers and revoke pending images/approvals."""
+    global pending_image, pending_media
     stop_event.set()
+    pending_image = pending_media = None
+    stop_all()  # Kill owned process trees; does not wait for a blocked UIA call.
+    close_desktop()
+    for window in root.winfo_children():
+        if getattr(window, "_approval_dialog", False):
+            window.event_generate("<Escape>")
+    if not busy:
+        show("Stop", "owned automation/media workers stopped.")
+        return
     stop_button.configure(state="disabled", text="Stopping...")
     remove_pending()
-    show("Stop", "stopping after the current step. Nothing new will run.")
+    show("Stop", "owned automation/media workers stopped. A browser or Ollama call may still be finishing; no new action is allowed.")
     add_pending()
+
+
+def watch_emergency():
+    if emergency_ui.is_set():
+        emergency_ui.clear()
+        stop_agent()
+    root.after(50, watch_emergency)
 
 
 def finish_turn():
@@ -335,12 +373,13 @@ def attach_file():
         entry.focus_set()
 
 
-def preview_image(image):
+def preview_image(image, on_approve=None):
     """The person approves the exact normalized pixels, not a model-supplied path."""
     from io import BytesIO
     from PIL import Image, ImageTk
     answer = False
     win = tk.Toplevel(root)
+    win._approval_dialog = True
     win.title("Preview image for local analysis")
     win.transient(root)
     width = min(760, win.winfo_screenwidth() - 80)
@@ -352,15 +391,69 @@ def preview_image(image):
                        "Check for passwords, private chats and other sensitive information.\n"
                        "Analysis only: this image cannot trigger computer actions.",
              wraplength=width - 40, padx=12, pady=12).pack()
+    original = image
+    display_width, display_height = max(100, width - 40), max(100, height - 240)
+    mode = tk.StringVar(value="hide")
+    tools = tk.Frame(win)
+    tools.pack()
+    tk.Radiobutton(tools, text="Drag to hide area", variable=mode, value="hide").pack(side="left")
+    tk.Radiobutton(tools, text="Drag to crop", variable=mode, value="crop").pack(side="left")
     with Image.open(BytesIO(image.png)) as source:
-        source.thumbnail((max(100, width - 40), max(100, height - 200)))
+        source.thumbnail((display_width, display_height))
         photo = ImageTk.PhotoImage(source)
-    tk.Label(win, image=photo).pack(padx=12, pady=8)
-    tk.Label(win, text=f"Prepared image: {image.width} x {image.height}; {len(image.png):,} bytes").pack()
+    canvas = tk.Canvas(win, width=photo.width(), height=photo.height(), highlightthickness=0)
+    canvas.pack(padx=12, pady=8)
+    canvas.create_image(0, 0, image=photo, anchor="nw")
+    origin = None
+
+    def render():
+        nonlocal photo
+        with Image.open(BytesIO(image.png)) as source:
+            source.thumbnail((display_width, display_height))
+            photo = ImageTk.PhotoImage(source)
+        canvas.configure(width=photo.width(), height=photo.height())
+        canvas.delete("all")
+        canvas.create_image(0, 0, image=photo, anchor="nw")
+        details.configure(text=f"Prepared image: {image.width} x {image.height}; {len(image.png):,} bytes")
+
+    def begin(event):
+        nonlocal origin
+        origin = (event.x, event.y)
+
+    def end(event):
+        nonlocal image, origin
+        if origin is None:
+            return
+        from image_privacy import edit_image
+        x1, x2 = sorted((origin[0], event.x))
+        y1, y2 = sorted((origin[1], event.y))
+        rectangle = (max(0, int(x1 * image.width / photo.width())),
+                     max(0, int(y1 * image.height / photo.height())),
+                     min(image.width, int(x2 * image.width / photo.width())),
+                     min(image.height, int(y2 * image.height / photo.height())))
+        origin = None
+        try:
+            image = edit_image(image, rectangle, crop=mode.get() == "crop")
+            render()
+        except ValueError:
+            pass  # An empty/outside drag changes nothing.
+
+    def reset():
+        nonlocal image
+        image = original
+        render()
+
+    tk.Button(tools, text="Reset", command=reset).pack(side="left")
+    canvas.bind("<ButtonPress-1>", begin)
+    canvas.bind("<ButtonRelease-1>", end)
+    details = tk.Label(win, text=f"Prepared image: {image.width} x {image.height}; {len(image.png):,} bytes")
+    details.pack()
 
     def finish(allow=False):
         nonlocal answer
         answer = allow is True
+        if answer and on_approve is not None:
+            on_approve(image)  # Exact edited pixels, never the original behind them.
         win.destroy()
 
     tk.Button(row, text="Use this image", command=lambda: finish(True)).pack(side="left")
@@ -377,10 +470,13 @@ def preview_image(image):
 
 
 def stage_image(image):
-    global pending_image
-    if preview_image(image) is not True:
+    global pending_image, pending_media
+    prepared = []
+    if (preview_image(image, on_approve=prepared.append) is not True or len(prepared) != 1
+            or stop_event.is_set()):
         return
-    pending_image = image
+    pending_image = prepared[0]
+    pending_media = None
     show("Image", "One preview-approved image is ready for the next message. It is not saved to disk.")
     if not entry.get().strip():
         entry.insert(0, "Describe what is visible in this image and mention anything uncertain.")
@@ -389,9 +485,10 @@ def stage_image(image):
 def attach_image():
     if busy:
         return
+    stop_event.clear()
     path = filedialog.askopenfilename(title="Choose an image or saved screenshot",
                                      filetypes=[("Images", "*.png *.jpg *.jpeg *.webp")])
-    if not path:
+    if not path or stop_event.is_set():
         return
     try:
         stage_image(load_image(path))
@@ -401,18 +498,21 @@ def attach_image():
 
 def screenshot():
     """One capture only; never a background watcher or model-callable tool."""
-    if busy or messagebox.askyesno("Capture primary screen?",
-            "Capture the primary screen once? Close anything sensitive first.\n"
-            "You will preview it before choosing whether to attach it.", default="no") is not True:
+    if busy:
+        return
+    stop_event.clear()
+    if messagebox.askyesno("Capture practice window?",
+            "Capture only the owned practice window once?\n"
+            "You will preview it before choosing whether to attach it.", default="no") is not True or stop_event.is_set():
         return
     root.withdraw()
 
     def capture():
         try:
-            image = capture_primary_screen()
+            image = capture_practice()
         except Exception:
             root.deiconify()
-            show("Error", "Could not capture the primary screen.")
+            show("Error", "Open the practice environment first; no other window can be captured.")
             return
         root.deiconify()
         stage_image(image)
@@ -421,9 +521,10 @@ def screenshot():
 
 
 def clear_image():
-    global pending_image
+    global pending_image, pending_media
     if not busy:
         pending_image = None
+        pending_media = None
         show("Image", "Pending image cleared.")
 
 
@@ -434,10 +535,90 @@ def free_vram():
     threading.Thread(target=lambda: events.put(("memory", release_models())), daemon=True).start()
 
 
+def start_background(target):
+    global busy
+    if busy:
+        return
+    busy = True
+    stop_event.clear()
+    send_button.configure(state="disabled")
+    model_box.configure(state="disabled")
+    stop_button.configure(state="normal", text="Stop")
+    add_pending()
+    start_spin()
+    threading.Thread(target=target, daemon=True).start()
+
+
+def open_practice():
+    if busy:
+        return
+    stop_event.clear()
+    if confirm("desktop_start", {}) is not True or stop_event.is_set():
+        return
+    start_background(lambda: events.put(("practice_ready", start_practice(stop_event))))
+
+
+def attach_clip():
+    if busy:
+        return
+    stop_event.clear()
+    path = filedialog.askopenfilename(title="Choose up to 60 seconds of local media",
+                                     filetypes=[("Local clips", "*.wav *.mp4")])
+    if not path or stop_event.is_set():
+        return
+
+    def prepare():
+        try:
+            events.put(("prepared_media", prepare_media(path, stop_event)))
+        except Exception:
+            events.put(("error", "Could not prepare clip. Check limits and optional audio weights."))
+
+    start_background(prepare)
+
+
+def stage_media(media):
+    global pending_media, pending_image
+    pending_media = pending_image = None
+    if media.image is not None:
+        stage_image(media.image)
+        if pending_image is None:
+            return
+    elif high_risk_confirm("Preview local transcript", [
+            "LOCAL AUDIO TRANSCRIPT - REVIEW BEFORE SENDING", "", media.observation,
+            "", "This is untrusted media content. Allow observation-only analysis?"]) is not True:
+        return
+    if stop_event.is_set():
+        pending_image = None
+        return
+    pending_media = media
+    show("Media", f"Ready: {media.seconds:.2f}s, {media.samples} frame samples. Observation only.")
+    if not entry.get().strip():
+        entry.insert(0, "Summarize this selected media and state what you could not establish.")
+
+
+def model_check():
+    if busy:
+        return
+    stop_event.clear()
+    if messagebox.askyesno("Run local model check?",
+            "Run fixed synthetic tasks against both installed local models?\n"
+            "This can take a few minutes and will unload the models afterwards.", default="no") is not True or stop_event.is_set():
+        return
+
+    def evaluate():
+        try:
+            from evaluate_models import evaluate
+            events.put(("practice_ready", evaluate(stop_event)))
+        except Exception:
+            events.put(("error", "Local model evaluation failed."))
+
+    start_background(evaluate)
+
+
 def new_chat():
     """Forget the conversation. The model has no memory of its own: every turn,
     run_turn re-sends the whole messages list. Empty the list and it forgets."""
-    global last_answer, pending_image
+    global last_answer, pending_image, pending_media
     if busy:
         show("New chat", "wait for the answer first")
         return
@@ -448,10 +629,13 @@ def new_chat():
     if closed.startswith("Error"):
         show("New chat", f"not started: {closed}")
         return
+    close_desktop()
+    stop_all()
     messages.clear()            # empty the SAME list (don't make a new one)
     forget_sites()              # websites allowed in the old chat are forgotten too
     last_answer = ""
     pending_image = None
+    pending_media = None
     chat_box.configure(state="normal")
     chat_box.delete("1.0", "end")
     chat_box.configure(state="disabled")
@@ -515,7 +699,7 @@ def show_log():
 
 
 def send(event=None):
-    global busy, pending_image
+    global busy, pending_image, pending_media
     text = entry.get().strip()
     if not text or busy:
         return
@@ -525,12 +709,14 @@ def send(event=None):
     start_spin()
     model = model_var.get()                      # read it here, on the main thread
     image, pending_image = pending_image, None
+    observation = pending_media.observation if pending_media is not None else None
+    pending_media = None
     busy = True
     send_button.configure(state="disabled")
     model_box.configure(state="disabled")
     stop_event.clear()                           # a fresh turn starts un-stopped
     stop_button.configure(state="normal", text="Stop")
-    threading.Thread(target=worker, args=(text, model, image), daemon=True).start()
+    threading.Thread(target=worker, args=(text, model, image, observation), daemon=True).start()
 
 
 def poll():
@@ -550,7 +736,7 @@ def poll():
                 add_pending()          # still working, so thinking... goes back underneath
             elif kind == "ask":
                 _, name, args, answer_box = item
-                answer_box.put(confirm(name, args))
+                answer_box.put(False if stop_event.is_set() else confirm(name, args))
             elif kind == "answer":
                 remove_pending()
                 last_answer = clean(item[1])
@@ -562,6 +748,17 @@ def poll():
                 finish_turn()
             elif kind == "memory":
                 show("Memory", item[1])
+            elif kind == "emergency_stop":
+                stop_agent()
+            elif kind == "prepared_media":
+                remove_pending()
+                finish_turn()
+                if not stop_event.is_set():
+                    stage_media(item[1])
+            elif kind == "practice_ready":
+                remove_pending()
+                show("Practice", item[1])
+                finish_turn()
     except queue.Empty:
         pass
     root.after(100, poll)
@@ -636,62 +833,75 @@ def toggle_theme():
     apply_theme()
 
 
-root = tk.Tk()
-root.title("Local agent")
-root.minsize(860, 420)       # narrower than this and the toolbar gets cut off
-style = ttk.Style(root)
-style.theme_use("clam")      # the only built-in ttk look that accepts custom colors
 
-# Pack order matters: the bottom rows go in FIRST, so when the window is short
-# the chat area shrinks instead of the buttons getting pushed off the screen.
-bottom = tk.Frame(root)
-bottom.pack(side="bottom", fill="x", padx=12, pady=12)
-toolbar = tk.Frame(root)
-toolbar.pack(side="bottom", fill="x", padx=12)
-vision_toolbar = tk.Frame(root)
-vision_toolbar.pack(side="bottom", fill="x", padx=12, pady=4)
-make_button(vision_toolbar, "Attach image", attach_image).pack(side="left")
-make_button(vision_toolbar, "Screenshot", screenshot).pack(side="left", padx=6)
-make_button(vision_toolbar, "Clear image", clear_image).pack(side="left")
-make_button(vision_toolbar, "Free VRAM", free_vram).pack(side="right")
-chat_holder, chat_box = scroll_box(
-    root, state="disabled", wrap="word", width=70, height=22,
-    spacing2=6, spacing3=10,             # extra space between lines and between messages
-    relief="flat", bd=0, padx=16, pady=12, highlightthickness=1)
-chat_holder.pack(padx=12, pady=(12, 6), fill="both", expand=True)
+def build_window():
+    global root, style, bottom, toolbar, vision_toolbar, chat_holder, chat_box, copy_button, attach_button, model_var, model_box, theme_button, send_button, stop_button, entry
+    root = tk.Tk()
+    root.title("Local agent")
+    root.minsize(860, 420)       # narrower than this and the toolbar gets cut off
+    style = ttk.Style(root)
+    style.theme_use("clam")      # the only built-in ttk look that accepts custom colors
 
-copy_button = make_button(toolbar, "Copy last answer", lambda: copy_text(last_answer))
-copy_button.pack(side="left")
-attach_button = make_button(toolbar, "Attach file", attach_file)
-attach_button.pack(side="left", padx=(6, 0))
-make_button(toolbar, "New chat", new_chat).pack(side="left", padx=(6, 0))
-make_button(toolbar, "Audit log", show_log).pack(side="left", padx=(6, 0))
-model_var = tk.StringVar(value="auto")
-model_box = ttk.Combobox(toolbar, textvariable=model_var, values=MODEL_CHOICES,
-                         state="readonly", width=14, font=(UI_FONT, 10))
-model_box.pack(side="left", padx=8)
-make_button(toolbar, "A+", lambda: change_size(2)).pack(side="right")
-make_button(toolbar, "A-", lambda: change_size(-2)).pack(side="right", padx=(0, 6))
-theme_button = make_button(toolbar, "Dark mode", toggle_theme)
-theme_button.pack(side="right", padx=(0, 6))
+    # Pack order matters: the bottom rows go in FIRST, so when the window is short
+    # the chat area shrinks instead of the buttons getting pushed off the screen.
+    bottom = tk.Frame(root)
+    bottom.pack(side="bottom", fill="x", padx=12, pady=12)
+    toolbar = tk.Frame(root)
+    toolbar.pack(side="bottom", fill="x", padx=12)
+    vision_toolbar = tk.Frame(root)
+    vision_toolbar.pack(side="bottom", fill="x", padx=12, pady=4)
+    make_button(vision_toolbar, "Attach image", attach_image).pack(side="left")
+    make_button(vision_toolbar, "Screenshot", screenshot).pack(side="left", padx=6)
+    make_button(vision_toolbar, "Clear image", clear_image).pack(side="left")
+    make_button(vision_toolbar, "Practice", open_practice).pack(side="left", padx=6)
+    make_button(vision_toolbar, "Attach clip", attach_clip).pack(side="left")
+    make_button(vision_toolbar, "Model check", model_check).pack(side="left", padx=6)
+    make_button(vision_toolbar, "Free VRAM", free_vram).pack(side="right")
+    chat_holder, chat_box = scroll_box(
+        root, state="disabled", wrap="word", width=70, height=22,
+        spacing2=6, spacing3=10,             # extra space between lines and between messages
+        relief="flat", bd=0, padx=16, pady=12, highlightthickness=1)
+    chat_holder.pack(padx=12, pady=(12, 6), fill="both", expand=True)
 
-# Same idea: buttons packed before the stretchy entry, so the entry can't squeeze them.
-send_button = make_button(bottom, "Send", send, kind="accent")
-send_button.pack(side="right", padx=(8, 0))
-stop_button = make_button(bottom, "Stop", stop_agent, kind="danger", state="disabled")
-stop_button.pack(side="right", padx=(8, 0))
-entry = tk.Entry(bottom, width=60, relief="flat", bd=0, highlightthickness=1)
-entry.pack(side="left", fill="x", expand=True, ipady=7)       # ipady = taller box, room to breathe
-entry.bind("<Return>", send)
-root.bind("<Escape>", lambda e: stop_agent())   # Esc works too, for fast reaction time
+    copy_button = make_button(toolbar, "Copy last answer", lambda: copy_text(last_answer))
+    copy_button.pack(side="left")
+    attach_button = make_button(toolbar, "Attach file", attach_file)
+    attach_button.pack(side="left", padx=(6, 0))
+    make_button(toolbar, "New chat", new_chat).pack(side="left", padx=(6, 0))
+    make_button(toolbar, "Audit log", show_log).pack(side="left", padx=(6, 0))
+    model_var = tk.StringVar(value="auto")
+    model_box = ttk.Combobox(toolbar, textvariable=model_var, values=MODEL_CHOICES,
+                             state="readonly", width=14, font=(UI_FONT, 10))
+    model_box.pack(side="left", padx=8)
+    make_button(toolbar, "A+", lambda: change_size(2)).pack(side="right")
+    make_button(toolbar, "A-", lambda: change_size(-2)).pack(side="right", padx=(0, 6))
+    theme_button = make_button(toolbar, "Dark mode", toggle_theme)
+    theme_button.pack(side="right", padx=(0, 6))
 
-apply_font()
-apply_theme()
-add_context_menu(chat_box, can_paste=False)
-add_context_menu(entry, can_paste=True)
-chat_box.bind("<Button-1>", lambda e: chat_box.focus_set())   # so Ctrl+C reaches the chat box
+    # Same idea: buttons packed before the stretchy entry, so the entry can't squeeze them.
+    send_button = make_button(bottom, "Send", send, kind="accent")
+    send_button.pack(side="right", padx=(8, 0))
+    stop_button = make_button(bottom, "Stop", stop_agent, kind="danger", state="disabled")
+    stop_button.pack(side="right", padx=(8, 0))
+    entry = tk.Entry(bottom, width=60, relief="flat", bd=0, highlightthickness=1)
+    entry.pack(side="left", fill="x", expand=True, ipady=7)       # ipady = taller box, room to breathe
+    entry.bind("<Return>", send)
+    from emergency_hotkey import start_hotkey
+    start_hotkey(lambda: (stop_event.set(), stop_all(), emergency_ui.set()),
+                 lambda text: events.put(("memory", text)))
+    root.after(50, watch_emergency)
+    root.bind_all("<F12>", lambda e: stop_agent())
+    root.bind("<Escape>", lambda e: stop_agent())   # Esc works too, for fast reaction time
+
+    apply_font()
+    apply_theme()
+    add_context_menu(chat_box, can_paste=False)
+    add_context_menu(entry, can_paste=True)
+    chat_box.bind("<Button-1>", lambda e: chat_box.focus_set())   # so Ctrl+C reaches the chat box
+
 
 if __name__ == "__main__":
+    build_window()
     entry.focus_set()
     poll()
     root.mainloop()

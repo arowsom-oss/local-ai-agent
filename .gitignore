@@ -16,3 +16,8 @@ __pycache__/
 *_pre_*.py
 *_backup*.py
 *_before_*.py
+
+model_cache/
+generated/
+benchmark_results.json
+.venv/

@@ -334,6 +334,7 @@ def test_capture_and_router_are_not_exposed_as_tools():
 
 
 def ui_function(name, **namespace):
+    namespace.setdefault("stop_event", threading.Event())
     tree = ast.parse(Path(__file__).with_name("chat_window.py").read_text(encoding="utf-8"))
     node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name)
     exec(compile(ast.Module(body=[node], type_ignores=[]), "chat_window.py", "exec"), namespace)
@@ -354,7 +355,7 @@ def test_screenshot_capture_requires_literal_true_then_stages_exact_payload():
             after=lambda ms, call: call(), deiconify=lambda: seen.append("visible"))
         fn, _ = ui_function("screenshot", busy=False, root=root,
             messagebox=types.SimpleNamespace(askyesno=lambda *a, **kw: answer),
-            capture_primary_screen=lambda: image, stage_image=lambda value: seen.append(value))
+            capture_practice=lambda: image, stage_image=lambda value: seen.append(value))
         fn()
         if answer is True:
             assert seen == ["hidden", "visible", image]
@@ -379,6 +380,7 @@ def test_preview_defaults_no_for_enter_escape_close_and_has_explicit_yes():
             def winfo_screenwidth(self): return 1920
             def winfo_screenheight(self): return 1080
             def geometry(self, *a): pass
+            def create_image(self, *a, **kw): pass
             def destroy(self): pass
             def wait_visibility(self): pass
             def grab_set(self): pass
@@ -397,13 +399,16 @@ def test_preview_defaults_no_for_enter_escape_close_and_has_explicit_yes():
             return widget
 
         def wait(win):
-            assert buttons[1].options["default"] == "active" and buttons[1].focused
-            if action == "yes": buttons[0].options["command"]()
+            no = next(b for b in buttons if b.options.get("text") == "No")
+            yes = next(b for b in buttons if b.options.get("text") == "Use this image")
+            assert no.options["default"] == "active" and no.focused
+            if action == "yes": yes.options["command"]()
             else: win.bindings[action]()
 
-        tk = types.SimpleNamespace(Toplevel=window, Label=Widget, Frame=Widget, Button=button)
+        tk = types.SimpleNamespace(Toplevel=window, Label=Widget, Frame=Widget, Button=button,
+            Canvas=Widget, Radiobutton=Widget, StringVar=lambda **kw: types.SimpleNamespace(get=lambda: kw["value"]))
         fn, _ = ui_function("preview_image", tk=tk, root=types.SimpleNamespace(wait_window=wait))
-        with patch.object(ImageTk, "PhotoImage", return_value=object()):
+        with patch.object(ImageTk, "PhotoImage", return_value=types.SimpleNamespace(width=lambda:320,height=lambda:180)):
             assert fn(image) is expected
 
 
