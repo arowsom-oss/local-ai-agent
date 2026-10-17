@@ -7,11 +7,11 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 from urllib.parse import urlparse
 
-from ollama import generate
-
 import attach
+from model_router import release_models
+from vision_input import load_image, capture_primary_screen
 from browser_tool import close_browser
-from agent_core import run_turn, ALLOWED_MODELS, MODEL, SAFE, AUDIT_LOG, forget_sites
+from agent_core import run_turn, MODEL_CHOICES, SAFE, AUDIT_LOG, forget_sites
 
 # ---- shared state -------------------------------------------------------
 messages = []            # the conversation; lives as long as the window is open
@@ -19,7 +19,7 @@ stop_event = threading.Event()   # set by the Stop button, checked by the worker
 events = queue.Queue()   # worker thread -> window: things to show or ask about
 busy = False             # True while the model is working on a question
 last_answer = ""         # the newest agent reply, for the "Copy last answer" button
-last_model = None        # the model used for the previous message
+pending_image = None     # immutable preview-approved bytes, for one turn only
 
 # Reading settings. Change these and re-run if they don't feel right for you.
 FONT_NAME = "Verdana"    # wide letters, ships with Windows
@@ -72,22 +72,12 @@ def ask_approval(name, args):
     return answer_box.get() is True   # blocks until the window answers; only True means yes
 
 
-def unload(model):
-    """Ask Ollama to free the VRAM a model is using. Best effort: a failure is shown, not hidden."""
+def worker(text, model, image=None):
     try:
-        generate(model=model, keep_alive=0)
-    except Exception as e:
-        events.put(("log", f"could not unload {model}: {e}"))
-
-
-def worker(text, model, old_model):
-    try:
-        if old_model and old_model != model:
-            unload(old_model)
         answer, seconds = run_turn(
             messages, text, ask_approval,
             log=lambda line: events.put(("log", line)),
-            model=model, stop_event=stop_event)
+            model=model, stop_event=stop_event, image=image)
         events.put(("answer", answer, seconds))
     except Exception as e:            # top of the thread: show the error instead of dying silently
         events.put(("error", str(e)))
@@ -345,10 +335,109 @@ def attach_file():
         entry.focus_set()
 
 
+def preview_image(image):
+    """The person approves the exact normalized pixels, not a model-supplied path."""
+    from io import BytesIO
+    from PIL import Image, ImageTk
+    answer = False
+    win = tk.Toplevel(root)
+    win.title("Preview image for local analysis")
+    win.transient(root)
+    width = min(760, win.winfo_screenwidth() - 80)
+    height = min(640, win.winfo_screenheight() - 100)
+    win.geometry(f"{width}x{height}")
+    row = tk.Frame(win)
+    row.pack(side="bottom", fill="x", padx=12, pady=12)  # Keep No visible at display scaling.
+    tk.Label(win, text="This image will be sent only to the local model when you press Send.\n"
+                       "Check for passwords, private chats and other sensitive information.\n"
+                       "Analysis only: this image cannot trigger computer actions.",
+             wraplength=width - 40, padx=12, pady=12).pack()
+    with Image.open(BytesIO(image.png)) as source:
+        source.thumbnail((max(100, width - 40), max(100, height - 200)))
+        photo = ImageTk.PhotoImage(source)
+    tk.Label(win, image=photo).pack(padx=12, pady=8)
+    tk.Label(win, text=f"Prepared image: {image.width} x {image.height}; {len(image.png):,} bytes").pack()
+
+    def finish(allow=False):
+        nonlocal answer
+        answer = allow is True
+        win.destroy()
+
+    tk.Button(row, text="Use this image", command=lambda: finish(True)).pack(side="left")
+    no = tk.Button(row, text="No", command=finish, default="active")
+    no.pack(side="right")
+    win.bind("<Return>", lambda event: finish())
+    win.bind("<Escape>", lambda event: finish())
+    win.protocol("WM_DELETE_WINDOW", finish)
+    win.wait_visibility()
+    win.grab_set()
+    no.focus_set()
+    root.wait_window(win)
+    return answer
+
+
+def stage_image(image):
+    global pending_image
+    if preview_image(image) is not True:
+        return
+    pending_image = image
+    show("Image", "One preview-approved image is ready for the next message. It is not saved to disk.")
+    if not entry.get().strip():
+        entry.insert(0, "Describe what is visible in this image and mention anything uncertain.")
+
+
+def attach_image():
+    if busy:
+        return
+    path = filedialog.askopenfilename(title="Choose an image or saved screenshot",
+                                     filetypes=[("Images", "*.png *.jpg *.jpeg *.webp")])
+    if not path:
+        return
+    try:
+        stage_image(load_image(path))
+    except Exception:
+        show("Error", "Could not prepare that image within the image limits.")
+
+
+def screenshot():
+    """One capture only; never a background watcher or model-callable tool."""
+    if busy or messagebox.askyesno("Capture primary screen?",
+            "Capture the primary screen once? Close anything sensitive first.\n"
+            "You will preview it before choosing whether to attach it.", default="no") is not True:
+        return
+    root.withdraw()
+
+    def capture():
+        try:
+            image = capture_primary_screen()
+        except Exception:
+            root.deiconify()
+            show("Error", "Could not capture the primary screen.")
+            return
+        root.deiconify()
+        stage_image(image)
+
+    root.after(350, capture)  # Allow Windows to hide this window before capturing.
+
+
+def clear_image():
+    global pending_image
+    if not busy:
+        pending_image = None
+        show("Image", "Pending image cleared.")
+
+
+def free_vram():
+    if busy:
+        show("Memory", "Wait for the current request to finish before unloading its model.")
+        return
+    threading.Thread(target=lambda: events.put(("memory", release_models())), daemon=True).start()
+
+
 def new_chat():
     """Forget the conversation. The model has no memory of its own: every turn,
     run_turn re-sends the whole messages list. Empty the list and it forgets."""
-    global last_answer
+    global last_answer, pending_image
     if busy:
         show("New chat", "wait for the answer first")
         return
@@ -362,10 +451,12 @@ def new_chat():
     messages.clear()            # empty the SAME list (don't make a new one)
     forget_sites()              # websites allowed in the old chat are forgotten too
     last_answer = ""
+    pending_image = None
     chat_box.configure(state="normal")
     chat_box.delete("1.0", "end")
     chat_box.configure(state="disabled")
     show("New chat", "started. The agent has forgotten everything before this.")
+    free_vram()
     entry.focus_set()
 
 
@@ -424,7 +515,7 @@ def show_log():
 
 
 def send(event=None):
-    global busy, last_model
+    global busy, pending_image
     text = entry.get().strip()
     if not text or busy:
         return
@@ -433,13 +524,13 @@ def send(event=None):
     add_pending()
     start_spin()
     model = model_var.get()                      # read it here, on the main thread
-    old_model, last_model = last_model, model
+    image, pending_image = pending_image, None
     busy = True
     send_button.configure(state="disabled")
     model_box.configure(state="disabled")
     stop_event.clear()                           # a fresh turn starts un-stopped
     stop_button.configure(state="normal", text="Stop")
-    threading.Thread(target=worker, args=(text, model, old_model), daemon=True).start()
+    threading.Thread(target=worker, args=(text, model, image), daemon=True).start()
 
 
 def poll():
@@ -469,6 +560,8 @@ def poll():
                 remove_pending()
                 show("Error", item[1])
                 finish_turn()
+            elif kind == "memory":
+                show("Memory", item[1])
     except queue.Empty:
         pass
     root.after(100, poll)
@@ -497,7 +590,7 @@ def make_button(parent, text, command, kind="plain", **extra):
 def apply_theme():
     """Repaint every widget with the current mode's colors. Purely visual: no logic lives here."""
     root.configure(bg=T("window"))
-    for frame in (toolbar, bottom, chat_holder):
+    for frame in (toolbar, vision_toolbar, bottom, chat_holder):
         frame.configure(bg=T("window"))
     chat_box.configure(bg=T("card"), fg=T("text"), insertbackground=T("text"),
                        selectbackground=T("select"), selectforeground=T("text"),
@@ -555,6 +648,12 @@ bottom = tk.Frame(root)
 bottom.pack(side="bottom", fill="x", padx=12, pady=12)
 toolbar = tk.Frame(root)
 toolbar.pack(side="bottom", fill="x", padx=12)
+vision_toolbar = tk.Frame(root)
+vision_toolbar.pack(side="bottom", fill="x", padx=12, pady=4)
+make_button(vision_toolbar, "Attach image", attach_image).pack(side="left")
+make_button(vision_toolbar, "Screenshot", screenshot).pack(side="left", padx=6)
+make_button(vision_toolbar, "Clear image", clear_image).pack(side="left")
+make_button(vision_toolbar, "Free VRAM", free_vram).pack(side="right")
 chat_holder, chat_box = scroll_box(
     root, state="disabled", wrap="word", width=70, height=22,
     spacing2=6, spacing3=10,             # extra space between lines and between messages
@@ -567,8 +666,8 @@ attach_button = make_button(toolbar, "Attach file", attach_file)
 attach_button.pack(side="left", padx=(6, 0))
 make_button(toolbar, "New chat", new_chat).pack(side="left", padx=(6, 0))
 make_button(toolbar, "Audit log", show_log).pack(side="left", padx=(6, 0))
-model_var = tk.StringVar(value=MODEL)
-model_box = ttk.Combobox(toolbar, textvariable=model_var, values=ALLOWED_MODELS,
+model_var = tk.StringVar(value="auto")
+model_box = ttk.Combobox(toolbar, textvariable=model_var, values=MODEL_CHOICES,
                          state="readonly", width=14, font=(UI_FONT, 10))
 model_box.pack(side="left", padx=8)
 make_button(toolbar, "A+", lambda: change_size(2)).pack(side="right")

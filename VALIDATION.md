@@ -3,7 +3,38 @@
 Checked on Windows with Python 3.12.10, Playwright 1.64.0, HTTPX 0.28.1 and
 Ollama's Python package 0.6.3. The existing installed Chromium was used.
 
-## Current page containment checks
+## Current vision and model-routing checks
+
+- 95 offline plain-assert tests passed: the prior 72 plus 23 model/vision tests.
+  The new suite needs Pillow but uses fake inference, networking and capture.
+- Cases cover fixed local endpoint despite OLLAMA_HOST/proxies, model allowlist,
+  malformed/extra-key routing output, missing models, unload ordering/failure,
+  serialized caller threads, vision capability checks, exact-URL consent after
+  auto routing, image dimensions/metadata stripping, invalid/oversize/animated
+  image refusal, stop behavior, no image-tool execution, no pixel history/audit,
+  capture consent and No-default preview behavior.
+- Real Windows/Tk fixture passed: new controls visible, synthetic image displayed,
+  No focused and visible, Enter/Escape denied, explicit Use approved, Clear removed
+  the pending image. No actual desktop capture was performed.
+- Live local Ollama: two classifier examples selected expected roles; synthetic
+  vision read TEST SCREEN and STATUS: READY; switching to 12b returned 42 for
+  17 + 25; explicit unloading left no models in Ollama ps. Full core auto-image
+  flow also read both labels, retained text-only history, and unloaded cleanly.
+  See MODEL_ROUTING.md for individual timings and their limits.
+- Real headed Chromium fixture passed again with mocked HTTPX; existing request
+  limits, third-party rejection, redirects and separate caller threads passed.
+- All Python files parse; git diff --check passes. No model downloads, no changes
+  to server configuration or original installation, and no real screenshots used.
+
+This stage is screenshot observation and constrained model selection, not desktop
+control or real-time video. Actual screen capture is tested using a fake provider;
+we did not capture the person's desktop as a test. The idle-60-second API setting
+was tested in fakes; wall-clock idle expiration was not separately timed. Explicit
+unload was verified against the real server. Routing quality and public website
+compatibility were not benchmarked, and text can hallucinate or copy sensitive
+information from an image.
+
+## Previous page containment checks
 
 - 72 offline plain-assert tests passed: 38 core/search/approval, 24 browser-network
   and 10 direct-fetch tests.

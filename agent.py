@@ -13,6 +13,6 @@ while True:
     text = input("You: ")
     if text.strip().lower() == "quit":
         break
-    answer, seconds = run_turn(messages, text, ask_in_terminal)
+    answer, seconds = run_turn(messages, text, ask_in_terminal, model="auto")
     print("Agent:", answer)
     print(f"[{seconds:.2f}s]")

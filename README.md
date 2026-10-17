@@ -4,6 +4,35 @@ A small Python 3.12 agent for Windows, using a local model through Ollama.
 It reads approved websites, follows real links, searches simple GET forms, reads
 attached text files from a sandbox, and does basic math. Permissions live in code.
 
+## Local models and screenshot understanding
+
+The window now defaults to `auto`: the installed `gemma4:e2b` classifies a text
+request as general or reasoning; code selects only `gemma4:e2b` or `gemma4:12b`.
+This is a routing suggestion, not an approval or a tool executor. Manual selection
+is still available. The terminal frontend also uses auto routing. Models are
+never downloaded automatically. All inference uses `http://127.0.0.1:11434`, with
+environment proxies/host overrides and redirects disabled.
+
+`Attach image` accepts a PNG/JPEG/WebP you choose. `Screenshot` asks before one
+primary-screen capture, hides the chat window, and then shows the exact prepared
+image for approval. No is the default; Enter, Escape and closing deny. `Send`
+uses the pending image once; `Clear image` discards it. These functions are not
+model tools. There is no background capture, clicking or typing.
+
+Image analysis uses the small vision model with **no tools** and refuses any
+returned action request. Images are resized to at most 1536 pixels per side and
+stripped of metadata. Image bytes/path are not stored in chat history or audit
+logs, nor saved by this application. Interpretation text can contain sensitive
+information and remains in chat, so review it before later actions. Ollama/OS
+memory is not a secure-wipe boundary.
+
+The model manager serializes its calls, unloads its previous model before
+switching, and requests a 60-second idle expiry. `Free VRAM` unloads its last model
+without deleting weights. Other applications using Ollama are outside this
+manager's control. Stop takes effect between blocking model operations, not
+mid-inference. See [MODEL_ROUTING.md](MODEL_ROUTING.md) for measurements, design
+opinion and remaining work.
+
 ## Browser tools
 
 | Tool | What code allows |
@@ -119,7 +148,8 @@ the existing plan-changed approval. Searches do not consume plan steps.
 This folder is an update package, not a replacement for the whole project.
 
 1. Close the agent window and keep a backup of the current files.
-2. Copy `browser_tool.py`, `agent_core.py`, `chat_window.py`, and `fetch.py` into
+2. Copy `browser_tool.py`, `agent_core.py`, `chat_window.py`, `fetch.py`,
+   `model_router.py`, `vision_input.py`, and optionally the terminal `agent.py` into
    the existing project, beside `htmltext.py` and `attach.py`. Preserve any custom
    `ALLOWED_HOSTS`/`REGIONS` settings in your fetch file. Its URL and DNS validator
    functions are unchanged. Do not replace `identity.py`.
@@ -129,6 +159,8 @@ This folder is an update package, not a replacement for the whole project.
    in `agent_core.py` match the existing installation (`C:/dev/agent` by default).
 5. Run `python chat_window.py`, or use the existing `start_chat.bat`.
 
+Pillow is the new image dependency. The two supported models are already installed
+on the tested laptop; on another machine install them manually before use.
 No new paid API or cloud model is required. The fixed model allowlist is unchanged.
 
 ## Tests
@@ -140,10 +172,13 @@ python -B test_browser_search.py
 python -B test_browser_network.py
 python -B test_fetch_page.py
 python -B test_browser_live.py
+python -B test_model_vision.py
+python -B test_vision_ui.py
 ```
 
 The search, network and fetch suites need only the standard library and fake
-external modules. They have 72 offline tests. The live suite needs installed Playwright, Chromium
+external modules. They have 72 offline tests; the new model/vision suite adds 23 (95 total).
+The latter requires Pillow and uses fake inference/capture, with no network. The live suite needs installed Playwright, Chromium
 and HTTPX. It runs real visible Chromium against fake HTTPX responses, exercising
 the real route handler, DOM extraction, same-host resources, cross-host refusals
 and page request exhaustion without needing an Internet site.
@@ -173,5 +208,6 @@ See `VALIDATION.md` for the actual checks run and remaining limitations.
 - Same-host resources remain allowed and can send site-chosen paths/queries to
   that host. This is destination containment, not a complete data-flow sandbox.
 - Longer-page reading, page search and audit-log redaction remain future work.
-- Desktop app control, model routing, image generation and larger models remain
-  later roadmap stages. This update grants none of those powers.
+- Desktop actions, video input, and image/video generation remain later stages.
+  Screenshot observation grants no desktop control. Routing currently covers only
+  general text, reasoning and still-image analysis; it is not a quality oracle.
