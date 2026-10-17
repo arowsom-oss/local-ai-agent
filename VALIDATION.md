@@ -3,9 +3,25 @@
 Checked on Windows with Python 3.12.10, Playwright 1.64.0, HTTPX 0.28.1 and
 Ollama's Python package 0.6.3. The existing installed Chromium was used.
 
-## Passed
+## Current hardening checks
 
-- 30 plain-assert offline search, approval, plan, argument-validation and
+- 62 offline tests passed: 38 core/search/approval tests, 14 browser-network
+  tests, and 10 direct-fetch tests. Fakes require no Internet.
+- Regression cases cover raw URLs containing query/path/encoded data, mandatory
+  per-URL approval during plans and after site approval, callback exceptions,
+  literal-True approval, approved-URL mutation, and malformed URL refusal.
+- Fetch tests cover streaming limits, exact 5 MB boundary, Host/SNI/IP pinning,
+  proxy disabling, redirects, compression, attachments, errors and DNS rejection.
+- Real headed Chromium with fake HTTPX responses passed again after the changes.
+- Syntax parsing and diff whitespace checks passed.
+
+The scoped security review found the privacy approval bypass in both URL tools
+and a pre-existing unbounded response buffer in fetch_page. Both are addressed
+in this package. Review does not prove that no further vulnerabilities exist.
+
+## Earlier integration checks
+
+- 38 plain-assert offline search, approval, plan, argument-validation and
   stale-element tests in `test_browser_search.py`.
 - 14 plain-assert offline interception, DNS rejection, IP/Host/SNI pinning,
   resource blocking, size-limit, error and worker-timeout tests in
@@ -52,6 +68,11 @@ Chromium integration fixture. No exception to redirect checks was added.
 - Compatibility with every public website is not established.
 - No claim of OS-level network isolation or a hard interruptible DNS deadline.
 - The full existing attach/compaction application was not exhaustively retested.
+
+The earlier Internet, Ollama and Windows dialog results above apply to the
+previous integration build; those external checks were not repeated for this
+hardening patch. The new exact-URL dialog content is checked with a fake widget
+harness; its shared No-default dialog implementation is unchanged.
 
 The original files in Downloads and the working `C:/dev/agent` installation were
 left unchanged. The GitHub update is proposed separately for review.

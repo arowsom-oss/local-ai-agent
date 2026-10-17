@@ -207,7 +207,7 @@ def tool_call(name, args):
     return types.SimpleNamespace(function=types.SimpleNamespace(name=name, arguments=args))
 
 
-def run_calls(calls, session=None, decisions=None, after_popup=None, open_result="Page opened."):
+def run_calls(calls, session=None, decisions=None, after_popup=None, open_result="Page opened.", initial_hosts=()):
     """Run the real model/tool loop with a scripted model and approval recorder."""
     session = session or session_with()
     popups, audit_events, logs, opened, messages, tool_schemas = [], [], [], [], [], []
@@ -241,6 +241,7 @@ def run_calls(calls, session=None, decisions=None, after_popup=None, open_result
         audit_events.append((event, name, copy.deepcopy(args), note))
 
     fake_fetch.session_hosts.clear()
+    fake_fetch.session_hosts.update(initial_hosts)
     with patch.object(core, "chat", side_effect=chat), \
             patch.object(core, "audit", side_effect=audit), \
             patch.object(core, "compact", return_value=False), \
@@ -290,18 +291,108 @@ def test_popup_even_mid_plan_without_consuming_plan_step():
         search_call(),
         tool_call("browser_open", {"url": "https://approved.example/next"}),
     ])
-    assert [name for name, _ in result.popups] == ["plan", "browser_search"]
+    assert [name for name, _ in result.popups] == ["plan", "browser_search", "outbound_request"]
     assert len(result.opened) == 2
     assert sum(event[0] == "step_done" for event in result.audit) == 1
     assert not any(event[0] == "plan_changed" for event in result.audit)
 
 
-def test_approved_open_and_fetch_are_low_risk_without_popup():
-    assert core.RISK_TIERS["browser_open"] == core.RISK_TIERS["fetch_page"] == "low"
-    assert "browser_open" not in core.NEEDS_APPROVAL and "fetch_page" not in core.NEEDS_APPROVAL
+def test_approved_host_does_not_authorize_model_written_url():
+    assert core.RISK_TIERS["browser_open"] == core.RISK_TIERS["fetch_page"] == "high"
+    assert "browser_open" in core.NEEDS_APPROVAL and "fetch_page" in core.NEEDS_APPROVAL
     result = run_calls([tool_call("browser_open", {"url": "https://approved.example/"})])
-    assert result.popups == []
+    assert [name for name, _ in result.popups] == ["outbound_request"]
     assert result.opened == ["https://approved.example/"]
+
+
+def test_every_arbitrary_url_tool_requires_exact_data_approval():
+    urls = (
+        "https://approved.example/?q=DEMO_PRIVATE_TEXT",
+        "https://approved.example/DEMO_PRIVATE_TEXT",
+        "https://approved.example/?%44%45%4d%4f=value",
+        "https://approved.example/?q=RE VNTw==".replace(" ", ""),
+        "https://approved.example/?q=person%40example.com&number=1234567",
+    )
+    for name in ("browser_open", "fetch_page"):
+        for url in urls:
+            sent = []
+            with patch.dict(core.available_functions, {"fetch_page": lambda url: sent.append(url) or "Fetched."}):
+                denied = run_calls([tool_call(name, {"url": url})], decisions={"outbound_request": False})
+                assert denied.popups == [("outbound_request", {"tool": name, "url": url})]
+                assert denied.opened == sent == []
+                assert any(e[0] == "outbound_refused" for e in denied.audit)
+                allowed = run_calls([tool_call(name, {"url": url})])
+                assert allowed.popups == [("outbound_request", {"tool": name, "url": url})]
+                assert (allowed.opened if name == "browser_open" else sent) == [url]
+
+
+def test_plan_cannot_approve_model_written_data_urls():
+    for name in ("browser_open", "fetch_page"):
+        url = "https://approved.example/?q=DEMO_PRIVATE_TEXT"
+        result = run_calls([
+            tool_call("propose_plan", {"goal": "Read", "steps": ["open " + url]}),
+            tool_call(name, {"url": url}),
+        ], decisions={"outbound_request": False})
+        assert [name for name, _ in result.popups] == ["plan", "outbound_request"]
+        assert not result.opened
+        assert not any(e[0] == "step_done" for e in result.audit)
+
+
+def test_session_host_grant_does_not_approve_data():
+    result = run_calls([tool_call("browser_open", {"url": "https://session.example/private"})],
+                       initial_hosts={"session.example"}, decisions={"outbound_request": False})
+    assert [name for name, _ in result.popups] == ["outbound_request"]
+    assert not result.opened
+
+
+def test_new_site_grant_does_not_approve_data():
+    result = run_calls([tool_call("browser_open", {"url": "https://new.example/private"})],
+                       decisions={"outbound_request": False})
+    assert [name for name, _ in result.popups] == ["new_site", "outbound_request"]
+    assert not result.opened
+
+
+def test_malformed_urls_refused_before_popup():
+    for url in ("https://name:password@approved.example/", "https://approved.example/\nsecret",
+                "https://approved.example/with space", "https://approved.example\\@evil.example/",
+                "https://approved.example/" + "a" * 4096):
+        result = run_calls([tool_call("browser_open", {"url": url})])
+        assert result.popups == result.opened == []
+        assert any(e[0] == "outbound_refused" for e in result.audit)
+
+
+def test_approval_must_be_literal_true_and_exceptions_deny():
+    for answer in (False, None, 1, "yes", "no", [True]):
+        result = run_calls([tool_call("browser_open", {"url": "https://approved.example/"})],
+                           decisions={"outbound_request": answer})
+        assert not result.opened
+    def broken_popup(name, args):
+        raise RuntimeError("UI failed")
+    result = run_calls([tool_call("browser_open", {"url": "https://approved.example/"})],
+                       after_popup=broken_popup)
+    assert not result.opened
+
+
+def test_popup_cannot_mutate_approved_url():
+    url = "https://approved.example/original?q=hello"
+    def mutate(name, args):
+        if name == "outbound_request":
+            args["url"] = "https://approved.example/changed?q=secret"
+    result = run_calls([tool_call("browser_open", {"url": url})], after_popup=mutate)
+    assert result.opened == [url]
+
+
+def test_outbound_popup_displays_full_url_and_warning():
+    tree = ast.parse((HERE / "chat_window.py").read_text(encoding="utf-8"))
+    nodes = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "confirm"
+             or isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "WHAT_IT_DOES" for t in n.targets)]
+    shown = []
+    ns = {"high_risk_confirm": lambda title, lines: shown.append((title, lines)) or False}
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), "chat_window.py", "exec"), ns)
+    url = "https://approved.example/" + "x" * 2000 + "?q=EXACT"
+    assert ns["confirm"]("outbound_request", {"tool": "fetch_page", "url": url}) is False
+    assert url in shown[0][1]
+    assert "private data" in "\n".join(shown[0][1])
 
 
 def test_downloads_are_blocked_without_schema_or_popup():
@@ -372,9 +463,9 @@ def test_existing_click_plan_still_works():
     assert sum(event[0] == "step_done" for event in result.audit) == 1
 
 
-def test_existing_open_new_site_still_uses_one_popup():
+def test_open_new_site_needs_site_and_data_approval():
     result = run_calls([tool_call("browser_open", {"url": "https://new.example/"})])
-    assert [name for name, _ in result.popups] == ["new_site"]
+    assert [name for name, _ in result.popups] == ["new_site", "outbound_request"]
     assert result.opened == ["https://new.example/"]
 
 

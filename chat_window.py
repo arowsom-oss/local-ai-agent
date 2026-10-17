@@ -60,6 +60,7 @@ WHAT_IT_DOES = {
     "browser_open": "OPENS A WEB PAGE in the read-only browser",
     "browser_click": "CLICKS A LINK in the read-only browser",
     "browser_search": "SUBMITS A SEARCH on a website",
+    "outbound_request": "SENDS THIS EXACT ADDRESS TO A WEBSITE",
 }
 
 
@@ -140,7 +141,7 @@ def confirm(name, args):
         lines = ["WANTS TO FOLLOW THIS PLAN (open approved sites and click links only)", "",
                  f"Goal: {args.get('goal')}", ""]
         lines += [f"{i}. {s}" for i, s in enumerate(args.get("steps", []), 1)]
-        lines += ["", "New websites, downloads and anything else still get their own popup.",
+        lines += ["", "Model-written addresses, searches and new websites still need separate approval.",
                   "Approve the whole plan?"]
         return messagebox.askyesno("Approve plan", "\n".join(lines), default="no", icon="warning") is True
     if name == "plan_changed":
@@ -158,6 +159,13 @@ def confirm(name, args):
                  "Exact search text:", args.get("text", ""), "",
                  f"Full URL: {args.get('url')}", "", "Allow this search?"]
         return high_risk_confirm("Approve search", lines)
+    if name == "outbound_request":
+        lines = [WHAT_IT_DOES[name], "", f"Tool: {args.get('tool')}", "",
+                 "Full URL (exact address):", args.get("url", ""), "",
+                 "An address can contain private data in its path or query, even on an approved site.",
+                 "Site approval and plans do not approve sending this data.", "",
+                 "Allow this one request?"]
+        return high_risk_confirm("Approve outbound address", lines)
     lines = [WHAT_IT_DOES.get(name, "RUNS A TOOL"), "", f"Tool: {name}"]
     if name in ("fetch_page", "download_file", "browser_open", "browser_click"):
         try:

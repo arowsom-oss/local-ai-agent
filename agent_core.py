@@ -1,6 +1,8 @@
 import json
 import time
+from copy import deepcopy
 from datetime import datetime
+from urllib.parse import urlsplit
 from ollama import chat
 from pathlib import Path
 import fetch
@@ -27,12 +29,14 @@ SAFE = Path("C:/dev/agent/sandbox")
 AUDIT_LOG = Path("C:/dev/agent/audit.log")
 
 # Tools that must be approved by a human before they run.
-NEEDS_APPROVAL = {"read_file", "browser_click", "browser_search"}
+NEEDS_APPROVAL = {"read_file", "browser_open", "fetch_page", "browser_click", "browser_search"}
+ARBITRARY_URL_TOOLS = {"browser_open", "fetch_page"}
+NETWORK_TOOLS = ARBITRARY_URL_TOOLS | {"browser_click", "browser_search"}
 # Unknown tools are denied too. Downloads have no executable entry or model schema.
 NEVER_ALLOWED = {"download_file"}
 RISK_TIERS = {
     "add": "low", "multiply": "low", "browser_read": "low",
-    "browser_open": "low", "fetch_page": "low", "read_file": "medium",
+    "browser_open": "high", "fetch_page": "high", "read_file": "medium",
     "browser_click": "medium", "propose_plan": "medium", "browser_search": "high",
 }
 TOOL_ARGUMENTS = {
@@ -53,6 +57,31 @@ def tool_args_problem(name, args):
         value = args[key]
         if not isinstance(value, kind) or (kind is int and isinstance(value, bool)):
             return f"invalid type for {key}"
+    return ""
+
+
+def approved(ask_approval, name, args):
+    """Only literal True grants consent; UI errors and malformed replies deny."""
+    try:
+        return ask_approval(name, deepcopy(args)) is True
+    except Exception:
+        return False
+
+
+def outbound_url_problem(url):
+    """Validate the exact URL before showing it; never guess whether its data is private."""
+    if (not isinstance(url, str) or not 1 <= len(url) <= 4096
+            or any(not c.isprintable() or c.isspace() for c in url) or "\\" in url):
+        return "URL must be 1 to 4096 printable characters without whitespace or backslashes"
+    try:
+        parts = urlsplit(url)
+        if parts.username is not None or parts.password is not None:
+            return "URL credentials are not allowed"
+        host, problem = fetch.check_new_site(url)
+        if problem or host is None:
+            return problem or "invalid website address"
+    except Exception:
+        return "invalid website address"
     return ""
 
 
@@ -329,7 +358,7 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                     audit("plan_refused", name, args, model, note=problem)
                     log(f"[blocked] propose_plan: {problem}")
                     reply_text = f"Error: {problem}"
-                elif ask_approval("plan", {"goal": new_plan["goal"],
+                elif approved(ask_approval, "plan", {"goal": new_plan["goal"],
                                            "steps": [show_step(s) for s in new_plan["steps"]]}):
                     plan = new_plan
                     audit("plan_approved", name, args, model, note=new_plan["goal"])
@@ -367,6 +396,14 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                     messages.append({'role': 'tool', 'tool_name': name, 'content': f"Error: {info}"})
                     continue
                 args = {"element": element, "link": info, "url": url}   # what the popup shows
+            if name in NETWORK_TOOLS:
+                problem = outbound_url_problem(url)
+                if problem:
+                    audit("search_refused" if name == "browser_search" else "outbound_refused",
+                          name, args, model, note=problem)
+                    log(f"[blocked] {name}: {problem}")
+                    messages.append({'role': 'tool', 'tool_name': name, 'content': f"Error: {problem}"})
+                    continue
             if name in ("fetch_page", "browser_open", "browser_click", "browser_search") and not fetch.is_allowed(url):
                 host, problem = fetch.check_new_site(url)    # code reads the site name, not the model
                 if problem:
@@ -377,7 +414,7 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                     messages.append({'role': 'tool', 'tool_name': name,
                                      'content': f"Error: {problem}"})
                     continue
-                if not ask_approval("new_site", {"host": host, "url": url}):
+                if not approved(ask_approval, "new_site", {"host": host, "url": url}):
                     audit("site_denied", name, args, model, note=host)
                     if name == "browser_search":
                         audit("search_refused", name, args, model, note="website not approved")
@@ -396,7 +433,7 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                     on_plan = True                       # covered by the plan popup
                 else:
                     wanted = f'open {url}' if name == "browser_open" else f'click the link "{_plan_text(label, 40)}"'
-                    if not ask_approval("plan_changed", {"planned": show_step(step), "new": wanted}):
+                    if not approved(ask_approval, "plan_changed", {"planned": show_step(step), "new": wanted}):
                         plan = None
                         audit("plan_stopped", name, args, model, note=wanted)
                         log(f"[blocked] {name}: off the plan, you stopped it")
@@ -406,9 +443,20 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                     audit("plan_changed", name, args, model, note=wanted)
                     site_ok_now = True                   # that popup approved this one action
 
-            # A search ALWAYS gets its own popup, even after a new-site popup or mid-plan.
-            if (name in NEEDS_APPROVAL and (name == "browser_search" or (not site_ok_now and not on_plan))
-                    and not ask_approval(name, args)):
+            # An approved hostname or plan is not consent to send model-written data.
+            # Paths, query names, values, and encodings all require the same gate.
+            if name in ARBITRARY_URL_TOOLS and not approved(
+                    ask_approval, "outbound_request", {"tool": name, "url": url}):
+                audit("outbound_refused", name, args, model, note="outbound URL not approved")
+                log(f"[blocked] {name}: outbound URL not approved")
+                messages.append({'role': 'tool', 'tool_name': name,
+                                 'content': "Error: user denied this outbound URL"})
+                continue
+
+            # A search ALWAYS gets its own popup; raw-URL tools used the gate above.
+            if (name in NEEDS_APPROVAL and name not in ARBITRARY_URL_TOOLS
+                    and (name == "browser_search" or (not site_ok_now and not on_plan))
+                    and not approved(ask_approval, name, args)):
                 audit("denied", name, args, model)
                 if name == "browser_search":
                     audit("search_refused", name, args, model, note="search not approved")
@@ -426,8 +474,10 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
             audit("approved" if name in NEEDS_APPROVAL else "ran_without_asking", name, args, model)
             log(f"[tool] {name} {args}")
             t0 = time.perf_counter()
-            if name in ("browser_click", "browser_search"):
+            if name in ("browser_open", "browser_click", "browser_search"):
                 result = browser_open(url)     # open EXACTLY the address that was approved
+            elif name == "fetch_page":
+                result = available_functions[name](url=url)  # same immutable approved address
             else:
                 result = available_functions[name](**args)
             total += time.perf_counter() - t0
