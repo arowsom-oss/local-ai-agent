@@ -181,3 +181,6 @@ See VALIDATION.md and TOP10_STATUS.md for what actually passed. Tests do not
 prove freedom from vulnerabilities. Wider app integration, OS/VM isolation,
 atomic protection against concurrent human edits, broad routing evaluation,
 full video/audio understanding and high-quality video generation remain future work.
+
+The generated video smoke sample contains a watermark-like artifact produced by
+the model. It demonstrates that the pipeline runs, not publication-ready quality.

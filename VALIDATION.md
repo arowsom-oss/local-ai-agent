@@ -67,3 +67,7 @@ quality claim is made. Interpretation may hallucinate or quote private informati
 New persistent audit entries omit payloads; old logs and visible chat are separate.
 Weights and the development runtime are excluded from the distributable source.
 A blocked cleanup left an unused partial video-model cache on this machine.
+
+Visual inspection of a generated video frame found a watermark-like artifact
+produced by the model. The sample is a pipeline demonstration, not a clean or
+publication-ready clip; nothing was removed or retouched.
