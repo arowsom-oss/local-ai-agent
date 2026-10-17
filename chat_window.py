@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from ollama import generate
 
 import attach
+from browser_tool import close_browser
 from agent_core import run_turn, ALLOWED_MODELS, MODEL, SAFE, AUDIT_LOG, forget_sites
 
 # ---- shared state -------------------------------------------------------
@@ -56,6 +57,9 @@ WHAT_IT_DOES = {
     "fetch_page": "CONTACTS THE INTERNET",
     "new_site": "WANTS TO READ A NEW WEBSITE (read only, this chat only)",
     "download_file": "SAVES A FILE onto your computer from the internet",
+    "browser_open": "OPENS A WEB PAGE in the read-only browser",
+    "browser_click": "CLICKS A LINK in the read-only browser",
+    "browser_search": "SUBMITS A SEARCH on a website",
 }
 
 
@@ -89,16 +93,73 @@ def worker(text, model, old_model):
 
 
 # ---- the window (everything below runs on the main thread) ---------------
+def high_risk_confirm(title, lines):
+    """Modal red approval dialog. No starts focused; Enter, Escape and close deny."""
+    answer = False
+    win = tk.Toplevel(root)
+    win.title(title)
+    win.transient(root)
+    win.configure(bg=T("window"))
+    width, height = min(720, win.winfo_screenwidth() - 80), min(480, win.winfo_screenheight() - 120)
+    x, y = max(0, (win.winfo_screenwidth() - width) // 2), max(0, (win.winfo_screenheight() - height) // 2)
+    win.geometry(f"{width}x{height}+{x}+{y}")
+    win.minsize(540, 360)
+    tk.Label(win, text="HIGH RISK - EXPLICIT APPROVAL REQUIRED", bg="#B91C1C", fg="white",
+             font=(UI_FONT, 12, "bold"), padx=16, pady=14).pack(fill="x")
+    # Reserve button space FIRST so the scrolling text cannot hide the controls.
+    row = tk.Frame(win, bg=T("window"))
+    row.pack(side="bottom", fill="x", padx=12, pady=(0, 12))
+    holder, box = scroll_box(win, wrap="word", bg=T("card"), fg=T("text"),
+                             font=(FONT_NAME, 12), padx=14, pady=12, relief="flat")
+    holder.pack(fill="both", expand=True, padx=12, pady=12)
+    box.insert("end", "\n".join(lines))
+    box.configure(state="disabled")
+
+    def finish(allow=False):
+        nonlocal answer
+        answer = allow is True
+        win.destroy()
+
+    tk.Button(row, text="Yes, allow this action", command=lambda: finish(True),
+              bg="#B91C1C", fg="white", padx=12, pady=8).pack(side="left")
+    no = tk.Button(row, text="No", command=finish, default="active", padx=24, pady=8)
+    no.pack(side="right")
+    win.protocol("WM_DELETE_WINDOW", finish)
+    win.bind("<Escape>", lambda event: finish())
+    win.bind("<Return>", lambda event: finish())
+    win.wait_visibility()
+    win.grab_set()
+    no.focus_set()
+    root.wait_window(win)
+    return answer
+
+
 def confirm(name, args):
     """Pop up the approval question. Returns True only if the person clicks Yes."""
+    if name == "plan":
+        lines = ["WANTS TO FOLLOW THIS PLAN (open approved sites and click links only)", "",
+                 f"Goal: {args.get('goal')}", ""]
+        lines += [f"{i}. {s}" for i, s in enumerate(args.get("steps", []), 1)]
+        lines += ["", "New websites, downloads and anything else still get their own popup.",
+                  "Approve the whole plan?"]
+        return messagebox.askyesno("Approve plan", "\n".join(lines), default="no", icon="warning") is True
+    if name == "plan_changed":
+        lines = ["THE AGENT WANTS TO LEAVE ITS PLAN", "",
+                 f"Planned step:  {args.get('planned')}", f"Wants instead: {args.get('new')}", "",
+                 "Yes = allow just this one action.   No = stop the plan."]
+        return messagebox.askyesno("Plan changed", "\n".join(lines), default="no", icon="warning") is True
     if name == "new_site":                       # the site name here was read by code, not the model
         lines = [WHAT_IT_DOES["new_site"], "", f"Site:  {args.get('host')}", "",
                  f"Full address: {args.get('url')}", "",
                  "Check the site name carefully. Allow reading it for this chat?"]
-        return messagebox.askyesno("New website", "\n".join(lines),
-                                   default="no", icon="warning") is True
+        return high_risk_confirm("New website", lines)
+    if name == "browser_search":
+        lines = [WHAT_IT_DOES["browser_search"], "", f"Box: {args.get('box')}", "",
+                 "Exact search text:", args.get("text", ""), "",
+                 f"Full URL: {args.get('url')}", "", "Allow this search?"]
+        return high_risk_confirm("Approve search", lines)
     lines = [WHAT_IT_DOES.get(name, "RUNS A TOOL"), "", f"Tool: {name}"]
-    if name in ("fetch_page", "download_file"):
+    if name in ("fetch_page", "download_file", "browser_open", "browser_click"):
         try:
             lines.append(f"Site: {urlparse(str(args.get('url', ''))).hostname}")
         except ValueError:
@@ -285,6 +346,10 @@ def new_chat():
         return
     if not messagebox.askyesno("New chat", "Start a new chat?\n\nThe agent will forget this conversation.",
                                default="no"):
+        return
+    closed = close_browser()    # close the browser BEFORE wiping anything: no half-reset chats
+    if closed.startswith("Error"):
+        show("New chat", f"not started: {closed}")
         return
     messages.clear()            # empty the SAME list (don't make a new one)
     forget_sites()              # websites allowed in the old chat are forgotten too

@@ -1,72 +1,145 @@
 # Local AI Agent with Code-Enforced Restrictions
 
-A small AI agent that runs entirely on my laptop with [Ollama](https://ollama.com) and a local Gemma model.
-It can browse two approved websites, download files, and read files I give it.
-**Every restriction is enforced in Python code, not in the prompt**, because a model can be talked out of
-its instructions (prompt injection) but it can't talk its way past an `if` statement.
+A small Python 3.12 agent for Windows, using a local model through Ollama.
+It reads approved websites, follows real links, searches simple GET forms, reads
+attached text files from a sandbox, and does basic math. Permissions live in code.
 
-## What it can and can't do
+## Browser tools
 
-| Can | Can't |
+| Tool | What code allows |
 |---|---|
-| Read pages from an allowlist of sites | Open apps, change settings, run commands |
-| Download files into its own folder | Delete anything (it has no delete tool at all) |
-| Read files I attach, inside a sandbox folder | Read files outside the sandbox |
-| Do math with built-in tools | Use any tool not on the allowlist |
+| `browser_open(url)` | Open an approved HTTPS address |
+| `browser_read()` | Return at most 4,000 characters, including numbered visible links and boxes |
+| `browser_click(element)` | Look up a recorded link address and open it through the same checks |
+| `browser_search(element, text)` | Build and open a URL for one named field inside a GET form |
+| `propose_plan(goal, steps)` | Ask approval for 1 to 5 open/click steps |
 
-Anything risky (reading a file, contacting the internet, saving a download) shows a **Yes/No popup with No as the default**.
+The browser never types, clicks script-driven buttons, fills passwords, or runs
+JavaScript chosen by the model. The element-listing JavaScript is fixed code that
+only reads the DOM. Page JavaScript stays disabled.
 
-## Security design (and why)
+## Approval tiers
 
-- **Deny by default.** Tools, models, websites and file types are all allowlists. Anything not listed is refused.
-- **The gate lives in the core, not the UI.** `agent_core.run_turn` asks for approval before any risky tool runs,
-  so neither the terminal version nor the window can skip it.
-- **Path jail.** `read_file` resolves the path and refuses anything outside `sandbox/`, so `../secret.txt` fails.
-- **URL checks that can't be fooled by tricks** like `https://en.wikipedia.org@evil.com` (the real host is `evil.com`),
-  wrong ports, or redirects (redirects are never followed).
-- **Downloads:** own folder only, never overwrite (`open(..., "xb")` fails if the file exists), filename chosen by
-  code not the model, Windows device names like `CON` blocked, 200 MB cap counted while streaming
-  (the server's `Content-Length` isn't trusted).
-- **Attach file:** I pick the file in a normal file dialog, so the model never chooses a path. Text types only,
-  1 MB cap. The size is checked on the bytes actually read, not on an earlier size lookup, to avoid a
-  **TOCTOU** (time-of-check to time-of-use) gap.
-- **File contents are labelled as data**, not instructions. That helps a little; the popup is the real defense.
-  `sandbox_examples/evil.txt` and `evil2.txt` are prompt-injection test files I used.
-- **Audit log.** Every tool request is written to `audit.log` as JSON Lines: `approved` *before* a tool runs and
-  `result` after, so a crash mid-tool still leaves evidence. `json.dumps` escapes newlines, which blocks
-  **log injection** (faking an extra log line). The log sits outside the sandbox, so the agent can't read it.
-- **Auto-compactor.** Long chats are summarized to fit the model's context window. The summary is inserted as a
-  labelled *user* message, never a *system* message, because promoting model-written text to the highest
-  authority would be privilege escalation.
-- **No network exposure.** Ollama has no login, so its port stays on `127.0.0.1`.
+| Tier | Actions | Approval |
+|---|---|---|
+| Low | Read/open an already approved site; read the browser; do math | Logged, no popup |
+| Medium | Follow a link; read a sandbox file; propose a plan | Approval required; a matching plan covers a link |
+| High | Submit a search; approve a new website | Separate red dialog for every action; No is the default |
+| Blocked | Download files, target passwords, run commands, control desktop apps | No executable tool is exposed |
 
-- **Stop button.** Pressing Stop (or Esc) sets a flag that the loop checks before every model call and right
-  before every tool runs, so a reply that asks for several tools can't sneak the rest through.
-- **New websites need a popup.** A site that is not on the allowlist can be approved read-only, for this chat only.
-  The site name in the popup is read by code from the URL, never written by the model, and the list of approved
-  sites is not a tool parameter, so the model has no way to add one itself. Raw IP addresses, `localhost`, `.local`
-  and similar names are refused before any popup (that attack is called SSRF).
-- **DNS rebinding blocked.** Before fetching or downloading, the code looks the site up once, refuses it if *any*
-  address is private or local, then connects to the exact IP it checked while still verifying the HTTPS certificate
-  against the real site name.
-- **Refusals show in the chat.** When code blocks something, an orange "Blocked:" line says so, so a code refusal
-  can't be mistaken for the model refusing on its own.
+A search on a new site needs **both** site approval and search approval. An
+approved plan never covers a search. Enter, Escape and closing a red dialog deny
+the action; Yes requires explicit selection. The terminal frontend uses its
+existing text confirmation instead of a red window.
 
-## Run it
+`download_file` is removed from the model schema and executable tool registry.
+Requests for it are explicitly refused, even if the model invents the tool call.
+The legacy `download.py` can remain on disk; the agent core does not import it.
 
-1. Install [Ollama](https://ollama.com) and pull a model: `ollama pull gemma4:e2b`
-2. `pip install -r requirements.txt`
-3. Copy `identity.example.py` to `identity.py` and fill in your details.
-4. Edit the folder paths at the top of `agent_core.py` and `download.py` if yours aren't `C:\dev\agent`.
-5. Double-click `start_chat.bat`, or run `python chat_window.py`. (`python agent.py` is the terminal version.)
+## Search rules
 
-## Known limits
+The model supplies only an element number and search text. Code records the box's
+name, its containing form's resolved action URL, and the form's method. A search
+is refused unless the box was numbered, is a search/text box, has a name, belongs
+to its containing form, and uses GET or an omitted method.
 
-- The approval popup only works if the person reads it. Too many popups train people to click Yes (approval fatigue).
-- Labelling file contents as data does not stop prompt injection; it only makes it less likely to work.
-- Summaries lose detail, so the agent can forget things from long ago in a long chat.
+Text must be 1 to 100 printable characters, with no line breaks, `@`, or run of
+7 or more digits. Unicode digits are checked too. All checks happen before a
+popup. These rules reduce data leakage; they do not identify all private data.
 
-## How it was built
+`urlencode` builds the query. Only `{field_name: search_text}` is sent; existing
+action queries, fragments and other fields are omitted. The approval dialog
+shows the box label, exact search text and full URL. After approval, code opens
+that exact URL without resolving the element again.
 
-I built this with help from an AI assistant (Claude), step by step. I tested each feature on my own machine and
-can explain each security decision above.
+## Browser restrictions
+
+- Chromium runs visibly, with a fresh non-persistent context per chat.
+- Downloads are not accepted; service workers are blocked.
+- The context is offline. Intercepted requests are fulfilled from HTTPX; the
+  browser's normal context networking has no online fallback.
+- Every intercepted HTTP request must be GET. Image, media, font, script,
+  WebSocket and EventSource requests are blocked. WebSockets also have a
+  separate blocking route installed before pages are created.
+- Your existing `fetch.check_new_site` and `fetch.safe_ip` validate URLs and DNS.
+  HTTPX connects directly to the checked IP, retaining Host and TLS SNI.
+  Environment proxies are disabled for this fetch path.
+- Each response is capped at 5,000,000 bytes while streaming. Compressed responses
+  and attachments are refused. HTTPX uses 10-second operation timeouts plus
+  elapsed-time checks. This is not a forcibly interruptible total deadline.
+- Redirects are refused. No 3xx response is fulfilled into Chromium.
+- Failed navigations dispose of the context before another navigation can run.
+- One dedicated thread owns all Playwright objects. Other threads use queues
+  with timeouts. `close_browser()` must succeed before New chat resets approvals.
+
+Element numbers are not reused during a chat. Reading again invalidates old
+numbers. Navigation clears the element map, including a same-URL reload. The map
+also records the page URL and navigation version, so stale references fail
+closed and ask for another `browser_read`.
+
+Plans name links by their visible text, not numbers for pages that do not exist
+yet. A planned click needs exactly one matching recorded label. Changes require
+the existing plan-changed approval. Searches do not consume plan steps.
+
+## Other existing features
+
+- Sandbox file reads check the resolved path and have an 8,000-character limit.
+- The person chooses attached files; the model has no file picker or upload tool.
+- The Stop button checks its flag between model calls and tool actions.
+- Chat summaries are labelled untrusted user-message data, never system messages.
+- The JSON Lines audit log records approvals, refusals, results and tool risk.
+  It stays outside the sandbox and is excluded from Git. It currently contains
+  tool arguments, including search text: do not publish it.
+- Every tool's actual arguments are checked in code, including rejecting extra
+  parameters and booleans supplied as element numbers.
+
+## Install the update
+
+This folder is an update package, not a replacement for the whole project.
+
+1. Close the agent window and keep a backup of the current files.
+2. Copy `browser_tool.py`, `agent_core.py`, and `chat_window.py` beside the existing
+   `fetch.py`, `htmltext.py`, and `attach.py`. Do not replace `identity.py`.
+3. Install dependencies with `python -m pip install -r requirements.txt` and
+   install the browser with `python -m playwright install chromium`.
+4. Keep the existing Ollama models and launcher. Confirm the sandbox/audit paths
+   in `agent_core.py` match the existing installation (`C:/dev/agent` by default).
+5. Run `python chat_window.py`, or use the existing `start_chat.bat`.
+
+No new paid API or cloud model is required. The fixed model allowlist is unchanged.
+
+## Tests
+
+Run without Python's `-O` option, because tests use plain asserts:
+
+```text
+python -B test_browser_search.py
+python -B test_browser_network.py
+python -B test_browser_live.py
+```
+
+The first two suites need only the standard library and fake external modules.
+They have 44 offline tests. The live suite needs installed Playwright, Chromium
+and HTTPX. It runs real visible Chromium against fake HTTPX responses, exercising
+the real route handler and DOM extraction without needing an Internet site.
+
+See `VALIDATION.md` for the actual checks run and remaining limitations.
+
+## Known limits and next stages
+
+- A live Wikipedia Dog article read passed. Its `dog` search returned a redirect
+  and was correctly refused. Search sites must return their result directly;
+  redirect support requires a separate design, not disabling the checks.
+- Sites requiring JavaScript, POST, hidden form fields or authentication may not
+  work. GET requests can have side effects on poorly designed sites; these rules
+  cannot prove that every endpoint is semantically read-only.
+- Chromium routing and offline emulation are not an OS network sandbox for all
+  browser background activity. Strict process-wide egress isolation is separate.
+- Account-link blocking uses the existing keyword checks; it is not a complete
+  classifier of every login or payment endpoint.
+- Stop cannot forcibly interrupt a Python worker thread already inside a
+  blocking operation. A separate browser process is a future improvement.
+- Longer-page reading, page search, request budgets, audit-log redaction and
+  third-party-resource restrictions remain future enhancements.
+- Desktop app control, model routing, image generation and larger models remain
+  later roadmap stages. This update grants none of those powers.
