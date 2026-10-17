@@ -15,6 +15,8 @@ from process_guard import stop_all
 from media_input import prepare_media
 from browser_tool import close_browser
 from agent_core import run_turn, MODEL_CHOICES, SAFE, AUDIT_LOG, forget_sites
+from artifacts import store as artifact_store
+from artifact_panel import ArtifactPanel
 
 # ---- shared state -------------------------------------------------------
 messages = []            # the conversation; lives as long as the window is open
@@ -23,6 +25,7 @@ emergency_ui = threading.Event()  # Separate watcher also runs inside modal Tk w
 events = queue.Queue()   # worker thread -> window: things to show or ask about
 busy = False             # True while the model is working on a question
 last_answer = ""         # the newest agent reply, for the "Copy last answer" button
+last_raw_answer = ""     # Preserve code fences when the person copies an answer to Artifacts.
 pending_image = None     # immutable preview-approved bytes, for one turn only
 pending_media = None
 
@@ -324,6 +327,7 @@ def stop_agent():
     pending_image = pending_media = None
     stop_all()  # Kill owned process trees; does not wait for a blocked UIA call.
     close_desktop()
+    artifact_panel.stop()
     for window in root.winfo_children():
         if getattr(window, "_approval_dialog", False):
             window.event_generate("<Escape>")
@@ -618,12 +622,13 @@ def model_check():
 def new_chat():
     """Forget the conversation. The model has no memory of its own: every turn,
     run_turn re-sends the whole messages list. Empty the list and it forgets."""
-    global last_answer, pending_image, pending_media
+    global last_answer, last_raw_answer, pending_image, pending_media
     if busy:
         show("New chat", "wait for the answer first")
         return
-    if not messagebox.askyesno("New chat", "Start a new chat?\n\nThe agent will forget this conversation.",
-                               default="no"):
+    if messagebox.askyesno("New chat", "Start a new chat?\n\nThe agent will forget this conversation.\n"
+                          "Artifact drafts and version history will be discarded. Exported files remain.",
+                          default="no") is not True:
         return
     closed = close_browser()    # close the browser BEFORE wiping anything: no half-reset chats
     if closed.startswith("Error"):
@@ -632,8 +637,12 @@ def new_chat():
     close_desktop()
     stop_all()
     messages.clear()            # empty the SAME list (don't make a new one)
+    artifact_store.clear()
+    artifact_panel.reset()
+    stop_event.clear()          # No turn is active; this is a person-approved fresh chat.
     forget_sites()              # websites allowed in the old chat are forgotten too
     last_answer = ""
+    last_raw_answer = ""
     pending_image = None
     pending_media = None
     chat_box.configure(state="normal")
@@ -721,7 +730,7 @@ def send(event=None):
 
 def poll():
     """Every 100 ms, look for news from the worker thread."""
-    global last_answer
+    global last_answer, last_raw_answer
     try:
         while True:
             item = events.get_nowait()
@@ -739,6 +748,7 @@ def poll():
                 answer_box.put(False if stop_event.is_set() else confirm(name, args))
             elif kind == "answer":
                 remove_pending()
+                last_raw_answer = str(item[1] or "")
                 last_answer = clean(item[1])
                 show("Agent", f"{last_answer}\n[{item[2]:.2f}s]")
                 finish_turn()
@@ -835,10 +845,11 @@ def toggle_theme():
 
 
 def build_window():
-    global root, style, bottom, toolbar, vision_toolbar, chat_holder, chat_box, copy_button, attach_button, model_var, model_box, theme_button, send_button, stop_button, entry
+    global root, style, bottom, toolbar, vision_toolbar, chat_holder, chat_box, copy_button, attach_button, model_var, model_box, theme_button, send_button, stop_button, entry, artifact_panel
     root = tk.Tk()
     root.title("Local agent")
-    root.minsize(860, 420)       # narrower than this and the toolbar gets cut off
+    root.minsize(960, 520)
+    root.geometry("1280x800")
     style = ttk.Style(root)
     style.theme_use("clam")      # the only built-in ttk look that accepts custom colors
 
@@ -857,11 +868,15 @@ def build_window():
     make_button(vision_toolbar, "Attach clip", attach_clip).pack(side="left")
     make_button(vision_toolbar, "Model check", model_check).pack(side="left", padx=6)
     make_button(vision_toolbar, "Free VRAM", free_vram).pack(side="right")
+    workspace = ttk.Panedwindow(root, orient="horizontal")
+    workspace.pack(padx=12, pady=(12, 6), fill="both", expand=True)
     chat_holder, chat_box = scroll_box(
-        root, state="disabled", wrap="word", width=70, height=22,
+        workspace, state="disabled", wrap="word", width=55, height=22,
         spacing2=6, spacing3=10,             # extra space between lines and between messages
         relief="flat", bd=0, padx=16, pady=12, highlightthickness=1)
-    chat_holder.pack(padx=12, pady=(12, 6), fill="both", expand=True)
+    workspace.add(chat_holder, weight=3)
+    artifact_panel = ArtifactPanel(workspace, stop_event, answer=lambda: last_raw_answer)
+    workspace.add(artifact_panel, weight=2)
 
     copy_button = make_button(toolbar, "Copy last answer", lambda: copy_text(last_answer))
     copy_button.pack(side="left")

@@ -1,3 +1,13 @@
+# Current Artifacts addition
+
+128 offline plain-assert tests passed: the prior 115 plus 13 artifact tests.
+All prior native Windows, Tk and Chromium fixture suites passed again. A new
+real Tk/codec fixture also passed edit/history/restore, stale human-edit retention,
+inert HTML, chosen-path export, image/video decoding, playback, Stop and import
+normalization. See ARTIFACTS.md for exact scope and limits. Actual local Ollama also created an inert print(42) code artifact in 15.66 seconds.
+No model code was run
+and no artifact export was chosen by the model.
+
 # Validation of the practice and media build
 
 Windows, Python 3.12.10, Playwright 1.64.0, HTTPX 0.28.1, Ollama package 0.6.3,

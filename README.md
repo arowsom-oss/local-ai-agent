@@ -35,6 +35,30 @@ Approve each exact preview only if it matches your intention. Save draft stores
 text in RAM, Clear clears the draft, and Undo restores one previous state.
 Closing the app discards its state. This practice app is not a VM or an OS sandbox.
 
+## Local Artifacts panel
+
+A split panel beside chat now holds documents, code, images and short videos.
+Ask "Create a study guide artifact about cells" or "Create a Python code artifact
+that prints 42, without running it." The model can create/read/revise bounded
+chat-local drafts; exact revision matching prevents stale edits from replacing
+newer versions. These RAM-only draft tools have no filesystem or execution API.
+
+Edit text directly, Save edit to create a version, or inspect and Restore older
+versions. Unsaved human edits stay in the editor if a newer model revision arrives.
+From answer copies the raw last answer, preserving code fences. Import is a
+person-run picker; imported text drafts can be read by the local AI. Generated
+images/videos automatically become immutable media snapshots in the panel.
+
+Export asks you to choose a new file and exports the exact selected version:
+documents as .md, code as .txt, images as .png and videos as .mp4. Existing files
+are never overwritten. New chat clears in-memory artifacts, including their
+history; already exported and previously generated files remain on disk.
+
+Markdown, HTML, SVG and scripts are displayed as text; URLs are never fetched or
+made into executable previews. Native image and silent video previews use bounded,
+stoppable decoder processes. This version does not run generated apps or render
+arbitrary web code. See ARTIFACTS.md for workflow, limits and tests.
+
 ## Desktop actions and Stop
 
 Windows UI Automation reads semantic controls rather than guessed pixel locations.
@@ -170,12 +194,14 @@ python -B test_browser_network.py
 python -B test_fetch_page.py
 python -B test_model_vision.py
 python -B test_computer_features.py
+python -B test_artifacts.py
 python -B test_desktop_live.py
 python -B test_vision_ui.py
 python -B test_browser_live.py
+python -B test_artifact_ui.py
 ```
 
-The first five contain 115 offline tests with fakes. The last three use real
+The first six contain 128 offline tests with fakes. The last four use real
 Windows UIA/Tk/Chromium with synthetic data or mocked HTTPX and no Internet.
 See VALIDATION.md and TOP10_STATUS.md for what actually passed. Tests do not
 prove freedom from vulnerabilities. Wider app integration, OS/VM isolation,
