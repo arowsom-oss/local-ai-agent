@@ -93,3 +93,13 @@ Actual local Ollama smoke check also passed: gemma4:e2b called create_artifact
 with code content print(42), then confirmed creation. The draft remained inert;
 no code was executed. This single run took 15.66 seconds and does not establish
 that every model request will choose the right artifact tool or produce good text.
+
+## Updated native editor appearance
+
+Artifacts shares the main window's dark/light palette. Documents use proportional
+text with emphasized Markdown heading lines; source characters remain unchanged.
+Code uses a monospace line gutter and simple display-only keyword/string/comment
+colors. The heuristic colors do not establish syntax correctness or a language
+parser. Horizontal scrolling appears when a source line exceeds the view width.
+A shorter pane omits its decorative subtitle; editor controls and safety behavior
+remain. Appearance changes do not grant execution or external network access.

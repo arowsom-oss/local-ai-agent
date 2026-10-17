@@ -2,6 +2,7 @@
 from io import BytesIO
 from pathlib import Path
 import queue
+import re
 import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -12,7 +13,7 @@ from artifact_media import prepare_preview
 
 class ArtifactPanel(ttk.Frame):
     def __init__(self, parent, stop_event, answer=lambda: ""):
-        super().__init__(parent, padding=8)
+        super().__init__(parent, padding=20)
         self.stop_event, self.answer = stop_event, answer
         self.selected = self.version = None
         self.dirty = False
@@ -21,55 +22,133 @@ class ArtifactPanel(ttk.Frame):
         self.playing = False
         self.serial = 0
         self.mail = queue.Queue()
-        ttk.Label(self, text="Artifacts", font=("Segoe UI", 15, "bold")).pack(anchor="w")
-        ttk.Label(self, text="Local AI can read text drafts. Code is displayed, never executed.", wraplength=360).pack(anchor="w", pady=(0, 6))
-        self.choice = ttk.Combobox(self, state="readonly")
-        self.choice.pack(fill="x")
+        heading=ttk.Frame(self)
+        heading.pack(fill="x",pady=(0,4))
+        ttk.Label(heading,text="Artifacts",style="Title.TLabel").pack(side="left")
+        self.kind_label=ttk.Label(heading,text="WORKSPACE",style="Muted.TLabel")
+        self.kind_label.pack(side="right")
+        self.subtitle=ttk.Label(self,text="Your ideas, with room to take shape.",style="Muted.TLabel")
+        self.subtitle.pack(anchor="w",pady=(0,16))
+        self.choice = ttk.Combobox(self,state="readonly",font=("Segoe UI",10))
+        self.choice.pack(fill="x",pady=(0,10))
         self.choice.bind("<<ComboboxSelected>>", self.choose)
-        actions = ttk.Frame(self)
-        actions.pack(fill="x", pady=5)
-        for label, callback in (("New", self.new), ("From answer", self.from_answer),
-                                ("Import", self.import_file), ("Export", self.export)):
-            ttk.Button(actions, text=label, command=callback, width=11).pack(side="left", padx=(0, 3))
-        history = ttk.Frame(self)
-        history.pack(fill="x")
-        ttk.Label(history, text="Version:").pack(side="left")
-        self.history = ttk.Combobox(history, state="readonly", width=7)
-        self.history.pack(side="left", padx=4)
-        self.history.bind("<<ComboboxSelected>>", self.choose_version)
-        self.restore_button = ttk.Button(history, text="Restore", command=self.restore)
+        actions=ttk.Frame(self)
+        actions.pack(fill="x",pady=(0,14))
+        for text,callback in (("New",self.new),("From answer",self.from_answer),("Import",self.import_file)):
+            ttk.Button(actions,text=text,command=callback,width=12 if text=="From answer" else 7).pack(side="left",padx=(0,5))
+        ttk.Button(actions,text="Export",command=self.export,style="Accent.TButton",width=8).pack(side="right")
+        history=ttk.Frame(self)
+        history.pack(fill="x",pady=(0,12))
+        ttk.Label(history,text="VERSION",style="Muted.TLabel").pack(side="left")
+        self.history=ttk.Combobox(history,state="readonly",width=4,font=("Segoe UI",10))
+        self.history.pack(side="left",padx=8)
+        self.history.bind("<<ComboboxSelected>>",self.choose_version)
+        self.restore_button=ttk.Button(history,text="Restore",command=self.restore,width=8)
         self.restore_button.pack(side="left")
-        self.save_button = ttk.Button(history, text="Save edit", command=self.save)
-        self.save_button.pack(side="left", padx=4)
-        ttk.Button(history, text="Reload", command=self.reload).pack(side="left")
-        self.status = tk.StringVar(value="Ask the AI to create an artifact, or choose New.")
-        ttk.Label(self, textvariable=self.status, wraplength=360).pack(fill="x", pady=6)
-        self.body = ttk.Frame(self)
-        self.body.pack(fill="both", expand=True)
-        self.editor = tk.Text(self.body, wrap="word", undo=True, font=("Consolas", 11))
-        bar = ttk.Scrollbar(self.body, command=self.editor.yview)
-        self.editor.configure(yscrollcommand=bar.set)
-        self.editor.grid(row=0, column=0, sticky="nsew")
-        bar.grid(row=0, column=1, sticky="ns")
-        self.text_bar = bar
-        self.body.rowconfigure(0, weight=1)
-        self.body.columnconfigure(0, weight=1)
-        self.editor.bind("<<Modified>>", self.modified)
-        self.image = ttk.Label(self.body, anchor="center")
-        self.play_row = ttk.Frame(self)
-        self.play_button = ttk.Button(self.play_row, text="Play / pause", command=self.toggle_play)
+        ttk.Button(history,text="Reload",command=self.reload,width=8).pack(side="left",padx=5)
+        self.save_button=ttk.Button(history,text="Save edit",command=self.save,width=9)
+        self.save_button.pack(side="right")
+        self.status=tk.StringVar(value="Ask for an artifact, or choose New to start a draft.")
+        footer=ttk.Frame(self)
+        footer.pack(side="bottom",fill="x",pady=(12,0))
+        self.status_label=ttk.Label(footer,textvariable=self.status,style="Muted.TLabel",wraplength=420)
+        self.status_label.pack(fill="x")
+        self.privacy_label=ttk.Label(footer,text="Drafts shared with local AI · Code stays inert.",
+                                     style="Muted.TLabel",wraplength=420)
+        self.privacy_label.pack(fill="x",pady=(7,0))
+        self.bind("<Configure>",self.resize)
+        self.play_row=ttk.Frame(self)
+        self.body=ttk.Frame(self)
+        self.body.pack(fill="both",expand=True)
+        self.editor=tk.Text(self.body,width=36,wrap="word",undo=True,font=("Segoe UI",12),relief="flat",bd=0,
+                            padx=20,pady=18,spacing1=0,spacing2=3,spacing3=3,insertwidth=2)
+        self.gutter=tk.Text(self.body,width=4,wrap="none",font=("Consolas",11),relief="flat",bd=0,
+                            padx=8,pady=18,state="disabled",takefocus=False)
+        self.gutter.grid(row=0,column=0,sticky="ns")
+        self.gutter.grid_remove()
+        bar=ttk.Scrollbar(self.body,command=self.editor.yview)
+        self.editor.configure(yscrollcommand=lambda first,last:(bar.set(first,last),self.gutter.yview_moveto(first)))
+        self.editor.grid(row=0,column=1,sticky="nsew")
+        bar.grid(row=0,column=2,sticky="ns")
+        self.text_bar=bar
+        self.horizontal=ttk.Scrollbar(self.body,orient="horizontal",command=self.editor.xview)
+        self.horizontal.grid(row=1,column=1,sticky="ew")
+        self.horizontal.grid_remove()
+        self.editor.configure(xscrollcommand=self.scroll_horizontal)
+        self.body.rowconfigure(0,weight=1)
+        self.body.columnconfigure(1,weight=1)
+        self.editor.bind("<<Modified>>",self.modified)
+        self.image=ttk.Label(self.body,anchor="center")
+        self.play_button=ttk.Button(self.play_row,text="Play / pause",command=self.toggle_play)
         self.play_button.pack(side="left")
-        self.timeline = tk.Scale(self.play_row, from_=0, to=0, orient="horizontal", showvalue=False,
-                                 command=self.seek)
-        self.timeline.pack(side="left", fill="x", expand=True)
+        self.timeline=tk.Scale(self.play_row,from_=0,to=0,orient="horizontal",showvalue=False,
+                               command=self.seek,relief="flat",bd=0,highlightthickness=0)
+        self.timeline.pack(side="left",fill="x",expand=True)
         self.editor.configure(state="disabled")
         self.save_button.configure(state="disabled")
         self.restore_button.configure(state="disabled")
-        self.after(150, self.tick)
+        self.after(150,self.tick)
+
+    def resize(self,event):
+        self.status_label.configure(wraplength=max(180,event.width-40))
+        self.privacy_label.configure(wraplength=max(180,event.width-40))
+        if event.height < 430:
+            self.subtitle.pack_forget()
+        elif not self.subtitle.winfo_manager():
+            self.subtitle.pack(anchor="w",pady=(0,16),before=self.choice)
+
+    def scroll_horizontal(self,first,last):
+        self.horizontal.set(first,last)
+        if (self.selected is not None and self.selected.kind == "code"
+                and (float(first) > 0 or float(last) < 1)):
+            self.horizontal.grid()
+        else:
+            self.horizontal.grid_remove()
+
+    def apply_theme(self,palette):
+        self.editor.configure(bg=palette["field"],fg=palette["text"],insertbackground=palette["accent"],
+                              selectbackground=palette["select"],selectforeground=palette["text"])
+        self.gutter.configure(bg=palette["field"],fg=palette["subtle"])
+        self.editor.tag_configure("keyword",foreground=palette["accent"])
+        self.editor.tag_configure("string",foreground=palette["green"])
+        self.editor.tag_configure("comment",foreground=palette["subtle"])
+        self.timeline.configure(bg=palette["card"],fg=palette["subtle"],troughcolor=palette["field"],
+                                activebackground=palette["accent"])
+        self.editor.tag_configure("heading",font=("Segoe UI Semibold",17),foreground=palette["accent"],spacing1=12,spacing3=10)
+
+    def format_editor(self):
+        code=self.selected is not None and self.selected.kind=="code"
+        self.editor.configure(font=("Consolas",11) if code else ("Segoe UI",12),
+                              spacing1=0,spacing2=0 if code else 3,spacing3=0 if code else 3)
+        self.gutter.configure(state="normal")
+        self.gutter.delete("1.0","end")
+        if code:
+            lines=int(self.editor.index("end-1c").split(".")[0])
+            self.gutter.insert("1.0","\n".join(str(i) for i in range(1,lines+1)))
+            self.gutter.grid()
+            self.kind_label.configure(text=f"CODE · {lines} LINES")
+        else:
+            self.gutter.grid_remove()
+            self.horizontal.grid_remove()
+        self.gutter.configure(state="disabled")
+        for tag in ("heading","keyword","string","comment"):
+            self.editor.tag_remove(tag,"1.0","end")
+        text=self.editor.get("1.0","end-1c")[:32000]
+        if code:
+            patterns = {"keyword": r"\b(?:def|class|return|import|from|if|else|for|while|const|let|function|export|async|await|print|True|False|None)\b",
+                        "string": r"\"[^\"\n]*\"|'[^'\n]*'", "comment": r"#[^\n]*"}
+            for tag,pattern in patterns.items():
+                for match in re.finditer(pattern,text):
+                    self.editor.tag_add(tag,f"1.0+{match.start()}c",f"1.0+{match.end()}c")
+        else:
+            for number,line in enumerate(text.splitlines(),1):
+                if line.startswith(("# ","## ","### ")):
+                    self.editor.tag_add("heading",f"{number}.0",f"{number}.end")
 
     def modified(self, event=None):
         if self.editor.edit_modified():
             self.dirty = True
+            self.format_editor()
             self.editor.edit_modified(False)
             self.status.set("Unsaved edit. Save creates a new version; no file is written.")
 
@@ -94,6 +173,9 @@ class ArtifactPanel(ttk.Frame):
         self.history.configure(values=())
         self.image.configure(image="", text="")
         self.image.grid_remove()
+        self.gutter.grid_remove()
+        self.horizontal.grid_remove()
+        self.kind_label.configure(text="WORKSPACE")
         self.play_row.pack_forget()
         self.editor.grid()
         self.text_bar.grid()
@@ -152,6 +234,7 @@ class ArtifactPanel(ttk.Frame):
         self.image.configure(image="", text="")
         self.selected = store.get(number)
         a = self.selected
+        self.kind_label.configure(text=a.kind.upper())
         self.version = next(v for v in a.versions if v.number == (revision or a.current.number))
         self.choice.set(f"{a.number}: {a.title} ({a.kind})")
         self.history.configure(values=[str(v.number) for v in a.versions])
@@ -161,6 +244,7 @@ class ArtifactPanel(ttk.Frame):
         self.editor.insert("1.0", self.version.content)
         self.editor.edit_modified(False)
         self.editor.edit_reset()
+        self.format_editor()
         self.dirty = False
         editable = a.kind in ("document", "code") and self.version.number == a.current.number
         self.editor.configure(state="normal" if editable else "disabled", wrap="none" if a.kind == "code" else "word")
@@ -175,7 +259,9 @@ class ArtifactPanel(ttk.Frame):
         else:
             self.editor.grid_remove()
             self.text_bar.grid_remove()
-            self.image.grid(row=0, column=0, columnspan=2, sticky="nsew")
+            self.gutter.grid_remove()
+            self.horizontal.grid_remove()
+            self.image.grid(row=0, column=0, columnspan=3, sticky="nsew")
             self.image.configure(text="Preparing bounded local preview...")
             self.status.set("Decoding local media; no audio, browser, scripts or external links.")
             self.decode(a.kind, self.version.data)

@@ -50,7 +50,13 @@ if __name__ == "__main__":
         source = "<script>fetch('https://must-not-run.invalid')</script>"
         code = store.create("HTML is source only", "code", source)
         panel.load(code.number)
+        ui.root.update()
         assert panel.editor.get("1.0", "end-1c") == source
+        assert panel.gutter.winfo_ismapped() and panel.gutter.get("1.0", "end-1c") == "1"
+        ui.toggle_theme()
+        assert panel.editor.cget("bg") == ui.T("field")
+        assert ui.chat_box.cget("bg") == ui.T("card")
+        ui.toggle_theme()
         with tempfile.TemporaryDirectory() as folder:
             export = Path(folder) / "selected.txt"
             with patch("artifact_panel.filedialog.asksaveasfilename", return_value=str(export)):

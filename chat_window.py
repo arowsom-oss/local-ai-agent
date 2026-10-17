@@ -17,6 +17,7 @@ from browser_tool import close_browser
 from agent_core import run_turn, MODEL_CHOICES, SAFE, AUDIT_LOG, forget_sites
 from artifacts import store as artifact_store
 from artifact_panel import ArtifactPanel
+from ui_theme import PALETTES, configure_styles
 
 # ---- shared state -------------------------------------------------------
 messages = []            # the conversation; lives as long as the window is open
@@ -30,23 +31,11 @@ pending_image = None     # immutable preview-approved bytes, for one turn only
 pending_media = None
 
 # Reading settings. Change these and re-run if they don't feel right for you.
-FONT_NAME = "Verdana"    # wide letters, ships with Windows
-font_size = 14
-UI_FONT = "Segoe UI"     # buttons and labels; the chat itself stays in FONT_NAME
-
-# Apple-style colors. Every widget reads its colors from here, so switching modes
-# is just "pick the other dictionary, then repaint everything".
-THEMES = {
-    "light": dict(window="#F5F5F7", card="#FFFFFF", text="#1D1D1F", subtle="#6E6E73",
-                  border="#D2D2D7", button="#E8E8ED", pressed="#D2D2D7",
-                  accent="#007AFF", on_accent="#FFFFFF", select="#B3D7FF",
-                  red="#D70015", green="#248A3D", orange="#C93400"),
-    "dark": dict(window="#1C1C1E", card="#2C2C2E", text="#F5F5F7", subtle="#98989D",
-                 border="#3A3A3C", button="#3A3A3C", pressed="#48484A",
-                 accent="#0A84FF", on_accent="#FFFFFF", select="#3F638B",
-                 red="#FF6961", green="#30DB5B", orange="#FFB340"),
-}
-theme_name = "light"
+FONT_NAME = "Segoe UI"
+font_size = 12
+UI_FONT = "Segoe UI"
+THEMES = PALETTES
+theme_name = "dark"
 buttons = []             # every button made by make_button, so apply_theme can repaint them
 
 
@@ -195,7 +184,7 @@ def confirm(name, args):
 
 def apply_font():
     chat_box.configure(font=(FONT_NAME, font_size))
-    chat_box.tag_configure("name", font=(FONT_NAME, font_size, "bold"))
+    chat_box.tag_configure("name", font=(UI_FONT, 9, "bold"), spacing1=12, spacing3=6)
     entry.configure(font=(FONT_NAME, font_size))
 
 
@@ -270,9 +259,16 @@ def clean(text):
 
 
 def show(who, text):
+    global welcome_visible
+    if who == "You" and welcome_visible:
+        chat_box.configure(state="normal")
+        ranges = chat_box.tag_ranges("welcome_block")
+        if ranges:
+            chat_box.delete(ranges[0],ranges[-1])
+        welcome_visible=False
     kind = {"You": "you", "Agent": "agent", "Error": "error", "Blocked": "blocked"}.get(who, "note")
     chat_box.configure(state="normal")
-    chat_box.insert("end", f"{who}: ", ("name", kind))       # a Tk tag list: both tags apply
+    chat_box.insert("end", f"{who.upper()}\n", ("name", kind))       # a Tk tag list: both tags apply
     chat_box.insert("end", f"{text}\n\n", (kind + "_body",))
     chat_box.configure(state="disabled")
     chat_box.see("end")
@@ -795,46 +791,38 @@ def make_button(parent, text, command, kind="plain", **extra):
 
 
 def apply_theme():
-    """Repaint every widget with the current mode's colors. Purely visual: no logic lives here."""
+    """Apply the shared palette to both workspaces and existing safety dialogs."""
+    palette = THEMES[theme_name]
     root.configure(bg=T("window"))
-    for frame in (toolbar, vision_toolbar, bottom, chat_holder):
-        frame.configure(bg=T("window"))
+    configure_styles(style, palette)
+    for widget, key in theme_surfaces:
+        widget.configure(bg=T(key))
+    for widget, foreground, background in theme_labels:
+        widget.configure(fg=T(foreground), bg=T(background))
     chat_box.configure(bg=T("card"), fg=T("text"), insertbackground=T("text"),
                        selectbackground=T("select"), selectforeground=T("text"),
-                       highlightbackground=T("border"), highlightcolor=T("border"))
-    chat_box.tag_configure("you", foreground=T("accent"))
-    chat_box.tag_configure("agent", foreground=T("text"))
-    chat_box.tag_configure("note", foreground=T("subtle"))
-    chat_box.tag_configure("note_body", foreground=T("subtle"))
-    chat_box.tag_configure("error", foreground=T("red"))
-    chat_box.tag_configure("error_body", foreground=T("red"))
-    chat_box.tag_configure("blocked", foreground=T("orange"))
-    chat_box.tag_configure("blocked_body", foreground=T("orange"))
-    chat_box.tag_configure("pending", foreground=T("subtle"))
-    entry.configure(bg=T("card"), fg=T("text"), insertbackground=T("text"),
-                    selectbackground=T("select"), selectforeground=T("text"),
-                    highlightbackground=T("border"), highlightcolor=T("accent"))
-    for b, kind in buttons:
-        if kind == "accent":
-            b.configure(bg=T("accent"), fg=T("on_accent"), activebackground=T("accent"),
-                        activeforeground=T("on_accent"), disabledforeground=T("select"))
-        else:
-            b.configure(bg=T("button"), fg=T("red") if kind == "danger" else T("text"),
-                        activebackground=T("pressed"), activeforeground=T("text"),
-                        disabledforeground=T("subtle"))
-    style.configure("TCombobox", fieldbackground=T("card"), background=T("button"),
-                    foreground=T("text"), arrowcolor=T("text"), bordercolor=T("border"),
-                    lightcolor=T("card"), darkcolor=T("card"))
-    style.map("TCombobox", fieldbackground=[("readonly", T("card"))],
-              foreground=[("readonly", T("text"))], selectbackground=[("readonly", T("card"))],
-              selectforeground=[("readonly", T("text"))])
-    style.configure("Vertical.TScrollbar", background=T("button"), troughcolor=T("card"),
-                    bordercolor=T("card"), arrowcolor=T("subtle"),
-                    lightcolor=T("button"), darkcolor=T("button"))
-    style.map("Vertical.TScrollbar", background=[("active", T("pressed"))])
-    root.option_add("*TCombobox*Listbox.background", T("card"))   # the drop-down list
-    root.option_add("*TCombobox*Listbox.foreground", T("text"))
-    theme_button.configure(text="Light mode" if theme_name == "dark" else "Dark mode")
+                       highlightbackground=T("card"), highlightcolor=T("card"))
+    for role, color in (("you", "accent"), ("agent", "text"), ("note", "subtle"),
+                        ("error", "red"), ("blocked", "orange"), ("pending", "subtle")):
+        chat_box.tag_configure(role, foreground=T(color))
+        chat_box.tag_configure(role + "_body", foreground=T(color if role in ("note","error","blocked") else "text"))
+    chat_box.tag_configure("you_body", background=T("bubble"), lmargin1=12, lmargin2=12,
+                           rmargin=12, spacing1=4, spacing3=8)
+    chat_box.tag_configure("welcome_title", foreground=T("text"), font=(UI_FONT,23,"bold"),spacing3=14)
+    chat_box.tag_configure("welcome_body",foreground=T("subtle"),font=(UI_FONT,12),spacing3=14)
+    entry.configure(bg=T("field"),fg=T("text"),insertbackground=T("accent"),
+                    selectbackground=T("select"),selectforeground=T("text"),
+                    highlightbackground=T("border"),highlightcolor=T("accent"))
+    for button, kind in buttons:
+        accent = kind == "accent"
+        button.configure(bg=T("accent" if accent else "button"),
+                         fg=T("on_accent" if accent else "red" if kind=="danger" else "text"),
+                         activebackground=T("accent" if accent else "pressed"),
+                         activeforeground=T("on_accent" if accent else "text"),disabledforeground=T("subtle"))
+    root.option_add("*TCombobox*Listbox.background",T("field"))
+    root.option_add("*TCombobox*Listbox.foreground",T("text"))
+    theme_button.configure(text="Light appearance" if theme_name=="dark" else "Dark appearance")
+    artifact_panel.apply_theme(palette)
 
 
 def toggle_theme():
@@ -845,74 +833,113 @@ def toggle_theme():
 
 
 def build_window():
-    global root, style, bottom, toolbar, vision_toolbar, chat_holder, chat_box, copy_button, attach_button, model_var, model_box, theme_button, send_button, stop_button, entry, artifact_panel
+    global root, style, bottom, toolbar, vision_toolbar, chat_holder, chat_box, copy_button, attach_button, model_var, model_box, theme_button, send_button, stop_button, entry, artifact_panel, theme_surfaces, theme_labels, welcome_visible
     root = tk.Tk()
-    root.title("Local agent")
-    root.minsize(960, 520)
-    root.geometry("1280x800")
+    root.title("Local Studio")
+    root.minsize(1100, 680)
+    root.geometry("1440x900")
     style = ttk.Style(root)
-    style.theme_use("clam")      # the only built-in ttk look that accepts custom colors
+    style.theme_use("clam")
+    theme_surfaces, theme_labels = [], []
 
-    # Pack order matters: the bottom rows go in FIRST, so when the window is short
-    # the chat area shrinks instead of the buttons getting pushed off the screen.
-    bottom = tk.Frame(root)
-    bottom.pack(side="bottom", fill="x", padx=12, pady=12)
-    toolbar = tk.Frame(root)
-    toolbar.pack(side="bottom", fill="x", padx=12)
-    vision_toolbar = tk.Frame(root)
-    vision_toolbar.pack(side="bottom", fill="x", padx=12, pady=4)
-    make_button(vision_toolbar, "Attach image", attach_image).pack(side="left")
-    make_button(vision_toolbar, "Screenshot", screenshot).pack(side="left", padx=6)
-    make_button(vision_toolbar, "Clear image", clear_image).pack(side="left")
-    make_button(vision_toolbar, "Practice", open_practice).pack(side="left", padx=6)
-    make_button(vision_toolbar, "Attach clip", attach_clip).pack(side="left")
-    make_button(vision_toolbar, "Model check", model_check).pack(side="left", padx=6)
-    make_button(vision_toolbar, "Free VRAM", free_vram).pack(side="right")
-    workspace = ttk.Panedwindow(root, orient="horizontal")
-    workspace.pack(padx=12, pady=(12, 6), fill="both", expand=True)
-    chat_holder, chat_box = scroll_box(
-        workspace, state="disabled", wrap="word", width=55, height=22,
-        spacing2=6, spacing3=10,             # extra space between lines and between messages
-        relief="flat", bd=0, padx=16, pady=12, highlightthickness=1)
-    workspace.add(chat_holder, weight=3)
-    artifact_panel = ArtifactPanel(workspace, stop_event, answer=lambda: last_raw_answer)
-    workspace.add(artifact_panel, weight=2)
+    def surface(parent, color="window", **options):
+        frame = tk.Frame(parent, bd=0, **options)
+        theme_surfaces.append((frame,color))
+        return frame
 
-    copy_button = make_button(toolbar, "Copy last answer", lambda: copy_text(last_answer))
-    copy_button.pack(side="left")
-    attach_button = make_button(toolbar, "Attach file", attach_file)
-    attach_button.pack(side="left", padx=(6, 0))
-    make_button(toolbar, "New chat", new_chat).pack(side="left", padx=(6, 0))
-    make_button(toolbar, "Audit log", show_log).pack(side="left", padx=(6, 0))
-    model_var = tk.StringVar(value="auto")
-    model_box = ttk.Combobox(toolbar, textvariable=model_var, values=MODEL_CHOICES,
-                             state="readonly", width=14, font=(UI_FONT, 10))
-    model_box.pack(side="left", padx=8)
-    make_button(toolbar, "A+", lambda: change_size(2)).pack(side="right")
-    make_button(toolbar, "A-", lambda: change_size(-2)).pack(side="right", padx=(0, 6))
-    theme_button = make_button(toolbar, "Dark mode", toggle_theme)
-    theme_button.pack(side="right", padx=(0, 6))
+    def label(parent, text, size=10, color="subtle", background="window", bold=False, **options):
+        widget = tk.Label(parent,text=text,font=(UI_FONT,size,"bold" if bold else "normal"),anchor="w",**options)
+        theme_labels.append((widget,color,background))
+        return widget
 
-    # Same idea: buttons packed before the stretchy entry, so the entry can't squeeze them.
-    send_button = make_button(bottom, "Send", send, kind="accent")
-    send_button.pack(side="right", padx=(8, 0))
-    stop_button = make_button(bottom, "Stop", stop_agent, kind="danger", state="disabled")
-    stop_button.pack(side="right", padx=(8, 0))
-    entry = tk.Entry(bottom, width=60, relief="flat", bd=0, highlightthickness=1)
-    entry.pack(side="left", fill="x", expand=True, ipady=7)       # ipady = taller box, room to breathe
-    entry.bind("<Return>", send)
+    sidebar = surface(root,"sidebar",width=170)
+    sidebar.pack(side="left",fill="y")
+    sidebar.pack_propagate(False)
+    label(sidebar,"LOCAL",10,"accent","sidebar",True).pack(anchor="w",padx=22,pady=(30,2))
+    label(sidebar,"Studio",24,"text","sidebar",True).pack(anchor="w",padx=20,pady=(0,24))
+    make_button(sidebar,"+  New chat",new_chat,kind="accent").pack(fill="x",padx=16,pady=(0,30))
+    label(sidebar,"WORKSPACE",9,background="sidebar",bold=True).pack(anchor="w",padx=22,pady=(0,12))
+    make_button(sidebar,"Practice",open_practice).pack(fill="x",padx=16,pady=4)
+    make_button(sidebar,"Audit log",show_log).pack(fill="x",padx=16,pady=4)
+    theme_button = make_button(sidebar,"Light appearance",toggle_theme)
+    theme_button.pack(side="bottom",fill="x",padx=16,pady=(8,22))
+    make_button(sidebar,"Free VRAM",free_vram).pack(side="bottom",fill="x",padx=16,pady=4)
+    make_button(sidebar,"Model check",model_check).pack(side="bottom",fill="x",padx=16,pady=4)
+    label(sidebar,"LOCAL UTILITIES",9,background="sidebar",bold=True).pack(side="bottom",anchor="w",padx=22,pady=(0,10))
+
+    main = surface(root)
+    main.pack(side="left",fill="both",expand=True,padx=22,pady=20)
+    header = surface(main)
+    header.pack(fill="x",pady=(0,18))
+    header_left=surface(header)
+    header_left.pack(side="left")
+    label(header_left,"Your workspace",23,"text",bold=True).pack(anchor="w")
+    label(header_left,"Think it through. Make something useful.",11).pack(anchor="w",pady=(5,0))
+    header_right=surface(header)
+    header_right.pack(side="right")
+    label(header_right,"●  On this device",10,"green").pack(anchor="e",pady=(0,6))
+    model_row=surface(header_right)
+    model_row.pack(anchor="e")
+    model_var=tk.StringVar(value="auto")
+    model_box=ttk.Combobox(model_row,textvariable=model_var,values=MODEL_CHOICES,state="readonly",width=18,font=(UI_FONT,10))
+    model_box.pack(side="left",padx=(0,6))
+
+    bottom=surface(main)
+    bottom.pack(side="bottom",fill="x",pady=(12,0))
+    label(bottom,"MESSAGE",9,bold=True).pack(anchor="w",pady=(0,7))
+    compose=surface(bottom)
+    compose.pack(fill="x")
+    send_button=make_button(compose,"Send  →",send,kind="accent")
+    send_button.pack(side="right",padx=(8,0),ipady=4)
+    stop_button=make_button(compose,"Stop",stop_agent,kind="danger",state="disabled")
+    stop_button.pack(side="right",padx=(8,0),ipady=4)
+    entry=tk.Entry(compose,width=60,relief="flat",bd=0,highlightthickness=1)
+    entry.pack(side="left",fill="x",expand=True,ipady=13)
+    entry.bind("<Return>",send)
+    label(bottom,"Enter to send  ·  F12 or Ctrl+Alt+F9 to stop",9).pack(anchor="w",pady=(8,0))
+
+    vision_toolbar=surface(main)
+    vision_toolbar.pack(side="bottom",fill="x",pady=(10,0))
+    attach_button=make_button(vision_toolbar,"Attach file",attach_file)
+    attach_button.pack(side="left")
+    for text,callback in (("Attach image",attach_image),("Attach clip",attach_clip),("Screenshot",screenshot),("Clear image",clear_image)):
+        make_button(vision_toolbar,text,callback).pack(side="left",padx=(6,0))
+    toolbar=surface(model_row)
+    toolbar.pack(side="left")
+    make_button(toolbar,"A-",lambda:change_size(-2)).pack(side="left",padx=3)
+    make_button(toolbar,"A+",lambda:change_size(2)).pack(side="left")
+
+    workspace=ttk.Panedwindow(main,orient="horizontal")
+    workspace.pack(fill="both",expand=True)
+    conversation=surface(workspace,"card")
+    conversation_header=surface(conversation,"card")
+    conversation_header.pack(fill="x",padx=20,pady=(16,5))
+    label(conversation_header,"Conversation",12,"text","card",True).pack(side="left")
+    copy_button=make_button(conversation_header,"Copy last answer",lambda:copy_text(last_answer))
+    copy_button.pack(side="right")
+    label(conversation,"A little space to explore your next idea.",10,background="card").pack(anchor="w",padx=22,pady=(0,12))
+    chat_holder,chat_box=scroll_box(conversation,state="disabled",wrap="word",width=42,height=20,
+        spacing1=0,spacing2=3,spacing3=8,relief="flat",bd=0,padx=22,pady=18,highlightthickness=0)
+    chat_holder.pack(fill="both",expand=True)
+    workspace.add(conversation,weight=3)
+    artifact_panel=ArtifactPanel(workspace,stop_event,answer=lambda:last_raw_answer)
+    workspace.add(artifact_panel,weight=3)
+    root.after(100,lambda:workspace.sashpos(0,int(workspace.winfo_width()*0.50)))
     from emergency_hotkey import start_hotkey
-    start_hotkey(lambda: (stop_event.set(), stop_all(), emergency_ui.set()),
-                 lambda text: events.put(("memory", text)))
-    root.after(50, watch_emergency)
-    root.bind_all("<F12>", lambda e: stop_agent())
-    root.bind("<Escape>", lambda e: stop_agent())   # Esc works too, for fast reaction time
-
+    start_hotkey(lambda:(stop_event.set(),stop_all(),emergency_ui.set()),lambda text:events.put(("memory",text)))
+    root.after(50,watch_emergency)
+    root.bind_all("<F12>",lambda event:stop_agent())
+    root.bind("<Escape>",lambda event:stop_agent())
     apply_font()
     apply_theme()
-    add_context_menu(chat_box, can_paste=False)
-    add_context_menu(entry, can_paste=True)
-    chat_box.bind("<Button-1>", lambda e: chat_box.focus_set())   # so Ctrl+C reaches the chat box
+    chat_box.configure(state="normal")
+    chat_box.insert("end","\nWhat are we working on?\n",("welcome_title","welcome_block"))
+    chat_box.insert("end","Ask a question, bring an idea, or create\nsomething in the Artifacts workspace.\n\nTry: ‘Create a study guide about cells.’\n\n",("welcome_body","welcome_block"))
+    chat_box.configure(state="disabled")
+    welcome_visible=True
+    add_context_menu(chat_box,can_paste=False)
+    add_context_menu(entry,can_paste=True)
+    chat_box.bind("<Button-1>",lambda event:chat_box.focus_set())
 
 
 if __name__ == "__main__":

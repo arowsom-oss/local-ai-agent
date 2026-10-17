@@ -1,3 +1,15 @@
+# Current window redesign
+
+128 offline plain-assert tests passed again. Real Tk approval and artifact suites
+passed with the redesigned layout, including the existing No-default modal and
+emergency-stop behavior. The artifact fixture additionally checked visible code
+line numbers and shared editor/chat colors across dark/light theme changes.
+Actual own-window screenshots were inspected in dark and light at 1440x900,
+with document/code content, and in the compact 1100x680 window. Core tool, browser,
+network, permission, generation and model-routing code were unchanged in this
+visual update. No new dependency or model download was needed. This does not
+establish every Windows DPI/font/display configuration; small panes still scroll.
+
 # Current Artifacts addition
 
 128 offline plain-assert tests passed: the prior 115 plus 13 artifact tests.

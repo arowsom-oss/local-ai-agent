@@ -1,4 +1,4 @@
-# Local AI Agent: practice computer use and local media
+# Local Studio: local AI, Artifacts and practice computer use
 
 Python 3.12 on Windows. Ollama runs locally; Python decides which tools can run.
 This is a working first version of the ten improvements in TOP10_STATUS.md.
@@ -6,9 +6,26 @@ Desktop control is deliberately limited to a disposable app owned by this progra
 It cannot select or operate your existing apps, accounts, files or messages.
 The original Downloads files and C:/dev/agent installation were left unchanged.
 
+## Window and appearance
+
+The native Windows window now uses a shared dark/light theme, Segoe UI type,
+a navigation sidebar and balanced conversation/Artifacts panes. The default is
+dark; Light appearance in the sidebar switches both panes together. Utilities
+are grouped in the sidebar; attachment controls sit beside the message area.
+The model picker and reading-size controls sit in the header. Stop stays beside
+Send, with the existing F12/global shortcut and approval behavior.
+
+Artifacts use readable document typography, heading emphasis, a code line gutter,
+simple keyword/string/comment colors and horizontal scrolling when needed. These
+are display tags on inert text, not code execution or a complete language parser.
+Version, restore, edit and export actions remain available. The pane divider is
+draggable; a shorter window hides its decorative subtitle to preserve editor room.
+The default window is 1440x900 and minimum is 1100x680. No new dependencies are
+required. Theme/zoom preferences are in-memory rather than saved across launches.
+
 ## Try it
 
-In the prepared workspace, use the supplied `outputs/start_computer_agent.cmd`.
+In the prepared workspace, use the supplied `outputs/start_local_studio.cmd`.
 The isolated runtime and downloaded model assets live under `work/` and are not
 included in the source ZIP. Close older agent windows first to avoid hotkey conflicts.
 
