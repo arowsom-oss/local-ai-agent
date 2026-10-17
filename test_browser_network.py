@@ -116,6 +116,7 @@ class FakeClient:
 
 def route_case(route=None, response=None, safe_ip=None):
     session = bt._Session()
+    session.page_host = "approved.example"
     route = route or FakeRoute()
     client = FakeClient(response or FakeResponse())
     with patch.object(bt.httpx, "Client", side_effect=client.factory):
@@ -202,12 +203,163 @@ def test_subresource_and_session_approval():
     _, route, _ = route_case(FakeRoute(
         url="https://cdn.example/style.css", kind="stylesheet", navigation=False,
     ))
-    assert route.fulfilled is not None
+    assert route.aborted
     _, route, _ = route_case(FakeRoute(url="https://frame.example/", main=False))
-    assert route.fulfilled is not None
+    assert route.aborted
     with patch.object(fake_fetch, "session_hosts", {"temporary.example"}):
-        _, route, _ = route_case(FakeRoute(url="https://temporary.example/"))
+        session = bt._Session()
+        session.page = types.SimpleNamespace(goto=lambda *a, **kw: None)
+        with patch.object(session, "start", return_value="Browser ready."):
+            assert session.open("https://temporary.example/") == "Page opened."
+        route = FakeRoute(url="https://temporary.example/")
+        with patch.object(bt.httpx, "Client", side_effect=FakeClient(FakeResponse()).factory):
+            assert session.handle_route(route) == "Fulfilled."
         assert route.fulfilled is not None
+
+
+def test_no_page_scope_fails_closed_before_dns():
+    session, route = bt._Session(), FakeRoute()
+    with patch.object(fake_fetch, "safe_ip", side_effect=AssertionError("must not resolve")), \
+            patch.object(bt.httpx, "Client", side_effect=AssertionError("must not fetch")):
+        assert session.handle_route(route) == "Blocked."
+    assert route.aborted and session.page_requests == 1
+
+
+def test_third_party_approved_hosts_subdomains_and_frames_blocked_before_dns():
+    for host in ("cdn.example", "sub.approved.example", "approved.example.evil.example"):
+        with patch.object(fake_fetch, "ALLOWED_HOSTS", {"approved.example", host}), \
+                patch.object(fake_fetch, "session_hosts", {host}), \
+                patch.object(fake_fetch, "safe_ip", side_effect=AssertionError("must not resolve")):
+            for kind, navigation, main in (("stylesheet", False, False), ("document", True, False),
+                                            ("document", True, True)):
+                session, route, client = route_case(FakeRoute(
+                    url=f"https://{host}/", kind=kind, navigation=navigation, main=main))
+                assert route.aborted and not client.calls and session.blocked == 1
+
+
+def test_same_host_resources_and_frames_share_pinned_fetch_path():
+    for kind, navigation in (("stylesheet", False), ("document", True)):
+        session, route, client = route_case(FakeRoute(
+            url="https://approved.example/resource", kind=kind, main=False, navigation=navigation))
+        assert route.fulfilled and session.page_requests == 1
+        assert session.page_bytes == len(route.fulfilled["body"])
+        assert client.calls[0][0][1] == "https://93.184.216.34/resource"
+
+
+def test_request_limit_includes_blocked_routes_and_websockets():
+    session = bt._Session()
+    session.page_host = "approved.example"
+    client = FakeClient(FakeResponse())
+    with patch.object(bt, "MAX_PAGE_REQUESTS", 3), \
+            patch.object(bt.httpx, "Client", side_effect=client.factory):
+        assert session.handle_route(FakeRoute(kind="image")) == "Blocked."
+        ws = types.SimpleNamespace(close=lambda: None)
+        assert session.block_websocket(ws) == "Blocked."
+        assert session.handle_route(FakeRoute(main=False)) == "Fulfilled."
+        route = FakeRoute()
+        assert session.handle_route(route) == "Blocked."
+        assert route.aborted and session.budget_exhausted and session.page_requests == 4
+        assert len(client.calls) == 1
+        assert session.handle_route(FakeRoute()) == "Blocked."
+        assert len(client.calls) == 1
+
+
+def test_default_request_budget_stops_dns_and_fetch_after_100():
+    assert bt.MAX_PAGE_REQUESTS == 100 and bt.MAX_PAGE_BYTES == 10_000_000
+    session = bt._Session()
+    session.page_host = "approved.example"
+    client = FakeClient(FakeResponse())
+    with patch.object(bt.httpx, "Client", side_effect=client.factory), \
+            patch.object(fake_fetch, "safe_ip", return_value=ipaddress.ip_address("93.184.216.34")) as dns:
+        for _ in range(100):
+            assert session.handle_route(FakeRoute(main=False)) == "Fulfilled."
+        assert session.handle_route(FakeRoute(main=False)) == "Blocked."
+        assert session.page_requests == 101 and session.budget_exhausted
+        assert len(client.calls) == dns.call_count == 100
+
+
+def test_aggregate_byte_limit_spans_responses_and_frames():
+    session = bt._Session()
+    session.page_host = "approved.example"
+    client = FakeClient(FakeResponse(chunks=(b"1234",)))
+    with patch.object(bt, "MAX_PAGE_BYTES", 10), \
+            patch.object(bt.httpx, "Client", side_effect=client.factory):
+        assert session.handle_route(FakeRoute()) == "Fulfilled."
+        assert session.handle_route(FakeRoute(main=False)) == "Fulfilled."
+        client.response = FakeResponse(chunks=(b"12",))
+        assert session.handle_route(FakeRoute(main=False)) == "Fulfilled."
+        assert session.page_bytes == 10
+        assert session.handle_route(FakeRoute()) == "Blocked."
+        assert len(client.calls) == 3
+
+
+def test_declared_or_streamed_page_byte_exhaustion_is_sticky():
+    for response in (FakeResponse(chunks=(b"12345",), headers={"content-length": "5"}),
+                     FakeResponse(chunks=(b"12345",))):
+        session = bt._Session()
+        session.page_host = "approved.example"
+        session.page_bytes = 6
+        client = FakeClient(response)
+        with patch.object(bt, "MAX_PAGE_BYTES", 10), \
+                patch.object(bt.httpx, "Client", side_effect=client.factory):
+            route = FakeRoute(main=False)
+            assert session.handle_route(route) == "Blocked."
+            assert route.fulfilled is None and session.budget_exhausted
+            if "content-length" in response.headers:
+                assert not response.iterated and session.page_bytes == 6
+            else:
+                assert session.page_bytes == 11
+            assert session.handle_route(FakeRoute()) == "Blocked."
+            assert len(client.calls) == 1
+
+
+def test_aborted_response_bytes_are_not_refunded():
+    session = bt._Session()
+    session.page_host = "approved.example"
+
+    def broken_stream(chunk_size):
+        yield b"1234"
+        raise RuntimeError("connection lost")
+
+    response = FakeResponse()
+    response.iter_raw = broken_stream
+    client = FakeClient(response)
+    with patch.object(bt.httpx, "Client", side_effect=client.factory):
+        assert session.handle_route(FakeRoute()) == "Blocked."
+    assert session.page_bytes == 4
+
+
+def test_read_and_navigation_preserve_budget_and_explicit_open_resets_it():
+    session = bt._Session()
+    main_frame = object()
+    session.page = types.SimpleNamespace(
+        main_frame=main_frame, url="https://approved.example/", goto=lambda *a, **kw: None,
+        locator=lambda selector: types.SimpleNamespace(inner_text=lambda **kw: "x" * 9000))
+    session.page_host = "approved.example"
+    session.page_requests, session.page_bytes, session.budget_exhausted = 101, 10_000_001, True
+    with patch.object(session, "list_elements", return_value=""), \
+            patch.object(session, "start", return_value="Browser ready."):
+        session.navigated(main_frame)
+        text = session.read()
+        assert len(text) <= bt.MAX_TEXT_CHARS and text.startswith(bt.TEXT_PREFIX)
+        assert "101/100 requests" in text and "exhausted" in text
+        assert session.page_requests == 101 and session.page_bytes == 10_000_001
+        assert session.open("https://unknown.example/").startswith("Error:")
+        assert session.budget_exhausted  # Refused opens do not renew anything.
+        assert session.open("https://approved.example/") == "Page opened."
+        assert session.page_requests == session.page_bytes == 0 and not session.budget_exhausted
+        assert session.page_host == "approved.example"
+
+
+def test_per_response_oversize_still_charges_received_bytes():
+    session = bt._Session()
+    session.page_host = "approved.example"
+    client = FakeClient(FakeResponse(chunks=(b"1234", b"5")))
+    with patch.object(bt, "MAX_RESPONSE_BYTES", 4), \
+            patch.object(bt.httpx, "Client", side_effect=client.factory):
+        route = FakeRoute()
+        assert session.handle_route(route) == "Blocked."
+        assert session.page_bytes == 5 and route.fulfilled is None
 
 
 def test_response_size_cap():

@@ -18,7 +18,7 @@ import httpx
 HERE = Path(__file__).resolve().parent
 fake_fetch = types.ModuleType("fetch")
 fake_fetch.USER_AGENT = "offline-browser-integration-test"
-fake_fetch.ALLOWED_HOSTS = {"fixture.example"}
+fake_fetch.ALLOWED_HOSTS = {"fixture.example", "other.example"}
 fake_fetch.session_hosts = set()
 
 
@@ -31,14 +31,24 @@ def check_site(url):
 
 
 fake_fetch.check_new_site = check_site
-fake_fetch.safe_ip = lambda host: ipaddress.ip_address("93.184.216.34")
+resolved_hosts = []
+
+
+def safe_ip(host):
+    resolved_hosts.append(host)
+    return ipaddress.ip_address("93.184.216.34")
+
+
+fake_fetch.safe_ip = safe_ip
 spec = importlib.util.spec_from_file_location("live_browser_target", HERE / "browser_tool.py")
 browser = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = browser
 with patch.dict(sys.modules, {"fetch": fake_fetch}):
     spec.loader.exec_module(browser)
 
-HTML = b"""<!doctype html><html><head><title>Offline browser test</title></head>
+HTML = b"""<!doctype html><html><head><title>Offline browser test</title>
+<link rel='stylesheet' href='/style.css'>
+<link rel='stylesheet' href='https://other.example/third-party.css'></head>
 <body><h1>Library</h1>
 <a href='/next'>Next</a><a href='/hidden' style='display:none'>Invisible</a>
 <input type='password' aria-label='Secret password'>
@@ -47,7 +57,9 @@ HTML = b"""<!doctype html><html><head><title>Offline browser test</title></head>
 <form action='/post' method='post'><input type='text' name='q' aria-label='POST search'></form>
 <form action='/find'><input type='search' aria-label='Nameless'></form>
 <script>document.body.innerHTML = 'JAVASCRIPT RAN';</script>
-<img src='/image.png'></body></html>"""
+<img src='/image.png'>
+<iframe src='/frame'></iframe><iframe src='https://other.example/frame'></iframe>
+</body></html>"""
 
 
 class BodyStream(httpx.SyncByteStream):
@@ -70,6 +82,14 @@ def network(request):
     seen.append(str(request.url))
     if request.url.path == "/redirect":
         return httpx.Response(302, headers={"Location": "https://other.example/"}, stream=BodyStream(b""))
+    if request.url.path.endswith(".css"):
+        return httpx.Response(200, headers={"Content-Type": "text/css"},
+                              stream=BodyStream(b"h1 {color: navy}"))
+    if request.url.path == "/budget":
+        body = ("<html><head>" + "".join(
+            f"<link rel='stylesheet' href='/budget-{i}.css'>" for i in range(12)
+        ) + "</head><body>Budget fixture</body></html>").encode()
+        return httpx.Response(200, headers={"Content-Type": "text/html"}, stream=BodyStream(body))
     body = HTML if request.url.path == "/" else b"<html><body><h1>Search results: dog</h1></body></html>"
     return httpx.Response(200, headers={"Content-Type": "text/html"}, stream=BodyStream(body))
 
@@ -117,6 +137,9 @@ if __name__ == "__main__":
             assert browser.link_for(link)[0] is None
             assert "Search results: dog" in browser.browser_read()
             assert not any("image.png" in url for url in seen)
+            assert any("style.css" in url for url in seen)
+            assert any(url.endswith("/frame") for url in seen)
+            assert set(resolved_hosts) == {"fixture.example"}, resolved_hosts
             before_redirect = len(seen)
             assert browser.browser_open("https://fixture.example/redirect").startswith("Error:")
             assert len(seen) == before_redirect + 1
@@ -135,7 +158,22 @@ if __name__ == "__main__":
                 assert not thread.is_alive()
             assert results[0] == results[2] == "Page opened.", results
             assert results[1].startswith(browser.TEXT_PREFIX) and results[3].startswith(browser.TEXT_PREFIX)
+            # One document plus three stylesheets may be fetched; all remaining
+            # stylesheet attempts share that page's exhausted request budget.
+            before_budget = len(seen)
+            with patch.object(browser, "MAX_PAGE_REQUESTS", 4):
+                assert browser.browser_open("https://fixture.example/budget") == "Page opened."
+                budget_text = browser.browser_read()
+                assert "Budget fixture" in budget_text and "exhausted" in budget_text
+                assert len(seen) - before_budget == 4, seen[before_budget:]
+                assert browser.browser_read().startswith(browser.TEXT_PREFIX)
+                assert len(seen) - before_budget == 4  # Reading grants no new budget.
+                # An explicit open renews the budget; the ordinary approval gate
+                # for model calls is separately covered by core tests.
+                assert browser.browser_open("https://fixture.example/next") == "Page opened."
+                assert "1/4 requests" in browser.browser_read()
             print("PASS real Chromium: offline routing, DOM/form extraction, JS off, password/hidden exclusion,")
-            print("     URL encoding, POST/name refusal, stale numbers, redirect blocking and caller threads.")
+            print("     URL encoding, POST/name refusal, stale numbers, redirects, caller threads,")
+            print("     same-host CSS/frames, third-party denial, request budget and explicit-open reset.")
         finally:
             assert browser.close_browser() == "Browser closed."

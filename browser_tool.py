@@ -28,6 +28,8 @@ import fetch
 __all__ = ["browser_open", "browser_read", "browser_click", "browser_search", "link_for", "link_labels", "search_url_for", "close_browser"]
 
 MAX_RESPONSE_BYTES = 5_000_000  # Decimal 5 MB, measured before buffering the body.
+MAX_PAGE_REQUESTS = 100  # Includes the document, frames, blocked routes and websockets.
+MAX_PAGE_BYTES = 10_000_000  # Shared streamed-body budget, not a process-memory cap.
 MAX_TEXT_CHARS = 4000  # Includes the warning and blocked-request count.
 HTTP_TIMEOUT = 10.0
 COMMAND_TIMEOUT = 30.0
@@ -101,6 +103,10 @@ class _Session:
     def __init__(self):
         self.playwright = self.browser = self.context = self.page = None
         self.blocked = 0
+        self.page_host = None  # Only an explicit, validated open grants this scope.
+        self.page_requests = 0
+        self.page_bytes = 0
+        self.budget_exhausted = False
         self.elements = {}   # number -> what code saw: kind, label, href, form metadata
         self.next_element = 1  # Never reuse a number during this chat.
         self.page_version = 0
@@ -148,6 +154,7 @@ class _Session:
                 and self.elements_version == self.page_version)
 
     def block_websocket(self, ws) -> str:
+        self.count_request()
         self.blocked += 1
         try:
             ws.close()
@@ -155,6 +162,13 @@ class _Session:
             pass
         # Never connect_to_server(): that would open a real connection.
         return "Blocked."
+
+    def count_request(self) -> bool:
+        """All routes share one budget; website navigation cannot reset it."""
+        self.page_requests += 1
+        if self.page_requests > MAX_PAGE_REQUESTS or self.page_bytes >= MAX_PAGE_BYTES:
+            self.budget_exhausted = True
+        return self.page_host is not None and not self.budget_exhausted
 
     def block(self, route, reason="Request validation or fetching failed.") -> str:
         self.blocked += 1
@@ -173,11 +187,17 @@ class _Session:
         """Fetch bytes ourselves; never delegate a request to Chromium."""
         try:
             request = route.request
+            if not self.count_request():
+                return self.block(route, "Page request or byte budget exhausted, or no page scope.")
             if request.method != "GET" or request.resource_type in _BLOCKED_TYPES:
                 return self.block(route)
             host, reason = fetch.check_new_site(request.url)
             if host is None or reason is not None:
                 return self.block(route)
+            # Exact hostname, not suffix matching: even approved CDNs, sibling
+            # subdomains and frames cannot inherit the opened page's permission.
+            if host != self.page_host:
+                return self.block(route, "Third-party requests are blocked for this page.")
             if request.is_navigation_request():
                 # A top-level navigation in ANY page must be approved.
                 if request.frame.parent_frame is None:
@@ -216,8 +236,17 @@ class _Session:
                     length = response.headers.get("content-length")
                     if length is not None and (int(length) < 0 or int(length) > MAX_RESPONSE_BYTES):
                         return self.block(route)
+                    if length is not None and int(length) > MAX_PAGE_BYTES - self.page_bytes:
+                        self.budget_exhausted = True
+                        return self.block(route, "Page byte budget exhausted.")
                     body = bytearray()
                     for chunk in response.iter_raw(chunk_size=64 * 1024):
+                        # Charge received bytes even if this response later fails.
+                        # An over-limit chunk has already arrived; never buffer it.
+                        self.page_bytes += len(chunk)
+                        if self.page_bytes > MAX_PAGE_BYTES:
+                            self.budget_exhausted = True
+                            return self.block(route, "Page byte budget exhausted.")
                         if time.monotonic() - started >= HTTP_TIMEOUT:
                             return self.block(route)
                         if len(body) + len(chunk) > MAX_RESPONSE_BYTES:
@@ -254,6 +283,11 @@ class _Session:
             self.close()
             raise
         self.invalidate_elements()  # Clear even if the navigation subsequently fails.
+        # Only this explicit tool operation resets the scope. Reads, redirects,
+        # frame events and website-initiated navigations never grant new budgets.
+        self.page_host = host
+        self.page_requests = self.page_bytes = 0
+        self.budget_exhausted = False
         self.last_navigation_error = ""
         try:
             self.page.goto(url, wait_until="domcontentloaded", timeout=10_000)
@@ -272,7 +306,10 @@ class _Session:
         # Fixed Playwright operation, never JavaScript supplied by the model.
         text = self.page.locator("body").inner_text(timeout=10_000)
         listing = self.list_elements()
-        suffix = f"\n[{self.blocked} requests were blocked]"
+        suffix = (f"\n[{self.blocked} requests were blocked]\n"
+                  f"[Page budget: {self.page_requests}/{MAX_PAGE_REQUESTS} requests; "
+                  f"{self.page_bytes}/{MAX_PAGE_BYTES} body bytes"
+                  + ("; exhausted" if self.budget_exhausted else "") + "]")
         budget = MAX_TEXT_CHARS - len(TEXT_PREFIX) - 1 - len(listing) - len(suffix)
         return TEXT_PREFIX + "\n" + text[:max(0, budget)] + listing + suffix
 
@@ -398,6 +435,7 @@ class _Session:
                 except Exception:
                     failed = True
         self.page = self.context = self.browser = self.playwright = None
+        self.page_host = None
         self.invalidate_elements()
         return "Error: Browser cleanup failed." if failed else "Browser closed."
 

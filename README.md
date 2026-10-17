@@ -68,6 +68,19 @@ that exact URL without resolving the element again.
 - Your existing `fetch.check_new_site` and `fetch.safe_ip` validate URLs and DNS.
   HTTPX connects directly to the checked IP, retaining Host and TLS SNI.
   Environment proxies are disabled for this fetch path.
+- Every page resource and frame must use the exact hostname explicitly opened.
+  Cross-host requests are aborted before DNS, including approved CDNs, sibling
+  subdomains and other session-approved sites. There are no resource popups.
+  A deliberate link/search/open can move to another site through existing checks.
+- Each explicit open gets 100 intercepted request attempts and a shared
+  10,000,000-byte body budget. The document, frames, blocked HTTP requests and
+  WebSockets count toward the request limit. Failed/aborted streamed responses
+  do not refund received bytes. Exhaustion stops further fetches for this page.
+  Only another explicit open resets the limits; reads and website navigation do
+  not. Existing exact-URL/link/search approvals still apply to that new open.
+- `browser_read` reports the page budget and cumulative chat blocked count within
+  its 4,000-character output cap. Limits are constants in `browser_tool.py`, never
+  model-supplied tool arguments.
 - Each response is capped at 5,000,000 bytes while streaming. Compressed responses
   and attachments are refused. HTTPX uses 10-second operation timeouts plus
   elapsed-time checks. This is not a forcibly interruptible total deadline.
@@ -130,9 +143,10 @@ python -B test_browser_live.py
 ```
 
 The search, network and fetch suites need only the standard library and fake
-external modules. They have 62 offline tests. The live suite needs installed Playwright, Chromium
+external modules. They have 72 offline tests. The live suite needs installed Playwright, Chromium
 and HTTPX. It runs real visible Chromium against fake HTTPX responses, exercising
-the real route handler and DOM extraction without needing an Internet site.
+the real route handler, DOM extraction, same-host resources, cross-host refusals
+and page request exhaustion without needing an Internet site.
 
 See `VALIDATION.md` for the actual checks run and remaining limitations.
 
@@ -150,7 +164,14 @@ See `VALIDATION.md` for the actual checks run and remaining limitations.
   classifier of every login or payment endpoint.
 - Stop cannot forcibly interrupt a Python worker thread already inside a
   blocking operation. A separate browser process is a future improvement.
-- Longer-page reading, page search, request budgets, audit-log redaction and
-  third-party-resource restrictions remain future enhancements.
+- Cross-host stylesheets and frames can be necessary for a site's appearance or
+  content, so this stricter policy may produce plainer or incomplete pages. We
+  have not benchmarked broad public-site compatibility.
+- The byte budget measures streamed body chunks, excluding headers/TLS traffic;
+  one over-limit chunk may already have arrived before code rejects it. It does
+  not cap Chromium's DOM/process memory or the whole chat across approved opens.
+- Same-host resources remain allowed and can send site-chosen paths/queries to
+  that host. This is destination containment, not a complete data-flow sandbox.
+- Longer-page reading, page search and audit-log redaction remain future work.
 - Desktop app control, model routing, image generation and larger models remain
   later roadmap stages. This update grants none of those powers.

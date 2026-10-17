@@ -3,7 +3,32 @@
 Checked on Windows with Python 3.12.10, Playwright 1.64.0, HTTPX 0.28.1 and
 Ollama's Python package 0.6.3. The existing installed Chromium was used.
 
-## Current hardening checks
+## Current page containment checks
+
+- 72 offline plain-assert tests passed: 38 core/search/approval, 24 browser-network
+  and 10 direct-fetch tests.
+- New network cases cover no page scope, approved/session third-party and sibling
+  subdomain refusal before DNS, allowed same-host CSS/frames with IP pinning,
+  exact default 100-request exhaustion before DNS/HTTP, blocked requests and
+  WebSockets sharing the count, aggregate byte limits across frames/responses,
+  declared/streamed overflow, failed-response byte accounting, navigation/read
+  preserving budgets, explicit open renewal, and 4,000-character read output.
+- Real headed Chromium with fake HTTPX passed the existing integration suite plus
+  same-host stylesheet/frame loading, denial of another independently approved
+  host before DNS, and an over-budget page of stylesheets. A 4-request fixture
+  admitted exactly the document plus 3 stylesheets; reading did not renew it,
+  and an explicit new open did. Default 100 is exercised in the offline suite.
+- All Python files parse; git diff --check passes. No new packages required.
+
+The defaults are 100 intercepted requests and 10,000,000 streamed body bytes per
+explicit open. Per-response 5,000,000 bytes remains. One body chunk may cross the
+aggregate limit on arrival and is rejected without buffering or fulfillment.
+These limits do not cover headers/TLS overhead, total chat traffic, Chromium
+process memory, or background browser egress. No public-site compatibility or
+latency benchmark was performed for this step. Older audit reports describe
+the previous revision's resource policy, which this step intentionally tightens.
+
+## Previous consent hardening checks
 
 - 62 offline tests passed: 38 core/search/approval tests, 14 browser-network
   tests, and 10 direct-fetch tests. Fakes require no Internet.
@@ -21,7 +46,7 @@ in this package. Review does not prove that no further vulnerabilities exist.
 
 ## Earlier integration checks
 
-- 38 plain-assert offline search, approval, plan, argument-validation and
+- 30 plain-assert offline search, approval, plan, argument-validation and
   stale-element tests in `test_browser_search.py`.
 - 14 plain-assert offline interception, DNS rejection, IP/Host/SNI pinning,
   resource blocking, size-limit, error and worker-timeout tests in
