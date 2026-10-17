@@ -16,3 +16,10 @@
 Each item is an initial implementation, not unrestricted computer use. Extending
 an app target requires a separate adapter with a reviewed action/verification
 contract. No current tool can grant itself a broader scope.
+
+## Additional real-app adapter
+
+A separate, approved classic Notepad scratch process now supports semantic reads
+and preview-bound text replacement with read-back verification. It cannot attach
+to existing windows or expose file/menu/keyboard commands. This does not broaden
+the practice app's tools or grant general desktop control. See NOTEPAD.md.

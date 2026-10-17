@@ -34,17 +34,17 @@ if __name__ == "__main__":
                 child.destroy()
 
     ui.root.report_callback_exception = callback_error
-    for text in ("Screenshot", "Attach image", "Clear image", "Free VRAM", "Practice", "Attach clip", "Model check"):
+    for text in ("Screenshot", "Attach image", "Clear image", "Free VRAM", "Practice", "Notepad", "Attach clip", "Model check"):
         button = next(b for b in buttons(ui.root) if b.cget("text") == text)
         assert button.winfo_ismapped() and button.winfo_width() > 10
 
-    def act(action):
+    def act(action, yes_label="Use this image"):
         win = next(w for w in ui.root.winfo_children() if isinstance(w, ui.tk.Toplevel))
         no = next(b for b in buttons(win) if b.cget("text") == "No")
         assert ui.root.focus_get() == no
         assert no.winfo_ismapped() and no.winfo_rooty() + no.winfo_height() < win.winfo_screenheight()
         if action == "yes":
-            next(b for b in buttons(win) if b.cget("text") == "Use this image").invoke()
+            next(b for b in buttons(win) if b.cget("text") == yes_label).invoke()
         else:
             win.event_generate(action)
 
@@ -53,6 +53,12 @@ if __name__ == "__main__":
             ui.root.after(250, lambda value=action: act(value))
             assert ui.preview_image(image) is expected
             assert not errors, errors
+        for name, args in (("notepad_start", {}), ("notepad_action", {
+                "window": "Untitled - Notepad", "before": "First draft", "after": "Revised draft"})):
+            for action, expected in (("<Return>", False), ("<Escape>", False), ("yes", True)):
+                ui.root.after(250, lambda value=action: act(value, "Yes, allow this action"))
+                assert ui.confirm(name, args) is expected
+                assert not errors, errors
         # Redaction/crop changes the payload delivered by approval, not merely
         # an overlay painted on top of the original image.
         accepted = []

@@ -2,8 +2,9 @@
 
 Python 3.12 on Windows. Ollama runs locally; Python decides which tools can run.
 This is a working first version of the ten improvements in TOP10_STATUS.md.
-Desktop control is deliberately limited to a disposable app owned by this program.
-It cannot select or operate your existing apps, accounts, files or messages.
+Desktop control is limited to an owned practice app and a separately approved,
+owned classic Notepad scratch window. It cannot attach to your existing windows,
+accounts, files or messages.
 The original Downloads files and C:/dev/agent installation were left unchanged.
 
 ## Window and appearance
@@ -75,6 +76,23 @@ Markdown, HTML, SVG and scripts are displayed as text; URLs are never fetched or
 made into executable previews. Native image and silent video previews use bounded,
 stoppable decoder processes. This version does not run generated apps or render
 arbitrary web code. See ARTIFACTS.md for workflow, limits and tests.
+
+## Scratch Notepad: first real-app integration
+
+Choose Notepad in the sidebar or ask "Open scratch Notepad and draft a paragraph."
+Code opens only a separate, empty classic Notepad with no file argument; modern
+Notepad tabs and existing editor windows are excluded. The model gets start,
+read and exact text replacement tools, with at most 2,000 characters. Every edit
+needs a separate No-default preview and a state recheck/read-back verification.
+There is no save, open-file, menu, arbitrary-window, clipboard or keyboard tool.
+
+A process-specific menu/dialog guard permanently halts automation if scope might
+have changed. Stop, New chat and exiting Local Studio discard this owned scratch
+window. The opening popup explains that; keep personal work in other windows.
+The installed classic executable is launched with a brief suspended/debug-creation
+handshake, detached before execution, and bounded by Windows Jobs. No OS settings,
+registry values or app aliases are changed. Unsupported installations fail closed
+without connecting to the packaged app. See NOTEPAD.md for API details and limits.
 
 ## Desktop actions and Stop
 
@@ -212,13 +230,15 @@ python -B test_fetch_page.py
 python -B test_model_vision.py
 python -B test_computer_features.py
 python -B test_artifacts.py
+python -B test_notepad.py
 python -B test_desktop_live.py
 python -B test_vision_ui.py
 python -B test_browser_live.py
 python -B test_artifact_ui.py
+python -B test_notepad_live.py
 ```
 
-The first six contain 128 offline tests with fakes. The last four use real
+The first seven contain 142 offline tests with fakes. The last five use real
 Windows UIA/Tk/Chromium with synthetic data or mocked HTTPX and no Internet.
 See VALIDATION.md and TOP10_STATUS.md for what actually passed. Tests do not
 prove freedom from vulnerabilities. Wider app integration, OS/VM isolation,

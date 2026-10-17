@@ -9,6 +9,7 @@ import fetch
 from fetch import fetch_page
 from audit_privacy import private_arguments, private_note
 from artifacts import create_artifact, revise_artifact, list_artifacts, read_artifact, record_generated
+from notepad_tools import notepad_start, notepad_read, notepad_replace, start_notepad, prepare_notepad, commit_notepad
 from desktop_tools import desktop_start, desktop_read, desktop_type, desktop_click, prepare_action, execute_approved, start_practice
 from generation_tools import generate_image, generate_video, run_generation, prompt_problem
 from browser_tool import browser_open, browser_read, browser_click, browser_search, link_for, link_labels, search_url_for
@@ -36,6 +37,7 @@ AUDIT_LOG = DATA_ROOT / "audit.log"
 
 # Tools that must be approved by a human before they run.
 NEEDS_APPROVAL = {"read_file", "browser_open", "fetch_page", "browser_click", "browser_search", "desktop_start", "desktop_type", "desktop_click", "generate_image", "generate_video"}
+NEEDS_APPROVAL.update({"notepad_start", "notepad_replace"})
 ARBITRARY_URL_TOOLS = {"browser_open", "fetch_page"}
 NETWORK_TOOLS = ARBITRARY_URL_TOOLS | {"browser_click", "browser_search"}
 # Unknown tools are denied too. Downloads have no executable entry or model schema.
@@ -47,6 +49,7 @@ RISK_TIERS = {
     "desktop_start": "high", "desktop_read": "low", "desktop_type": "high", "desktop_click": "high",
     "generate_image": "high", "generate_video": "high",
     "create_artifact": "low", "revise_artifact": "low", "list_artifacts": "low", "read_artifact": "low",
+    "notepad_start": "high", "notepad_read": "low", "notepad_replace": "high",
 }
 TOOL_ARGUMENTS = {
     "add": {"a": int, "b": int}, "multiply": {"a": int, "b": int},
@@ -60,6 +63,7 @@ TOOL_ARGUMENTS = {
     "create_artifact": {"title": str, "kind": str, "content": str},
     "revise_artifact": {"artifact": int, "revision": int, "content": str},
     "list_artifacts": {}, "read_artifact": {"artifact": int},
+    "notepad_start": {}, "notepad_read": {}, "notepad_replace": {"element": int, "text": str},
 }
 
 
@@ -180,6 +184,7 @@ available_functions = {
     'generate_image': generate_image, 'generate_video': generate_video,
     'create_artifact': create_artifact, 'revise_artifact': revise_artifact,
     'list_artifacts': list_artifacts, 'read_artifact': read_artifact,
+    'notepad_start': notepad_start, 'notepad_read': notepad_read, 'notepad_replace': notepad_replace,
 }
 
 
@@ -380,7 +385,7 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                             tools=[add, multiply, read_file, fetch_page, browser_open, browser_read, browser_click, browser_search, propose_plan,
                                    desktop_start, desktop_read, desktop_type, desktop_click,
                                    generate_image, generate_video, create_artifact, revise_artifact,
-                                   list_artifacts, read_artifact], think=True,
+                                   list_artifacts, read_artifact, notepad_start, notepad_read, notepad_replace], think=True,
                             options={'num_ctx': NUM_CTX})
         except Exception:
             return ("Error: local model request failed. Check Ollama and the installed allowed models.",
@@ -439,6 +444,23 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                     log("[blocked] propose_plan: you clicked No")
                     reply_text = "Error: the user did not approve the plan"
                 messages.append({'role': 'tool', 'tool_name': name, 'content': reply_text})
+                continue
+
+            if name == "notepad_replace":
+                proposal = prepare_notepad(args["element"], args["text"])
+                if "error" in proposal:
+                    result = "Error: " + proposal["error"]
+                elif not approved(ask_approval, "notepad_action", proposal["preview"]):
+                    result = "Error: the user denied this exact Notepad edit"
+                elif stopped(stop_event):
+                    result = "Error: stopped by the user"
+                else:
+                    audit("notepad_approved", name, args, model)
+                    result = commit_notepad(proposal["token"])
+                audit("notepad_refused" if result.startswith("Error:") else "notepad_result", name, args, model, note=result)
+                if result.startswith("Error:"):
+                    log(f"[blocked] {name}: {result}")
+                messages.append({'role': 'tool', 'tool_name': name, 'content': result})
                 continue
 
             if name in {"desktop_type", "desktop_click"}:
@@ -599,6 +621,8 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                 result = available_functions[name](url=url)  # same immutable approved address
             elif name == "desktop_start":
                 result = start_practice(stop_event)
+            elif name == "notepad_start":
+                result = start_notepad(stop_event)
             else:
                 result = available_functions[name](**args)
             total += time.perf_counter() - t0

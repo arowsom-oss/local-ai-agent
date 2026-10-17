@@ -23,6 +23,7 @@ Single development runs on an RTX 5070 Ti Laptop GPU (12 GB) and approximately
 | --- | --- | --- |
 | Earlier synthetic vision | Read TEST SCREEN and STATUS: READY | 20.00 s |
 | Earlier switch to 12b: 17 + 25 | 42 | 10.59 s |
+| Actual Ollama scratch Notepad workflow | Started/read owned classic Notepad; exact approved SYNTHETIC NOTEPAD CHECK verified | 15.57 s |
 | Actual Ollama practice workflow | Started/read practice app; proposed approved SYNTHETIC TEST draft; state verified | 32.73 s |
 | Local image generation | Valid 512x512 PNG | 32.89 s |
 | Local video generation | Valid 256x256, 16-frame, 8-fps MP4 | 37.93 s |

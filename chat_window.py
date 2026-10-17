@@ -18,6 +18,7 @@ from agent_core import run_turn, MODEL_CHOICES, SAFE, AUDIT_LOG, forget_sites
 from artifacts import store as artifact_store
 from artifact_panel import ArtifactPanel
 from ui_theme import PALETTES, configure_styles
+from notepad_tools import start_notepad, close_notepad
 
 # ---- shared state -------------------------------------------------------
 messages = []            # the conversation; lives as long as the window is open
@@ -59,6 +60,7 @@ WHAT_IT_DOES = {
     "browser_search": "SUBMITS A SEARCH on a website",
     "outbound_request": "SENDS THIS EXACT ADDRESS TO A WEBSITE",
     "desktop_start": "OPENS AN OWNED PRACTICE WINDOW (RAM-only draft; no real applications)",
+    "notepad_start": "OPENS A NEW CLASSIC NOTEPAD SCRATCH WINDOW",
 }
 
 
@@ -126,6 +128,22 @@ def high_risk_confirm(title, lines):
 
 def confirm(name, args):
     """Pop up the approval question. Returns True only if the person clicks Yes."""
+    if name == "notepad_start":
+        return high_risk_confirm("Open scratch Notepad", [WHAT_IT_DOES[name], "",
+            "This is a separate classic Notepad process, starting with an empty document.",
+            "Existing windows and modern Notepad tabs are not connected.",
+            "Edits are limited to 2000 characters and each needs its own exact preview.",
+            "The agent cannot open, save, print, click menus or switch documents.", "",
+            "Stop, New chat or closing Local Studio discards this owned scratch window.",
+            "Keep personal work in your usual Notepad windows. Open this scratch session?"])
+    if name == "notepad_action":
+        return high_risk_confirm("Approve exact Notepad edit", [
+            "REPLACE TEXT IN THE OWNED NOTEPAD SCRATCH DOCUMENT", "",
+            f"Window: {args.get('window')}", "Before (JSON text):",
+            json.dumps(args.get("before"), ensure_ascii=False), "", "After (exact JSON text):",
+            json.dumps(args.get("after"), ensure_ascii=False), "",
+            "No file will be opened or saved by this action. Code rechecks the target and reads the result back.",
+            "This edit always needs its own approval. Allow?"])
     if name == "desktop_action":
         return high_risk_confirm("Approve exact practice change", [
             "PRACTICE APP ONLY - THIS CHANGE NEEDS ITS OWN APPROVAL", "",
@@ -323,16 +341,17 @@ def stop_agent():
     pending_image = pending_media = None
     stop_all()  # Kill owned process trees; does not wait for a blocked UIA call.
     close_desktop()
+    close_notepad()
     artifact_panel.stop()
     for window in root.winfo_children():
         if getattr(window, "_approval_dialog", False):
             window.event_generate("<Escape>")
     if not busy:
-        show("Stop", "owned automation/media workers stopped.")
+        show("Stop", "owned workers stopped. Any owned scratch Notepad was closed and its draft discarded.")
         return
     stop_button.configure(state="disabled", text="Stopping...")
     remove_pending()
-    show("Stop", "owned automation/media workers stopped. A browser or Ollama call may still be finishing; no new action is allowed.")
+    show("Stop", "owned workers stopped; any owned scratch Notepad was closed. A browser or Ollama call may still be finishing; no new action is allowed.")
     add_pending()
 
 
@@ -535,12 +554,13 @@ def free_vram():
     threading.Thread(target=lambda: events.put(("memory", release_models())), daemon=True).start()
 
 
-def start_background(target):
+def start_background(target, reset_stop=True):
     global busy
     if busy:
         return
     busy = True
-    stop_event.clear()
+    if reset_stop:
+        stop_event.clear()
     send_button.configure(state="disabled")
     model_box.configure(state="disabled")
     stop_button.configure(state="normal", text="Stop")
@@ -556,6 +576,15 @@ def open_practice():
     if confirm("desktop_start", {}) is not True or stop_event.is_set():
         return
     start_background(lambda: events.put(("practice_ready", start_practice(stop_event))))
+
+
+def open_notepad():
+    if busy:
+        return
+    stop_event.clear()
+    if confirm("notepad_start", {}) is not True or stop_event.is_set():
+        return
+    start_background(lambda: events.put(("practice_ready", start_notepad(stop_event))), reset_stop=False)
 
 
 def attach_clip():
@@ -623,7 +652,7 @@ def new_chat():
         show("New chat", "wait for the answer first")
         return
     if messagebox.askyesno("New chat", "Start a new chat?\n\nThe agent will forget this conversation.\n"
-                          "Artifact drafts and version history will be discarded. Exported files remain.",
+                          "Artifact drafts, version history and scratch Notepad will be discarded. Exported files remain.",
                           default="no") is not True:
         return
     closed = close_browser()    # close the browser BEFORE wiping anything: no half-reset chats
@@ -631,6 +660,7 @@ def new_chat():
         show("New chat", f"not started: {closed}")
         return
     close_desktop()
+    close_notepad()
     stop_all()
     messages.clear()            # empty the SAME list (don't make a new one)
     artifact_store.clear()
@@ -860,6 +890,7 @@ def build_window():
     make_button(sidebar,"+  New chat",new_chat,kind="accent").pack(fill="x",padx=16,pady=(0,30))
     label(sidebar,"WORKSPACE",9,background="sidebar",bold=True).pack(anchor="w",padx=22,pady=(0,12))
     make_button(sidebar,"Practice",open_practice).pack(fill="x",padx=16,pady=4)
+    make_button(sidebar,"Notepad",open_notepad).pack(fill="x",padx=16,pady=4)
     make_button(sidebar,"Audit log",show_log).pack(fill="x",padx=16,pady=4)
     theme_button = make_button(sidebar,"Light appearance",toggle_theme)
     theme_button.pack(side="bottom",fill="x",padx=16,pady=(8,22))

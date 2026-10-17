@@ -1,3 +1,17 @@
+# Current Notepad adapter
+
+142 offline plain-assert tests passed: the prior 128 plus 14 Notepad cases.
+Real owned classic Notepad tests passed exact UIA read/edit, two caller threads,
+replay/stale/human-edit refusal, fresh numbering, permanent menu-event halt and
+owned worker/app cleanup. Both Notepad Tk approval dialogs passed No-default,
+Enter/Escape refusal and explicit Yes. Actual local Ollama completed the exact
+synthetic start/read/approved edit in 15.57 seconds. No document-save operation
+was invoked by the agent or these fixtures. See NOTEPAD.md for the suspended
+classic-launch handshake, tested API behavior and remaining scope limitations.
+The initial ordinary launch restored the modern app's prior tabs; they were not
+edited/closed. Production never falls back to that packaged app. Original source
+installation, Windows app aliases and registry/security settings were not changed.
+
 # Current window redesign
 
 128 offline plain-assert tests passed again. Real Tk approval and artifact suites
