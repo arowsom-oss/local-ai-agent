@@ -270,6 +270,7 @@ python -B test_workspace_documents.py
 python -B test_task_progress.py
 python -B test_workspace_io.py
 python -B test_reliability.py
+python -B test_document_edit.py
 python -B test_desktop_live.py
 python -B test_vision_ui.py
 python -B test_browser_live.py
@@ -280,7 +281,7 @@ python -B test_progress_ui.py
 python -B test_workspace_io_live.py
 ```
 
-The first twelve contain 206 offline tests with fakes. The last eight use real
+The first thirteen contain 226 offline tests with fakes. The last eight use real
 Windows UIA/Tk/Chromium with synthetic data or mocked HTTPX and no Internet.
 See VALIDATION.md and TOP10_STATUS.md for what actually passed. Tests do not
 prove freedom from vulnerabilities. Wider app integration, OS/VM isolation,
@@ -292,12 +293,20 @@ in a temporary folder. The first strict run failed its creation case and stopped
 that evidence is retained. A separate two-turn worker-backed smoke run passed.
 These small runs show variability rather than general model reliability.
 
-evaluate_reliability.py adds six independent synthetic cases, including exact
-edits and human-text preservation, repeated seeds and separate task/control
-scores. Updated e2b and 12b each completed 5/8 document attempts; the larger model
-did not improve this small task score. See RELIABILITY.md for failures, control
-results, baseline limits and commands. Approval/stale-state checks remain in
-place; failed saves are never automatically retried.
+evaluate_reliability.py has six independent cases and --extended adds two further
+document tasks. Scores check actual files, with controls reported separately.
+After adding document_edit, e2b completed 5/12 document attempts and 12b completed
+12/12; controls were 4/4 and 2/4. Failed control attempts stopped before the
+intended preview, so do not count as guard verification. See RELIABILITY.md for
+all retained failures, historical results and limits. No broad quality rating is
+established by this small sample.
+
+document_edit appends or replaces a unique literal excerpt after a latest read,
+without asking the model for revision counters. Each change still needs its own
+exact preview; stale files/drafts and uncertain saves refuse. See DOCUMENT_EDIT.md.
+In Auto, common English document/action wording now selects the installed 12b
+model in code. Other text retains the constrained classifier; image routes and
+manual selection remain. This is a bounded heuristic, not a permission gate.
 
 The generated video smoke sample contains a watermark-like artifact produced by
 the model. It demonstrates that the pipeline runs, not publication-ready quality.

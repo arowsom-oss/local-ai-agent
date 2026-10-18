@@ -13,11 +13,11 @@ LABELS={
     'notepad_replace':'Edit scratch Notepad','generate_image':'Generate image','generate_video':'Generate video',
     'create_artifact':'Create Artifact','revise_artifact':'Revise Artifact','read_artifact':'Read Artifact',
     'list_artifacts':'List Artifacts','document_list':'List Documents','document_read':'Read saved document',
-    'document_save':'Save document version','outline_task':'Proposed task steps'}
+    'document_save':'Save document version','document_edit':'Edit saved document','outline_task':'Proposed task steps'}
 READS={'read_file','fetch_page','browser_read','desktop_read','notepad_read','read_artifact','list_artifacts','document_list','document_read'}
 VERIFIED={'notepad_replace':'Notepad edit verified by exact read-back.',
           'desktop_type':'Practice action verified.','desktop_click':'Practice action verified.',
-          'document_save':'Saved and verified Document ',
+          'document_save':'Saved and verified Document ', 'document_edit':'Saved and verified Document ',
           'create_artifact':'Artifact ','revise_artifact':'Artifact '}
 APPROVALS={'workspace_access':'Workspace read permission','document_save_exact':'Exact document save',
     'notepad_action':'Exact Notepad edit','notepad_start':'Scratch Notepad launch','desktop_action':'Exact practice change',
@@ -144,7 +144,7 @@ class TurnEvidence:
         if needed and needed not in self.fresh:return 'resume requires a fresh '+needed+' before this action'
         if name in {'revise_artifact','document_save'} and args.get('artifact') not in self.artifacts:
             return 'resume requires reading the current Artifact before revising or saving it'
-        if name=='document_save' and args.get('document')!=0 and args.get('document') not in self.documents:
+        if name in {'document_save','document_edit'} and args.get('document')!=0 and args.get('document') not in self.documents:
             return 'resume requires document_read of the current saved document before this save'
         return ''
 
@@ -152,7 +152,7 @@ class TurnEvidence:
         text=str(text)
         if text.startswith('Error:'):
             if 'queued action not run' not in text:self.refused.add(name)
-            status=('Unconfirmed' if name=='document_save' and ('outcome uncertain' in text or 'outcome unconfirmed' in text) else
+            status=('Unconfirmed' if name in {'document_save','document_edit'} and ('outcome uncertain' in text or 'outcome unconfirmed' in text) else
                     'Deferred' if 'queued action not run' in text else 'Refused')
         elif name in VERIFIED and text.startswith(VERIFIED[name]):status='Verified'
         elif name in READS:status='Observed'
@@ -177,4 +177,4 @@ class TurnEvidence:
         if name in {'notepad_replace','desktop_type','desktop_click'}:
             self.fresh.discard('notepad_read' if name=='notepad_replace' else 'desktop_read')
         if name in {'browser_open','browser_click','browser_search'}:self.fresh.discard('browser_read')
-        if name=='document_save':self.documents.discard(args.get('document'))
+        if name in {'document_save','document_edit'}:self.documents.discard(args.get('document'))

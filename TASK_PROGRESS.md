@@ -52,6 +52,11 @@ invalidates the previous app/page observation. Failed reads do not unlock edits.
 A closed or permanently halted app can still require a fresh approved start.
 Resume does not bypass this or guarantee that the model can recover unaided.
 
+document_edit uses the same verified/Unconfirmed save evidence and consumes its
+document observation. A missing fresh document read on Resume now pauses the
+turn immediately, including queued actions; it cannot silently read and retry a
+refused document write within that turn. A new person request is required.
+
 The UI preserves verified history/counts while starting a new scoped turn. Stop
 and New chat ignore late results from the old serial. New chat clears all task
 records. An unsent composer message is preserved rather than overwritten by

@@ -33,6 +33,13 @@ The panel does not certify whole-task completion. See TASK_PROGRESS.md.
 
 ## Saved document workspace
 
+document_edit adds literal appends and unique-excerpt replacements with code-held
+read provenance and revision bookkeeping. It retains exact approval, fresh reads,
+guarded version publication and uncertainty recovery. Auto has a bounded English
+document-workflow routing hint to 12b, following measured model differences.
+Independent task/control results and all failures are retained in RELIABILITY.md;
+the running project record now includes the evaluation and these improvements.
+
 Document work now uses short-lived owned filesystem processes and an asynchronous
 UI, with Stop, a transaction deadline and last-save hash reconciliation after an
 uncertain result. New saves cannot bypass that uncertainty check. Friendly titles

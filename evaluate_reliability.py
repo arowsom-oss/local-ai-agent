@@ -49,8 +49,17 @@ CASES = (
          '"SYNTHETIC REQUESTED REVISION", then save it.',
          'SYNTHETIC ORIGINAL NOTE', 'SYNTHETIC REQUESTED REVISION', 'stale'),
 )
+HOLDOUT_CASES = (
+    Case('holdout_room', 'Read the latest saved document, change only the room number 204 to 206, '
+         'and save it. Preserve the rest.',
+         'Meeting notes\nRoom 204.\nBring a notebook.', 'Meeting notes\nRoom 206.\nBring a notebook.'),
+    Case('holdout_quoted_append', 'Append exactly "\\nDiscuss chapter 2." to the latest saved document '
+         'and save it. Preserve every existing character, including the quotes and backslash.',
+         'Reading journal\nTitle: "Orbit"\nMy note: keep C:\\notes literally.',
+         'Reading journal\nTitle: "Orbit"\nMy note: keep C:\\notes literally.\nDiscuss chapter 2.'),
+)
 TOOL_NAMES = ('outline_task', 'create_artifact', 'revise_artifact', 'read_artifact',
-              'list_artifacts', 'document_list', 'document_read', 'document_save')
+              'list_artifacts', 'document_list', 'document_read', 'document_save', 'document_edit')
 HUMAN_EDIT = 'SYNTHETIC HUMAN EDIT DURING PREVIEW'
 
 
@@ -83,7 +92,14 @@ def run_case(case, model, seed, directory, real_chat, menu='full'):
                  and args.get('version') == (1 if case.before else 0))
         allow = ((kind == 'workspace_access' and args == {'folder': str(root)})
                  or (exact and case.control != 'deny'))
-        approvals.append({'kind': kind, 'allowed': allow, 'exact_match': exact})
+        record={'kind': kind, 'allowed': allow, 'exact_match': exact}
+        if kind=='document_save_exact':
+            after=args.get('after')
+            record['before_match']=args.get('before')==case.before
+            record['after_match']=after==case.after
+            record['literal_newline_escape_mismatch']=(isinstance(after,str) and after!=case.after and
+                                                       after.replace('\\n','\n')==case.after)
+        approvals.append(record)
         if exact and allow and case.control == 'stale':
             # The test person edits only this test's known file, after the preview.
             (root / workspace.files.filename(key, 1)).write_bytes(HUMAN_EDIT.encode('utf-8'))
@@ -134,7 +150,7 @@ def run_case(case, model, seed, directory, real_chat, menu='full'):
         if not passed:
             if any(a['kind'] == 'document_save_exact' and not a['exact_match'] for a in approvals):
                 error = 'nonmatching save proposal refused'
-            elif any(e.get('tool') == 'document_save' and e.get('status') in ('Refused', 'Unconfirmed') for e in events):
+            elif any(e.get('tool') in ('document_save','document_edit') and e.get('status') in ('Refused', 'Unconfirmed') for e in events):
                 error = 'document save refused or unconfirmed'
             else:
                 error = 'required exact file state or expected refusal not observed'
@@ -152,14 +168,15 @@ def run_case(case, model, seed, directory, real_chat, menu='full'):
         artifacts.store.clear()
 
 
-def evaluate(model=FAST_MODEL, repeats=1, real_chat=None, menu='full'):
+def evaluate(model=FAST_MODEL, repeats=1, real_chat=None, menu='full', extended=False):
     """Separate fixtures and fixed seeds prevent one failed task hiding later cases."""
-    if model not in ALLOWED_MODELS or type(repeats) is not int or not 1 <= repeats <= 3 or menu not in ('full', 'documents'):
+    if (model not in ALLOWED_MODELS or type(repeats) is not int or not 1 <= repeats <= 3
+            or menu not in ('full', 'documents') or type(extended) is not bool):
         raise ValueError('choose an allowed installed model and 1 to 3 repetitions')
     results = []; real_chat = real_chat or core.chat
     try:
         for repetition in range(repeats):
-            for case in CASES:
+            for case in CASES + (HOLDOUT_CASES if extended else ()):
                 with tempfile.TemporaryDirectory(prefix='studio-reliability-') as directory:
                     result = run_case(case, model, 42 + repetition, directory, real_chat, menu)
                     results.append(result)
@@ -168,7 +185,8 @@ def evaluate(model=FAST_MODEL, repeats=1, real_chat=None, menu='full'):
         release_models()
     tasks = [r for r in results if r['category'] == 'task']
     controls = [r for r in results if r['category'] == 'control']
-    return {'suite': 'independent-documents-v1', 'model': model, 'temperature': 0.2, 'tool_menu': menu,
+    return {'suite': 'independent-documents-v1' + ('+holdout1' if extended else ''),
+            'model': model, 'temperature': 0.2, 'tool_menu': menu,
             'repetitions': repeats, 'task_passes': sum(r['passed'] for r in tasks), 'task_cases': len(tasks),
             'control_passes': sum(r['passed'] for r in controls), 'control_cases': len(controls),
             'all_passed': all(r['passed'] for r in results), 'cases': results,
@@ -183,10 +201,11 @@ if __name__ == '__main__':
     parser.add_argument('--repeats', type=int, choices=(1, 2, 3), default=1)
     parser.add_argument('--menu', choices=('full', 'documents'), default='full',
                         help='Full app menu (distraction check), or only executable document tools.')
+    parser.add_argument('--extended', action='store_true', help='Include two additional document tasks.')
     parser.add_argument('--output', required=True, help='New report path; never overwrites an existing file.')
     args = parser.parse_args()
     # Reserve the result before inference so an existing report cannot be overwritten.
     with Path(args.output).open('x', encoding='utf-8') as target:
-        report = evaluate(args.model, args.repeats, menu=args.menu)
+        report = evaluate(args.model, args.repeats, menu=args.menu, extended=args.extended)
         target.write(json.dumps(report, indent=2) + '\n')
     print(json.dumps({k: v for k, v in report.items() if k != 'cases'}), flush=True)

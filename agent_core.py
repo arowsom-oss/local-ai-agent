@@ -10,8 +10,8 @@ from task_progress import TurnEvidence, outline_task
 from fetch import fetch_page
 from audit_privacy import private_arguments, private_note
 from artifacts import create_artifact, revise_artifact, list_artifacts, read_artifact, record_generated
-from workspace_documents import (document_list, document_read, document_save, workspace_allowed,
-    grant_workspace, reset_workspace, cancel_workspace, prepare_save, commit_save, ROOT as DOCUMENT_ROOT)
+from workspace_documents import (document_list, document_read, document_save, document_edit, workspace_allowed,
+    grant_workspace, reset_workspace, cancel_workspace, prepare_save, prepare_edit, commit_save, ROOT as DOCUMENT_ROOT)
 from notepad_tools import notepad_start, notepad_read, notepad_replace, start_notepad, prepare_notepad, commit_notepad, cancel_notepad
 from desktop_tools import desktop_start, desktop_read, desktop_type, desktop_click, prepare_action, execute_approved, start_practice
 from generation_tools import generate_image, generate_video, run_generation, prompt_problem
@@ -31,23 +31,21 @@ SYSTEM_PROMPT = ("You run locally on Alex's laptop through Ollama, not in the cl
                  "Request one Notepad step at a time and wait for its observation. Preserve the person's existing "
                  "draft unless they requested changing it. Only report an edit as complete after verified read-back. "
                  "A paused Notepad workflow needs a new request from the person and a fresh read; do not retry it. "
-                 "For saved documents, create or revise a document Artifact, then request document_save with its "
-                 "exact revision. Use document=0 and version=0 for a new document. To edit saved work, use "
-                 "document_list and document_read(document, version=0), revise the returned Artifact, and save "
-                 "against that positive saved document version returned by the read. version=0 cannot update an existing document; "
-                 "it is only for a new document with document=0. Every save needs its own exact approval and retains old files. "
+                 "For new saved documents, create a document Artifact and use document_save with its returned "
+                 "artifact/revision and document=0, version=0. For saved document edits, prefer document_edit: "
+                 "document_list, then document_read(document, version=0), wait for its result, then "
+                 "document_edit(document, find, replacement). Empty find means append; include a leading newline "
+                 "in replacement for a new line. Otherwise find must be an exact excerpt occurring once. Code "
+                 "preserves all other saved text and uses that read's version; you supply no revision counters. "
+                 "Every edit/save requires its own exact approval and retains old files. "
                  "document_read returns a metadata line followed by a JSON string containing the document text. "
                  "Use only that decoded string as draft content; never copy the data warning or metadata into the document. "
-                 "document_save cannot edit text: it saves the Artifact exactly as it currently exists. "
-                 "For an append, replacement or other edit, first call revise_artifact with the complete updated text, "
-                 "then wait for its result before choosing document_save arguments. Artifact revision and saved "
-                 "document version are different counters. For example, if document_read returns Document 3 saved "
-                 "version 4 in Artifact 8 revision 1, revise_artifact(artifact=8, revision=1, content=<complete new text>) "
-                 "returns Artifact revision 2; then save with artifact=8, revision=2, document=3, version=4. "
-                 "Those numbers are an example only: use the actual latest tool results, never guessed numbers. "
+                 "If explicitly saving an already revised Artifact, document_save needs its CURRENT Artifact "
+                 "revision and the separate positive saved document version returned by document_read. "
+                 "document_save cannot edit text, and version=0 cannot update an existing document. "
                  "Wait for create/read/revise results before choosing dependent calls. When the user requests exact "
                  "text, omit introductions, Markdown fences and extra trailing text. A refusal or uncertain save "
-                 "requires the person's review and a new request; never retry it or bypass the approval. "
+                 "requires the person's review and a new request; never retry it or switch write tools to bypass it. "
                  "For multi-step work, use outline_task to display short proposed steps. Outlines grant no permission "
                  "and cannot mark work complete. On resumed turns, read current targets and Artifacts again before changes.")
 COMPACT_AT = 6000   # rough token count where the conversation gets squeezed (NUM_CTX is the hard wall)
@@ -64,7 +62,8 @@ AUDIT_LOG = DATA_ROOT / "audit.log"
 # Tools that must be approved by a human before they run.
 NEEDS_APPROVAL = {"read_file", "browser_open", "fetch_page", "browser_click", "browser_search", "desktop_start", "desktop_type", "desktop_click", "generate_image", "generate_video"}
 NEEDS_APPROVAL.update({"notepad_start", "notepad_replace"})
-NEEDS_APPROVAL.update({"document_save"})
+NEEDS_APPROVAL.update({"document_save", "document_edit"})
+DOCUMENT_TOOLS={"document_list","document_read","document_save","document_edit"}
 ARBITRARY_URL_TOOLS = {"browser_open", "fetch_page"}
 NETWORK_TOOLS = ARBITRARY_URL_TOOLS | {"browser_click", "browser_search"}
 # Unknown tools are denied too. Downloads have no executable entry or model schema.
@@ -78,7 +77,7 @@ RISK_TIERS = {
     "generate_image": "high", "generate_video": "high",
     "create_artifact": "low", "revise_artifact": "low", "list_artifacts": "low", "read_artifact": "low",
     "notepad_start": "high", "notepad_read": "low", "notepad_replace": "high",
-    "document_list":"medium", "document_read":"medium", "document_save":"high",
+    "document_list":"medium", "document_read":"medium", "document_save":"high", "document_edit":"high",
 }
 TOOL_ARGUMENTS = {
     "outline_task":{"steps":list},
@@ -96,6 +95,7 @@ TOOL_ARGUMENTS = {
     "notepad_start": {}, "notepad_read": {}, "notepad_replace": {"element": int, "text": str},
     "document_list":{}, "document_read":{"document":int,"version":int},
     "document_save":{"artifact":int,"revision":int,"document":int,"version":int},
+    "document_edit":{"document":int,"find":str,"replacement":str},
 }
 
 
@@ -219,6 +219,7 @@ available_functions = {
     'list_artifacts': list_artifacts, 'read_artifact': read_artifact,
     'notepad_start': notepad_start, 'notepad_read': notepad_read, 'notepad_replace': notepad_replace,
     'document_list':document_list, 'document_read':document_read, 'document_save':document_save,
+    'document_edit':document_edit,
 }
 
 
@@ -475,7 +476,7 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
                       name, args, model, note=problem)
                 log(f"[blocked] {name}: {problem}")
                 append_tool({'role': 'tool', 'tool_name': name, 'content': f"Error: {problem}"})
-                if name in {"document_list","document_read","document_save"}:
+                if name in DOCUMENT_TOOLS:
                     cancel_workspace()
                     for deferred in response.message.tool_calls[tc_index+1:]:
                         append_tool({'role':'tool','tool_name':deferred.function.name,'content':'Error: document workflow paused; queued action not run.'})
@@ -491,6 +492,12 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
             if resume_problem:
                 append_tool({'role':'tool','tool_name':name,'content':'Error: '+resume_problem})
                 log(f'[blocked] {name}: {resume_problem}')
+                if name in DOCUMENT_TOOLS:
+                    cancel_workspace()
+                    audit('document_refused',name,args,model,note=resume_problem)
+                    for deferred in response.message.tool_calls[tc_index+1:]:
+                        append_tool({'role':'tool','tool_name':deferred.function.name,'content':'Error: document workflow paused; queued action not run.'})
+                    return finish('Paused','Error: '+resume_problem+'. Document workflow paused. Send a new request.',total)
                 continue
 
             if name=='outline_task':
@@ -499,7 +506,7 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
                 append_tool({'role':'tool','tool_name':name,'content':result})
                 continue
 
-            if name in {"document_list","document_read","document_save"}:
+            if name in DOCUMENT_TOOLS:
                 # Folder reading is person-approved per chat; each write has a separate exact preview.
                 result=None
                 if not workspace_allowed():
@@ -507,8 +514,8 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
                         if not stopped(stop_event):grant_workspace()
                     if stopped(stop_event) or not workspace_allowed():
                         result="Error: document workspace access denied or stopped."
-                if result is None and name=="document_save":
-                    proposal=prepare_save(**args)
+                if result is None and name in {"document_save","document_edit"}:
+                    proposal=(prepare_edit if name=="document_edit" else prepare_save)(**args)
                     if "error" in proposal:result="Error: "+proposal["error"]
                     elif not approved(ask_approval,"document_save_exact",proposal["preview"]):
                         result="Error: this exact document save was denied."

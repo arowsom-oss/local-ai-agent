@@ -3,7 +3,7 @@
 This assistant remains a supervised prototype. Passing code tests is not a model
 intelligence score. This evaluation does not justify an 8/10 general rating.
 
-## Changes
+## Earlier changes before document_edit
 
 Instructions and the document_save description now explicitly distinguish an
 Artifact revision from a saved document version. Editing requires revising the
@@ -15,7 +15,7 @@ approval, stale-state refusal, bounded workers and retained versions.
 The offered tool list now comes from the trusted dispatch registry. Previously
 the loop had a separate hardcoded schema list: restricting a fixture's dispatcher
 left irrelevant tools visible. The model cannot change the registry or grant
-permissions. No documents-only UI mode was added; routing/defaults are unchanged.
+permissions. At that milestone no documents-only UI mode or routing change was added.
 
 ## Independent evaluator
 
@@ -85,7 +85,65 @@ unknown-tool dispatch refusal, setup failure reporting, schema/registry alignmen
 independent cases and bounded repetitions. Existing approval, Stop, resume and
 uncertain-save tests also passed. This is not a new security audit.
 
-Next: simplify how a model requests document edits, then test unseen documents
-and longer/multi-turn tasks. Any simpler tool must retain exact preview approval,
-stale-state checks and version recovery. Never weaken checks to improve the score
-or automatically retry a refusal. These small fixtures are not general benchmarks.
+At that milestone the next step was a simpler edit tool with unchanged approval,
+stale-state and recovery checks. That step is implemented below. Longer/multi-turn
+tasks and broader unseen documents remain future work.
+
+## Current bounded edit and routing update
+
+document_edit(document, find, replacement) uses the last successful latest read
+to supply identity/version/hash in code. Empty find appends literal text;
+otherwise find must occur once, including an overlapping-match check. All other
+text is retained by code. A separate proposal Artifact feeds the existing exact
+approval/one-use commit path. Missing/stale reads, stored Artifact changes,
+ambiguous/no-op/oversize edits, uncertain saves and extra parameters refuse.
+After a commit or cancellation another latest read is required. See DOCUMENT_EDIT.md.
+
+Resume document-read-gate refusals now end the turn and defer remaining actions,
+matching the existing policy for denied/failed document execution. No automatic
+retry, fallback write tool, approval bypass or relaxed file guard was introduced.
+
+The evaluator keeps all six earlier cases and --extended adds two new tasks:
+change a room number while preserving notes, and append while preserving quotes
+and a literal backslash. Cases/expected bytes were fixed before the run. Neither
+failed cases nor earlier reports were replaced. The full normal schema menu,
+temperature 0.2 and seeds 42/43 were used again.
+
+| Current code | Original tasks | Additional tasks | Total tasks | Controls | Time |
+| --- | --- | --- | --- | --- | --- |
+| e2b | 3/8 | 2/4 | 5/12 | 4/4 | 108.70 s |
+| 12b | 8/8 | 4/4 | 12/12 | 2/4 | 223.16 s |
+
+The small model still mishandled append proposals and once created an Artifact
+without saving. Exact fixture approval refused nonmatching text. Both larger-model
+control failures were whole-text replacement requests refused before an exact
+preview. The human-edit mutation was never reached; each case retained only its
+original version. These cases remain failures and do not verify that guard.
+Real-worker and deterministic tests separately exercised the changed-file guard.
+
+The larger model succeeded on these twelve document attempts, but that is a small
+sample, including only two additional tasks, not a general reliability score.
+One quoted-append task took 65.07 s; measured gains have a latency cost. These
+changes worsened the small model's original-case count from 5/8 to 3/8, so the
+helper alone is not a small-model quality improvement.
+
+Classifier guidance alone selected e2b for all four document routing probes and
+met just 3/7 expectations (the three general prompts). A bounded code hint now
+selects 12b for common English document/note/draft plus action wording. Other text
+retains the constrained classifier, vision retains its fixed route, manual
+selection remains respected, and model selection grants no permissions. Hints
+can overmatch explanations/negations or miss phrasing/languages; their purpose is
+model choice, not intent enforcement. The fixed probes then met 7/7 expectations:
+four document hints without classifier inference and three general classifications.
+
+An actual Auto append selected 12b for all four task model calls, obtained the
+exact expected preview and retained the original saved version in 21.14 s.
+This is one additional synthetic end-to-end run, not a broad Auto benchmark.
+
+All 226 offline tests across thirteen suites passed: 17 new edit tests, an added
+evaluator oracle test and two routing-hint tests accompany existing checks.
+Three real Windows/Tk suites passed again, including the new worker-backed edit,
+stale-preview refusal and lost-publication-reply reconciliation. The running
+project record was updated with both reliability rounds, code changes and limits.
+The private build/evidence package retains all 32 new evaluation cases, the Auto
+smoke and both route-probe reports. No new dependency was added.

@@ -1,4 +1,24 @@
-# Current independent document reliability checks
+# Current bounded edits and routing
+
+226 offline tests passed in thirteen suites. 17 new edit checks cover literal
+preservation, exact/ambiguous matching, bounds, read provenance, stored draft
+changes, cancellation/reset, one-use exact approvals during plans, queued fallback
+refusal, Stop, fresh Resume and uncertain publication. An added evaluator test
+checks the new tool/extra cases; two routing tests check code hints and limits.
+Real Windows worker recovery/edit, Windows/Tk Documents and Tk progress/Resume
+suites passed again, using only owned temporary data.
+
+Current full-menu live cases at seeds 42/43: e2b 5/12 document tasks, 4/4 controls;
+12b 12/12 tasks, 2/4 controls. The two failed larger-model controls stopped before
+the intended preview and did not exercise the human-change guard or create a new
+version. Original-only task counts were 3/8 and 8/8; the smaller model's prior
+5/8 result was not improved by the helper. All failed attempts remain retained.
+Classifier-only routing expectations were 3/7; the bounded code hint then met 7/7,
+with four hints requiring no inference. A real Auto append used 12b, approved exact
+text and retained version 1 in 21.14 seconds. See RELIABILITY.md for latency,
+false-positive/negative routing, fixture scope and limitations.
+
+# Earlier independent document reliability checks
 
 206 offline tests passed across twelve suites. Nine new cases fake model/workers,
 block network sockets and verify evaluator byte checks, version retention,

@@ -87,6 +87,23 @@ def test_exact_creation_and_revision_preserve_all_versions():
         assert sum(a['exact_match'] and a['allowed'] for a in result['approvals']) == 1
 
 
+def test_evaluator_accepts_approved_exact_edits_and_additional_cases():
+    for case in (evaluation.CASES[1], evaluation.CASES[2]) + evaluation.HOLDOUT_CASES:
+        stage = 0
+        def chat(**kwargs):
+            nonlocal stage
+            stage += 1
+            if stage == 1:return response(h.tool_call('document_read', {'document': 1, 'version': 0}))
+            if stage == 2:
+                find = '' if case.after.startswith(case.before) else case.before
+                replacement = case.after[len(case.before):] if find == '' else case.after
+                return response(h.tool_call('document_edit', {'document': 1, 'find': find, 'replacement': replacement}))
+            return response()
+        result = run(case, chat)
+        assert result['passed'] and result['saved_files'] == 2, result
+        assert 'document_edit' in result['tools']
+
+
 def test_wrong_artifact_revision_stays_refused_before_save_popup():
     case = evaluation.CASES[1]
     result = run(case, scripted(case, wrong_revision=True))

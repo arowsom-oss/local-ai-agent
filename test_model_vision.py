@@ -87,6 +87,26 @@ def test_router_rejects_arbitrary_names_extra_keys_and_malformed_output():
         assert router.choose_model("task") == router.FAST_MODEL
 
 
+def test_document_wording_routes_in_code_without_classifier_or_new_authority():
+    for prompt in ('Create a document about cells and save it.',
+                   'Add a new line to my saved document and preserve the rest.',
+                   'Replace red with blue in my saved notes.', 'Read my saved meeting notes and change room 204 to 206.'):
+        with client_case() as client:
+            assert router.choose_model(prompt)==router.REASONING_MODEL
+            assert not client.events and router._reasoning_hold==2
+            assert router.choose_model(prompt,has_image=True)==router.VISION_MODEL
+            assert not client.events
+
+
+def test_document_hint_is_bounded_and_does_not_route_every_question_to_large_model():
+    for prompt in ('Hello, how are you?', 'What is 17 plus 25?', 'Explain what a plant cell is.',
+                   'What does the word document mean?', 'x'*4000+' create document'):
+        assert not router.document_route_hint(prompt)
+        with client_case() as client:
+            assert router.choose_model(prompt)==router.FAST_MODEL and len(client.events)==1
+    assert not router.document_route_hint(None)
+
+
 def test_router_missing_model_falls_back_without_download():
     with client_case() as client:
         client.models = []

@@ -14,7 +14,9 @@ closing the dialog deny. A browser plan never authorizes a save.
 
 To revise: "List my Documents, read the latest study guide, add a section about
 mitochondria and save a new version." Code requires a fresh read of the latest
-saved version and the exact current document Artifact revision. The model cannot
+saved version. document_edit provides a literal append or unique-excerpt replacement
+without model-supplied revision counters. The Artifact/save path instead needs the
+exact current Artifact revision and positive saved version. The model cannot
 supply a filename, path, extension, URL, overwrite option or executable output type.
 
 The Documents sidebar lists saved documents and their latest version numbers.
@@ -23,6 +25,8 @@ new document Artifact. To recover, load an older saved version, optionally edit 
 and Save edit in Artifacts, then select the document and Save Artifact here. That
 operation previews the current saved text and appends the chosen draft as a new
 latest version. Save new in the Artifacts panel creates a separate document.
+
+See DOCUMENT_EDIT.md for examples, ambiguity checks and read provenance.
 
 ## Approval and storage
 

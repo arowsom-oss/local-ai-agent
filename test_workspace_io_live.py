@@ -84,6 +84,35 @@ def test_real_lost_save_confirmation_and_reconciliation():
     print('PASS real save recovery: lost reply after publication, retained history, exact hash reconciliation, no rewrite, titles')
 
 
+def test_real_document_edit_workers():
+    with tempfile.TemporaryDirectory(prefix='studio-edit-worker-') as temp:
+        root=Path(temp)/'documents';files=RemoteFiles(root,timeout=3);w=d.Workspace(files);w.grant();artifacts.store.clear()
+        try:
+            a=artifacts.store.create('Synthetic','document','School notes\nHuman addition.')
+            w.commit(w.prepare(a.number,1,0,0)['token'])
+            w.read(1,0);w.commit(w.prepare_edit(1,'','\nRequested line.')['token'])
+            paths=sorted(root.glob('*.txt'))
+            assert len(paths)==2 and paths[0].read_bytes()==b'School notes\nHuman addition.'
+            assert paths[1].read_bytes()==b'School notes\nHuman addition.\nRequested line.'
+            w.read(1,0);p=w.prepare_edit(1,'Requested','Revised')
+            paths[1].write_bytes(b'Human changed current text during preview')
+            try:w.commit(p['token'])
+            except ValueError:pass
+            else:raise AssertionError('stale exact edit accepted')
+            assert len(list(root.glob('*.txt')))==2
+            w.read(1,0);p=w.prepare_edit(1,'','\nApproved addition.')
+            files.target=lost_receipt_worker
+            try:w.commit(p['token'])
+            except ValueError as exc:assert 'uncertain' in str(exc)
+            else:raise AssertionError('lost edit receipt reported success')
+            files.target=file_worker
+            assert 'Verified' in w.check_last_save() and len(list(root.glob('*.txt')))==3
+            assert sorted(root.glob('*.txt'))[2].read_bytes()==b'Human changed current text during preview\nApproved addition.'
+            assert paths[0].read_bytes()==b'School notes\nHuman addition.'
+        finally:w.cancel()
+    print('PASS real edit workers: literal append, prior versions, stale-preview refusal, lost edit receipt and independent reconciliation')
+
+
 def test_real_tk_heartbeat_and_manual_stop():
     import chat_window as ui
     from workspace_panel import save_selected,jobs
@@ -130,4 +159,5 @@ def test_real_tk_heartbeat_and_manual_stop():
 if __name__=='__main__':
     test_real_worker_deadline_and_stop()
     test_real_lost_save_confirmation_and_reconciliation()
+    test_real_document_edit_workers()
     test_real_tk_heartbeat_and_manual_stop()

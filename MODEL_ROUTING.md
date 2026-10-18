@@ -1,7 +1,9 @@
 # Local model routing and memory policy
 
 Python selects only gemma4:e2b or gemma4:12b at the fixed loopback Ollama endpoint.
-A small tool-free JSON classifier chooses general/reasoning for text; malformed
+A fixed, bounded English wording hint selects 12b when document/note/draft nouns
+and create/read/edit/save/change-style verbs occur in the first 4000 characters.
+Otherwise a small tool-free JSON classifier chooses general/reasoning; malformed
 output falls back to the small model. Images and video contact sheets have a
 fixed small vision route, no history/tools, and returned tool requests are refused.
 WAV speech uses faster-whisper-tiny.en on CPU; generation uses separate local
@@ -13,6 +15,26 @@ VRAM requests immediate release. The manager cannot evict other clients' models.
 After a reasoning selection, two follow-up turns retain the larger model,
 avoiding repeated classifier/reasoner swapping. Manual selection remains available.
 Model selection cannot change tools, permissions, approved URLs or app scope.
+
+The document hint is a performance choice, not semantic intent detection. It may
+match an explanation/negation and miss other wording or languages. Explicit model
+selection still overrides Auto. A missing larger model fails without a download;
+there is no automatic mutation retry with another model after refusal.
+
+## Document routing evidence
+
+With the bounded document_edit helper, full-menu repeated evaluation measured
+e2b at 5/12 exact document tasks and 12b at 12/12. Controls were 4/4 and 2/4;
+both larger-model control failures stopped before the intended preview. This is
+not a general accuracy claim. One larger-model task took 65.07 seconds.
+
+Changing classifier guidance alone met only 3/7 fixed routing expectations; all
+four document requests still selected e2b. The code hint met 7/7: four document
+requests chose 12b without inference, three general probes used the classifier
+and chose e2b. These are seven fixed probes, not a broad router benchmark.
+An actual Auto append then selected 12b for all four model requests, obtained
+one exact fixture save approval and retained the earlier version in 21.14 seconds.
+See RELIABILITY.md for failures, setup and scope. Test callbacks stay outside UI.
 
 ## Measurements from this laptop
 
