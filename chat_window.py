@@ -20,6 +20,8 @@ from artifact_panel import ArtifactPanel
 from ui_theme import PALETTES, configure_styles
 from notepad_tools import start_notepad, close_notepad
 from workspace_documents import reset_workspace, cancel_workspace
+from task_progress import TaskProgress
+from progress_panel import ProgressPanel
 
 # ---- shared state -------------------------------------------------------
 messages = []            # the conversation; lives as long as the window is open
@@ -27,6 +29,7 @@ stop_event = threading.Event()   # set by the Stop button, checked by the worker
 emergency_ui = threading.Event()  # Separate watcher also runs inside modal Tk wait loops.
 events = queue.Queue()   # worker thread -> window: things to show or ask about
 busy = False             # True while the model is working on a question
+task_progress=TaskProgress()
 last_answer = ""         # the newest agent reply, for the "Copy last answer" button
 last_raw_answer = ""     # Preserve code fences when the person copies an answer to Artifacts.
 pending_image = None     # immutable preview-approved bytes, for one turn only
@@ -84,14 +87,16 @@ def ask_approval(name, args):
     return answer_box.get() is True   # blocks until the window answers; only True means yes
 
 
-def worker(text, model, image=None, observation=None):
+def worker(text, model, image=None, observation=None, progress_serial=None, resume=False):
     try:
         answer, seconds = run_turn(
             messages, text, ask_approval,
             log=lambda line: events.put(("log", line)),
-            model=model, stop_event=stop_event, image=image, observation_text=observation)
+            model=model, stop_event=stop_event, image=image, observation_text=observation,
+            on_progress=lambda **event:task_progress.event(progress_serial,**event),resume=resume)
         events.put(("answer", answer, seconds))
     except Exception as e:            # top of the thread: show the error instead of dying silently
+        task_progress.event(progress_serial,'finish',status='Failed')
         events.put(("error", str(e)))
 
 
@@ -365,6 +370,7 @@ def stop_agent():
     """Kill owned automation workers and revoke pending images/approvals."""
     global pending_image, pending_media
     stop_event.set()
+    task_progress.stop()
     pending_image = pending_media = None
     stop_all()  # Kill owned process trees; does not wait for a blocked UIA call.
     close_desktop()
@@ -693,6 +699,7 @@ def new_chat():
     set_notepad_phase("closed")
     stop_all()
     messages.clear()            # empty the SAME list (don't make a new one)
+    task_progress.reset()
     artifact_store.clear()
     artifact_panel.reset()
     stop_event.clear()          # No turn is active; this is a person-approved fresh chat.
@@ -763,7 +770,18 @@ def show_log():
     box.see("end")
 
 
-def send(event=None):
+def resume_task():
+    if busy or pending_image is not None or pending_media is not None:return
+    if entry.get().strip():
+        show('Task','Your unsent message is preserved. Send or clear it before resuming the checkpoint.')
+        return
+    try:text=task_progress.resume_request()
+    except ValueError:return
+    entry.delete(0,'end');entry.insert(0,text)
+    send(resume=True)
+
+
+def send(event=None,resume=False):
     global busy, pending_image, pending_media
     text = entry.get().strip()
     if not text or busy:
@@ -777,11 +795,12 @@ def send(event=None):
     observation = pending_media.observation if pending_media is not None else None
     pending_media = None
     busy = True
+    progress_serial=task_progress.begin('' if image is not None or observation is not None else text,resume=resume)
     send_button.configure(state="disabled")
     model_box.configure(state="disabled")
     stop_event.clear()                           # a fresh turn starts un-stopped
     stop_button.configure(state="normal", text="Stop")
-    threading.Thread(target=worker, args=(text, model, image, observation), daemon=True).start()
+    threading.Thread(target=worker, args=(text, model, image, observation,progress_serial,resume), daemon=True).start()
 
 
 def poll():
@@ -890,6 +909,7 @@ def apply_theme():
     root.option_add("*TCombobox*Listbox.foreground",T("text"))
     theme_button.configure(text="Light appearance" if theme_name=="dark" else "Dark appearance")
     artifact_panel.apply_theme(palette)
+    if 'progress_panel' in globals():progress_panel.render(task_progress.snapshot())
 
 
 def toggle_theme():
@@ -990,7 +1010,9 @@ def build_window():
     label(conversation_header,"Conversation",12,"text","card",True).pack(side="left")
     copy_button=make_button(conversation_header,"Copy last answer",lambda:copy_text(last_answer))
     copy_button.pack(side="right")
-    label(conversation,"A little space to explore your next idea.",10,background="card").pack(anchor="w",padx=22,pady=(0,12))
+    global progress_panel
+    progress_panel=ProgressPanel(conversation,task_progress,resume_task)
+    progress_panel.pack(fill='x',padx=20,pady=(0,6))
     chat_holder,chat_box=scroll_box(conversation,state="disabled",wrap="word",width=42,height=20,
         spacing1=0,spacing2=3,spacing3=8,relief="flat",bd=0,padx=22,pady=18,highlightthickness=0)
     chat_holder.pack(fill="both",expand=True)

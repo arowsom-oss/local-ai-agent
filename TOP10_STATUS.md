@@ -24,6 +24,13 @@ and preview-bound text replacement with read-back verification. It cannot attach
 to existing windows or expose file/menu/keyboard commands. This does not broaden
 the practice app's tools or grant general desktop control. See NOTEPAD.md.
 
+## Task progress and checkpoints
+
+A compact status and detailed action history distinguish model outlines, reads,
+approvals and verified operations. Paused tasks can be explicitly resumed with
+fresh-read gates; checkpoints do not replay old approvals or survive New chat.
+The panel does not certify whole-task completion. See TASK_PROGRESS.md.
+
 ## Saved document workspace
 
 Plain-text document Artifacts can now be saved to a fixed local folder after an

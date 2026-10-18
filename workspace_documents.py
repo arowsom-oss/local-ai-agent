@@ -93,6 +93,8 @@ class Workspace:
         with self.access():
             inventory=self.catalog()
             if any(type(v) is not int for v in (artifact,revision,document,version)):raise ValueError('numbers must be integers')
+            if document!=0 and version<=0:
+                raise ValueError('an existing document needs the positive saved version returned by document_read; version=0 is only for creating with document=0')
             source=artifacts.get(artifact)
             if source.kind!='document' or source.current.number!=revision:raise ValueError('select a current document Artifact revision')
             after=valid_text(source.current.content).encode('utf-8')
@@ -159,6 +161,7 @@ def cancel_workspace():
 
 def prepare_save(**args):
     try:return workspace().prepare(**args)
+    except ValueError as exc:return {'error':str(exc)}
     except Exception:return {'error':'workspace save refused; check access, document/artifact revisions, text bounds and current files'}
 
 
@@ -195,6 +198,6 @@ def document_save(artifact: int,revision: int,document: int,version: int) -> str
         artifact: Current document Artifact number; code/media Artifacts are refused.
         revision: Exact current Artifact revision to freeze before approval.
         document: Listed document number to revise, or 0 for a new document.
-        version: Latest saved version that was read, or 0 with document=0 to create.
+        version: Positive saved version returned by document_read for an existing document. 0 is only allowed with document=0 to create.
     """
     return 'Error: document saves require an exact approval in the agent loop.'

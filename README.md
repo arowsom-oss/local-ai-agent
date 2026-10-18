@@ -78,6 +78,16 @@ made into executable previews. Native image and silent video previews use bounde
 stoppable decoder processes. This version does not run generated apps or render
 arbitrary web code. See ARTIFACTS.md for workflow, limits and tests.
 
+## Task progress and checkpoints
+
+The conversation pane shows Task progress, verified operation counts and read
+counts. Details separates unverified proposed steps from code-reported actions,
+approvals and refusals. Reply ready never means the model's entire task was
+independently verified. Paused text tasks offer Resume, which starts a new turn
+and requires current reads before target-dependent changes. Existing permissions
+and exact-action approvals still apply. Checkpoints are RAM-only and cleared by
+New chat. See TASK_PROGRESS.md for states, tests and model-recovery limitations.
+
 ## Saved Documents
 
 Ask for a document Artifact and request saving it as a new Document. Workspace
@@ -250,15 +260,17 @@ python -B test_artifacts.py
 python -B test_notepad.py
 python -B test_notepad_workflow.py
 python -B test_workspace_documents.py
+python -B test_task_progress.py
 python -B test_desktop_live.py
 python -B test_vision_ui.py
 python -B test_browser_live.py
 python -B test_artifact_ui.py
 python -B test_notepad_live.py
 python -B test_workspace_live.py
+python -B test_progress_ui.py
 ```
 
-The first nine contain 168 offline tests with fakes. The last six use real
+The first ten contain 185 offline tests with fakes. The last seven use real
 Windows UIA/Tk/Chromium with synthetic data or mocked HTTPX and no Internet.
 See VALIDATION.md and TOP10_STATUS.md for what actually passed. Tests do not
 prove freedom from vulnerabilities. Wider app integration, OS/VM isolation,

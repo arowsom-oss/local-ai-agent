@@ -1,4 +1,22 @@
-# Current saved Documents workspace
+# Current task progress and checkpoints
+
+185 offline assertions passed in ten suites, including 17 new task-progress cases
+with sockets blocked. A real Tk/fake-backend workflow passed denial, pause, a
+simulated human change, Resume, fresh observation and exact approval, verified
+result display, visible Resume controls, Stop and New chat. Existing real Tk
+approval/Artifacts and Windows/Documents fixtures passed after integration.
+Compact and detail views were visually inspected. A final local gemma4:e2b
+exact-text recovery fixture passed in 22.03 seconds after three guarded failed
+attempts. Earlier failures involved saved-version/revision confusion, unwanted
+metadata in the draft and the old response bound. No unapproved document update
+occurred. The final fixture read the synthetic human change before its new exact
+approval and retained the earlier saved version. This is not evidence of general
+open-ended recovery reliability. The loop now permits at most seven responses
+for an outline and fresh observation, without automatic background continuation.
+See TASK_PROGRESS.md for trusted outcome events and fresh-read gates. Checkpoints
+are RAM-only; model final text cannot forge verified counts or pause/failure states.
+
+# Earlier saved Documents workspace
 
 168 offline plain-assert tests passed across nine suites, including 18 new
 workspace tests with sockets blocked. New native Windows and Tk fixtures passed

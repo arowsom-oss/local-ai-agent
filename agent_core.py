@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 from model_router import chat, choose_model, ALLOWED_MODELS, MODEL_CHOICES
 from pathlib import Path
 import fetch
+from task_progress import TurnEvidence, outline_task
 from fetch import fetch_page
 from audit_privacy import private_arguments, private_note
 from artifacts import create_artifact, revise_artifact, list_artifacts, read_artifact, record_generated
@@ -17,7 +18,7 @@ from generation_tools import generate_image, generate_video, run_generation, pro
 from browser_tool import browser_open, browser_read, browser_click, browser_search, link_for, link_labels, search_url_for
 
 MODEL = 'gemma4:e2b'                       # the default
-MAX_ROUNDS = 5
+MAX_ROUNDS = 7  # Bounded room for an outline and a fresh read when resuming.
 
 # Fixed text written by Alex, so it is TRUSTED and may be a system message. Text the model or a
 # web page wrote (like the compactor's summary) must never be one: authority follows the source.
@@ -33,7 +34,12 @@ SYSTEM_PROMPT = ("You run locally on Alex's laptop through Ollama, not in the cl
                  "For saved documents, create or revise a document Artifact, then request document_save with its "
                  "exact revision. Use document=0 and version=0 for a new document. To edit saved work, use "
                  "document_list and document_read(document, version=0), revise the returned Artifact, and save "
-                 "against that latest document version. Every save needs its own exact approval and retains old files.")
+                 "against that positive saved document version returned by the read. version=0 cannot update an existing document; "
+                 "it is only for a new document with document=0. Every save needs its own exact approval and retains old files. "
+                 "document_read returns a metadata line followed by a JSON string containing the document text. "
+                 "Use only that decoded string as draft content; never copy the data warning or metadata into the document. "
+                 "For multi-step work, use outline_task to display short proposed steps. Outlines grant no permission "
+                 "and cannot mark work complete. On resumed turns, read current targets and Artifacts again before changes.")
 COMPACT_AT = 6000   # rough token count where the conversation gets squeezed (NUM_CTX is the hard wall)
 KEEP_RECENT = 6     # the newest messages are always kept word for word
 NUM_CTX = 8192   # how many tokens of conversation the model can hold (Ollama default is 4096)
@@ -54,6 +60,7 @@ NETWORK_TOOLS = ARBITRARY_URL_TOOLS | {"browser_click", "browser_search"}
 # Unknown tools are denied too. Downloads have no executable entry or model schema.
 NEVER_ALLOWED = {"download_file"}
 RISK_TIERS = {
+    "outline_task":"low",
     "add": "low", "multiply": "low", "browser_read": "low",
     "browser_open": "high", "fetch_page": "high", "read_file": "medium",
     "browser_click": "medium", "propose_plan": "medium", "browser_search": "high",
@@ -64,6 +71,7 @@ RISK_TIERS = {
     "document_list":"medium", "document_read":"medium", "document_save":"high",
 }
 TOOL_ARGUMENTS = {
+    "outline_task":{"steps":list},
     "add": {"a": int, "b": int}, "multiply": {"a": int, "b": int},
     "read_file": {"name": str}, "fetch_page": {"url": str},
     "browser_open": {"url": str}, "browser_read": {}, "browser_click": {"element": int},
@@ -184,6 +192,7 @@ def propose_plan(goal: str, steps: list) -> str:
 
 # What the code is willing to run. Anything the model asks for that is not here is refused.
 available_functions = {
+    'outline_task':outline_task,
     'add': add,
     'multiply': multiply,
     'read_file': read_file,
@@ -330,7 +339,7 @@ def stopped(stop_event):
     return stop_event is not None and stop_event.is_set()
 
 
-def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_event=None, image=None, observation_text=None):
+def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, stop_event=None, image=None, observation_text=None, evidence=None):
     """Run one user message through the model/tool loop.
 
     messages:      the conversation so far (this function adds to it)
@@ -342,25 +351,33 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
 
     Returns (answer_text, seconds), where seconds is model + tool time only.
     """
+    def finish(phase,answer,seconds):
+        evidence.outcome=phase
+        return answer,seconds
+
+    def append_tool(message):
+        messages.append(message)
+        evidence.result(message['tool_name'],message['content'])
+
     if model not in MODEL_CHOICES:
         raise ValueError(f"model not allowed: {model}")
     if stopped(stop_event):
-        return "(stopped by you)", 0.0
+        return finish("Stopped","(stopped by you)",0.0)
     started = time.perf_counter()
     if image is not None:
         from vision_input import validate_image
         try:
             validate_image(image)
         except Exception:
-            return "Error: invalid image; attach it again using the image preview.", 0.0
+            return finish("Failed","Error: invalid image; attach it again using the image preview.",0.0)
     if observation_text is not None and (not isinstance(observation_text, str) or len(observation_text) > 8000):
-        return "Error: invalid media observation.", 0.0
+        return finish("Failed","Error: invalid media observation.",0.0)
     if model == "auto":
         model = choose_model(user_text, has_image=image is not None, log=log)
     if model not in ALLOWED_MODELS:  # Defense against a broken/replaced classifier.
-        return "Error: router selected a model outside the allowlist.", 0.0
+        return finish("Failed","Error: router selected a model outside the allowlist.",0.0)
     if stopped(stop_event):
-        return "(stopped by you)", time.perf_counter() - started
+        return finish("Stopped","(stopped by you)",time.perf_counter()-started)
     if image is not None or observation_text is not None:
         # A screenshot is observation only in this version. No tools are offered
         # and no returned tool call is dispatched, even if the image requests it.
@@ -375,17 +392,17 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                                     "\n[Untrusted selected-media data]\n" + observation_text if observation_text else ""),
                                  **({"images": [image.png]} if image is not None else {})}])
             if response.message.tool_calls:
-                return "Error: image analysis returned an unsupported action request.", time.perf_counter() - started
+                return finish("Failed","Error: image analysis returned an unsupported action request.",time.perf_counter()-started)
             answer = "[Image interpretation; may contain mistakes.]\n" + str(response.message.content or "")[:4000]
         except Exception:
-            return "Error: local image analysis failed; no action was executed.", time.perf_counter() - started
+            return finish("Failed","Error: local image analysis failed; no action was executed.",time.perf_counter()-started)
         if stopped(stop_event):
-            return "(stopped by you)", time.perf_counter() - started
+            return finish("Stopped","(stopped by you)",time.perf_counter()-started)
         # Retain text only: no screenshot bytes, path or EXIF in chat/audit history.
         messages.extend([{"role": "user", "content": user_text + "\n[User-approved media observation for this turn only.]"},
                          {"role": "assistant", "content": answer}])
         audit("media_observed" if observation_text is not None else "image_observed", "-", {}, model)
-        return answer, time.perf_counter() - started
+        return finish("Reply ready",answer,time.perf_counter()-started)
     messages.append({'role': 'user', 'content': user_text})
     total = time.perf_counter() - started
 
@@ -393,7 +410,7 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
     for _ in range(MAX_ROUNDS):
         if stopped(stop_event):
             audit("stopped", "-", {}, model, note="before asking the model again")
-            return "(stopped by you)", total
+            return finish("Stopped","(stopped by you)",total)
         t0 = time.perf_counter()
         try:
             compact(messages, model, log)      # squeeze old messages if the conversation is too long
@@ -402,16 +419,16 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                                    desktop_start, desktop_read, desktop_type, desktop_click,
                                    generate_image, generate_video, create_artifact, revise_artifact,
                                    list_artifacts, read_artifact, notepad_start, notepad_read, notepad_replace,
-                                   document_list, document_read, document_save], think=True,
+                                   document_list, document_read, document_save, outline_task], think=True,
                             options={'num_ctx': NUM_CTX})
         except Exception:
-            return ("Error: local model request failed. Check Ollama and the installed allowed models.",
-                    total + time.perf_counter() - t0)
+            return finish("Failed","Error: local model request failed. Check Ollama and the installed allowed models.",
+                    total+time.perf_counter()-t0)
         total += time.perf_counter() - t0
         messages.append(response.message)
 
         if not response.message.tool_calls:
-            return response.message.content, total
+            return finish("Reply ready",response.message.content,total)
 
         notepad_barrier=False
         notepad_pause=None
@@ -420,47 +437,60 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
             args = tc.function.arguments
 
             if notepad_barrier:
-                messages.append({'role':'tool','tool_name':name,'content':
+                append_tool({'role':'tool','tool_name':name,'content':
                     'Error: queued action not run. Wait for the Notepad observation before choosing another step.'})
                 audit("notepad_batch_deferred",name,{},model)
                 continue
 
             if stopped(stop_event):        # the model asked, but you pressed Stop: do not run it
                 audit("stopped", name, args, model, note="tool not run")
-                messages.append({'role': 'tool', 'tool_name': name,
+                append_tool({'role': 'tool', 'tool_name': name,
                                  'content': "Error: stopped by the user"})
                 continue
 
             if name in NEVER_ALLOWED:
                 audit("policy_refused", name, args, model, note="downloads are disabled")
                 log(f"[blocked] {name}: downloads are disabled")
-                messages.append({'role': 'tool', 'tool_name': name,
+                append_tool({'role': 'tool', 'tool_name': name,
                                  'content': "Error: downloads are disabled"})
                 continue
 
             if name not in available_functions:
                 audit("unknown_tool", name, args, model)
                 log(f"[blocked] {name}: not a tool the agent is allowed to use")
-                messages.append({'role': 'tool', 'tool_name': name,
+                append_tool({'role': 'tool', 'tool_name': name,
                                  'content': "Error: unknown tool"})
                 continue
 
+            evidence.request(name,args)
             problem = tool_args_problem(name, args)
             if problem:
                 audit("search_refused" if name == "browser_search" else "arguments_refused",
                       name, args, model, note=problem)
                 log(f"[blocked] {name}: {problem}")
-                messages.append({'role': 'tool', 'tool_name': name, 'content': f"Error: {problem}"})
+                append_tool({'role': 'tool', 'tool_name': name, 'content': f"Error: {problem}"})
                 if name in {"document_list","document_read","document_save"}:
                     cancel_workspace()
                     for deferred in response.message.tool_calls[tc_index+1:]:
-                        messages.append({'role':'tool','tool_name':deferred.function.name,'content':'Error: document workflow paused; queued action not run.'})
-                    return f"Error: {problem}. Document workflow paused. Send a new request.",total
+                        append_tool({'role':'tool','tool_name':deferred.function.name,'content':'Error: document workflow paused; queued action not run.'})
+                    return finish("Paused",f"Error: {problem}. Document workflow paused. Send a new request.",total)
                 if name in {"notepad_start","notepad_read","notepad_replace"}:
                     cancel_notepad()
                     notepad_barrier=True
                     notepad_pause=f"Error: {problem}\nNotepad workflow paused. Send a new request and read the current draft."
                     log("[notepad] paused")
+                continue
+
+            resume_problem=evidence.problem(name,args)
+            if resume_problem:
+                append_tool({'role':'tool','tool_name':name,'content':'Error: '+resume_problem})
+                log(f'[blocked] {name}: {resume_problem}')
+                continue
+
+            if name=='outline_task':
+                result=outline_task(args['steps'])
+                if not result.startswith('Error:'):evidence.emit('plan',steps=args['steps'])
+                append_tool({'role':'tool','tool_name':name,'content':result})
                 continue
 
             if name in {"document_list","document_read","document_save"}:
@@ -481,13 +511,13 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                 elif result is None:
                     result=available_functions[name](**args)
                 audit("document_refused" if result.startswith("Error:") else "document_result",name,args,model,note=result)
-                messages.append({'role':'tool','tool_name':name,'content':result})
+                append_tool({'role':'tool','tool_name':name,'content':result})
                 if result.startswith("Error:"):
                     cancel_workspace();log(f"[blocked] {name}: {result}")
                     # End the turn, including queued actions, rather than silently retrying a refused save.
                     for deferred in response.message.tool_calls[tc_index+1:]:
-                        messages.append({'role':'tool','tool_name':deferred.function.name,'content':'Error: document workflow paused; queued action not run.'})
-                    return ("(stopped by you)" if stopped(stop_event) else result+" Document workflow paused. Review it and send a new request."),total
+                        append_tool({'role':'tool','tool_name':deferred.function.name,'content':'Error: document workflow paused; queued action not run.'})
+                    return finish("Stopped" if stopped(stop_event) else "Paused",("(stopped by you)" if stopped(stop_event) else result+" Document workflow paused. Review it and send a new request."),total)
                 continue
 
             if name == "propose_plan":
@@ -499,13 +529,14 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                 elif approved(ask_approval, "plan", {"goal": new_plan["goal"],
                                            "steps": [show_step(s) for s in new_plan["steps"]]}):
                     plan = new_plan
+                    evidence.emit("plan",steps=[show_step(step) for step in plan["steps"]])
                     audit("plan_approved", name, args, model, note=new_plan["goal"])
                     reply_text = "Plan approved. Do the steps in order; anything else needs a new popup."
                 else:
                     audit("plan_denied", name, args, model)
                     log("[blocked] propose_plan: you clicked No")
                     reply_text = "Error: the user did not approve the plan"
-                messages.append({'role': 'tool', 'tool_name': name, 'content': reply_text})
+                append_tool({'role': 'tool', 'tool_name': name, 'content': reply_text})
                 continue
 
             if name == "notepad_replace":
@@ -533,7 +564,7 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                 else:
                     log("[notepad] verified")
                 notepad_barrier=True
-                messages.append({'role': 'tool', 'tool_name': name, 'content': result})
+                append_tool({'role': 'tool', 'tool_name': name, 'content': result})
                 continue
 
             if name in {"desktop_type", "desktop_click"}:
@@ -552,7 +583,7 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                     audit("desktop_result", name, args, model, note=result)
                 if result.startswith("Error:"):
                     log(f"[blocked] {name}: {result}")
-                messages.append({'role': 'tool', 'tool_name': name, 'content': result})
+                append_tool({'role': 'tool', 'tool_name': name, 'content': result})
                 continue
 
             if name in {"generate_image", "generate_video"}:
@@ -578,7 +609,7 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                 audit("generation_result", name, args, model, note=result)
                 if result.startswith("Error:"):
                     log(f"[blocked] {name}: {result}")
-                messages.append({'role': 'tool', 'tool_name': name, 'content': result})
+                append_tool({'role': 'tool', 'tool_name': name, 'content': result})
                 continue
 
             site_ok_now = False
@@ -594,7 +625,7 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                 if url is None:
                     audit("search_refused", name, args, model, note=info)
                     log(f"[blocked] browser_search {element}: {info}")
-                    messages.append({'role': 'tool', 'tool_name': name, 'content': f"Error: {info}"})
+                    append_tool({'role': 'tool', 'tool_name': name, 'content': f"Error: {info}"})
                     continue
                 args = {"element": element, "box": info, "text": args["text"], "url": url}
             if name == "browser_click":
@@ -604,7 +635,7 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                 if url is None:
                     audit("click_refused", name, args, model, note=info)
                     log(f"[blocked] browser_click {element}: {info}")
-                    messages.append({'role': 'tool', 'tool_name': name, 'content': f"Error: {info}"})
+                    append_tool({'role': 'tool', 'tool_name': name, 'content': f"Error: {info}"})
                     continue
                 args = {"element": element, "link": info, "url": url}   # what the popup shows
             if name in NETWORK_TOOLS:
@@ -613,7 +644,7 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                     audit("search_refused" if name == "browser_search" else "outbound_refused",
                           name, args, model, note=problem)
                     log(f"[blocked] {name}: {problem}")
-                    messages.append({'role': 'tool', 'tool_name': name, 'content': f"Error: {problem}"})
+                    append_tool({'role': 'tool', 'tool_name': name, 'content': f"Error: {problem}"})
                     continue
             if name in ("fetch_page", "browser_open", "browser_click", "browser_search") and not fetch.is_allowed(url):
                 host, problem = fetch.check_new_site(url)    # code reads the site name, not the model
@@ -622,7 +653,7 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                     if name == "browser_search":
                         audit("search_refused", name, args, model, note=problem)
                     log(f"[blocked] {name} {url[:120]}: {problem}")
-                    messages.append({'role': 'tool', 'tool_name': name,
+                    append_tool({'role': 'tool', 'tool_name': name,
                                      'content': f"Error: {problem}"})
                     continue
                 if not approved(ask_approval, "new_site", {"host": host, "url": url}):
@@ -630,7 +661,7 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                     if name == "browser_search":
                         audit("search_refused", name, args, model, note="website not approved")
                     log(f"[blocked] {name} {host}: you clicked No")
-                    messages.append({'role': 'tool', 'tool_name': name,
+                    append_tool({'role': 'tool', 'tool_name': name,
                                      'content': "Error: the user did not allow this website"})
                     continue
                 fetch.session_hosts.add(host)
@@ -648,7 +679,7 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                         plan = None
                         audit("plan_stopped", name, args, model, note=wanted)
                         log(f"[blocked] {name}: off the plan, you stopped it")
-                        messages.append({'role': 'tool', 'tool_name': name,
+                        append_tool({'role': 'tool', 'tool_name': name,
                                          'content': "Error: that was not in the plan and the user stopped the plan"})
                         continue
                     audit("plan_changed", name, args, model, note=wanted)
@@ -660,7 +691,7 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                     ask_approval, "outbound_request", {"tool": name, "url": url}):
                 audit("outbound_refused", name, args, model, note="outbound URL not approved")
                 log(f"[blocked] {name}: outbound URL not approved")
-                messages.append({'role': 'tool', 'tool_name': name,
+                append_tool({'role': 'tool', 'tool_name': name,
                                  'content': "Error: user denied this outbound URL"})
                 continue
 
@@ -672,7 +703,7 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                 if name == "browser_search":
                     audit("search_refused", name, args, model, note="search not approved")
                 log(f"[blocked] {name}: you clicked No")
-                messages.append({'role': 'tool', 'tool_name': name,
+                append_tool({'role': 'tool', 'tool_name': name,
                                  'content': "Error: user denied this action"})
                 if name=="notepad_start":
                     notepad_barrier=True
@@ -682,7 +713,7 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
 
             if stopped(stop_event):        # last check, right before the tool runs
                 audit("stopped", name, args, model, note="tool not run")
-                messages.append({'role': 'tool', 'tool_name': name,
+                append_tool({'role': 'tool', 'tool_name': name,
                                  'content': "Error: stopped by the user"})
                 continue
 
@@ -720,10 +751,41 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                 plan["index"] += 1
                 if plan["index"] >= len(plan["steps"]):
                     plan = None                          # finished: back to one popup per action
-            messages.append({'role': 'tool', 'tool_name': name, 'content': str(result)})
+            append_tool({'role': 'tool', 'tool_name': name, 'content': str(result)})
 
         if notepad_pause is not None:
-            if stopped(stop_event):return "(stopped by you)",total
-            return notepad_pause,total
+            if stopped(stop_event):return finish("Stopped","(stopped by you)",total)
+            return finish("Paused",notepad_pause,total)
 
-    return "(stopped: hit the round limit)", total
+    return finish("Paused","(stopped: hit the round limit)",total)
+
+
+
+def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_event=None,
+             image=None, observation_text=None, on_progress=None, resume=False):
+    """Run a person request; progress is trusted metadata, never model-declared completion.
+
+    on_progress is an optional trusted callback. resume is supplied only by the UI,
+    never a model tool parameter, and enforces fresh reads before target-dependent changes.
+    Returns (answer_text, seconds), preserving the existing caller interface.
+    """
+    evidence=TurnEvidence(on_progress,resume)
+    def approval(name,args):
+        evidence.emit('approval',name)
+        try:decision=ask_approval(name,args)
+        except Exception:decision=False
+        evidence.emit('decision',name,'approved' if decision is True else 'denied')
+        return decision
+    try:
+        if resume:
+            cancel_workspace()
+            # Existing app guards still check identity, current text and one-use approvals.
+            # The additional per-turn gate refuses mutations until an actual fresh read succeeds.
+        answer,seconds=_run_turn_impl(messages,user_text,approval,log,model,stop_event,image,observation_text,evidence)
+        phase=('Stopped' if stopped(stop_event) else
+               'Paused' if evidence.had_refusal and evidence.outcome=='Reply ready' else evidence.outcome)
+        evidence.emit('finish',status=phase)
+        return answer,seconds
+    except Exception:
+        evidence.emit('finish',status='Failed')
+        raise
