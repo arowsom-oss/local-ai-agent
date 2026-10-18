@@ -3,8 +3,9 @@
 Python 3.12 on Windows. Ollama runs locally; Python decides which tools can run.
 This is a working first version of the ten improvements in TOP10_STATUS.md.
 Desktop control is limited to an owned practice app and a separately approved,
-owned classic Notepad scratch window. It cannot attach to your existing windows,
-accounts, files or messages.
+owned classic Notepad scratch window. Saved Documents use a separate, approved
+fixed folder with exact save previews and retained versions. It cannot attach to
+your existing windows or accounts, or choose arbitrary files and messages.
 The original Downloads files and C:/dev/agent installation were left unchanged.
 
 ## Window and appearance
@@ -76,6 +77,21 @@ Markdown, HTML, SVG and scripts are displayed as text; URLs are never fetched or
 made into executable previews. Native image and silent video previews use bounded,
 stoppable decoder processes. This version does not run generated apps or render
 arbitrary web code. See ARTIFACTS.md for workflow, limits and tests.
+
+## Saved Documents
+
+Ask for a document Artifact and request saving it as a new Document. Workspace
+reading needs permission for this chat; every save needs a separate exact
+before/after preview. Code chooses UUID .txt filenames inside the fixed
+document_workspace folder and retains every earlier version as a recovery copy.
+It never overwrites or deletes an existing document. Only current document
+Artifacts with at most 8,000 characters can be saved; code/media are refused.
+
+Documents in the sidebar lets you load current or older saved versions into
+Artifacts, then Save Artifact here after reviewing a new preview. Save new in
+Artifacts creates a separate file history. New chat clears draft Artifacts and
+workspace permission, while saved Documents persist. See DOCUMENTS.md for bounds,
+recovery steps, native path checks, tests and remaining filesystem limitations.
 
 ## Scratch Notepad: first real-app integration
 
@@ -215,7 +231,8 @@ no prompt, search text, URL, draft value, transcript or output text is persisted
 there. Older logs are not retroactively cleaned. Chat may display tool arguments
 and retain interpretation text. Logs, generated files, caches, sandbox files and
 identity.py are excluded from Git. The model has no shell, downloads, arbitrary
-app control, file write/delete, credentials, uploads or permission-granting tool.
+app control, arbitrary file writes/deletes, credentials, uploads or permission-granting tool.
+Saved Documents are a separate bounded write path with exact approval and retained versions.
 All actual tool arguments are validated; extra parameters and boolean element
 numbers are rejected. A model schema or model promise is never the gate.
 
@@ -232,14 +249,16 @@ python -B test_computer_features.py
 python -B test_artifacts.py
 python -B test_notepad.py
 python -B test_notepad_workflow.py
+python -B test_workspace_documents.py
 python -B test_desktop_live.py
 python -B test_vision_ui.py
 python -B test_browser_live.py
 python -B test_artifact_ui.py
 python -B test_notepad_live.py
+python -B test_workspace_live.py
 ```
 
-The first eight contain 150 offline tests with fakes. The last five use real
+The first nine contain 168 offline tests with fakes. The last six use real
 Windows UIA/Tk/Chromium with synthetic data or mocked HTTPX and no Internet.
 See VALIDATION.md and TOP10_STATUS.md for what actually passed. Tests do not
 prove freedom from vulnerabilities. Wider app integration, OS/VM isolation,

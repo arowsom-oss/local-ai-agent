@@ -1,4 +1,22 @@
-# Current Notepad adapter
+# Current saved Documents workspace
+
+168 offline plain-assert tests passed across nine suites, including 18 new
+workspace tests with sockets blocked. New native Windows and Tk fixtures passed
+within temporary folders: exact saved versions, stale file refusal, retained
+history, no-overwrite publication, real hard-link refusal, synthetic reparse
+metadata refusal, Stop before publication, pending cleanup, Unicode paths,
+No-default approvals, save/load/recovery controls and New chat permission reset
+while saved files remain. Existing browser/core/media/Artifacts/Notepad offline
+tests and the real Tk approval/artifact suites also passed after integration.
+Actual gemma4:e2b created and revised two exact synthetic saved documents in
+18.58 seconds with folder approval and two exact save approvals. Test callbacks
+were confined to those contents and a temporary folder; they are not installed
+in production UI. See DOCUMENTS.md for limitations, including publication races
+with Stop, pending files after crashes, filesystem call deadlines and no claim
+of an OS sandbox or power-loss durability. The fixed workspace is excluded from
+Git and source archives. Existing scratch Notepad still has no Save command.
+
+# Earlier Notepad adapter
 
 142 offline plain-assert tests passed: the prior 128 plus 14 Notepad cases.
 Real owned classic Notepad tests passed exact UIA read/edit, two caller threads,

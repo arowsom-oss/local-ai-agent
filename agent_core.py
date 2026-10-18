@@ -9,6 +9,8 @@ import fetch
 from fetch import fetch_page
 from audit_privacy import private_arguments, private_note
 from artifacts import create_artifact, revise_artifact, list_artifacts, read_artifact, record_generated
+from workspace_documents import (document_list, document_read, document_save, workspace_allowed,
+    grant_workspace, reset_workspace, cancel_workspace, prepare_save, commit_save, ROOT as DOCUMENT_ROOT)
 from notepad_tools import notepad_start, notepad_read, notepad_replace, start_notepad, prepare_notepad, commit_notepad, cancel_notepad
 from desktop_tools import desktop_start, desktop_read, desktop_type, desktop_click, prepare_action, execute_approved, start_practice
 from generation_tools import generate_image, generate_video, run_generation, prompt_problem
@@ -27,7 +29,11 @@ SYSTEM_PROMPT = ("You run locally on Alex's laptop through Ollama, not in the cl
                  "For scratch Notepad, start if needed, then read its current document number before proposing an edit. "
                  "Request one Notepad step at a time and wait for its observation. Preserve the person's existing "
                  "draft unless they requested changing it. Only report an edit as complete after verified read-back. "
-                 "A paused Notepad workflow needs a new request from the person and a fresh read; do not retry it.")
+                 "A paused Notepad workflow needs a new request from the person and a fresh read; do not retry it. "
+                 "For saved documents, create or revise a document Artifact, then request document_save with its "
+                 "exact revision. Use document=0 and version=0 for a new document. To edit saved work, use "
+                 "document_list and document_read(document, version=0), revise the returned Artifact, and save "
+                 "against that latest document version. Every save needs its own exact approval and retains old files.")
 COMPACT_AT = 6000   # rough token count where the conversation gets squeezed (NUM_CTX is the hard wall)
 KEEP_RECENT = 6     # the newest messages are always kept word for word
 NUM_CTX = 8192   # how many tokens of conversation the model can hold (Ollama default is 4096)
@@ -42,6 +48,7 @@ AUDIT_LOG = DATA_ROOT / "audit.log"
 # Tools that must be approved by a human before they run.
 NEEDS_APPROVAL = {"read_file", "browser_open", "fetch_page", "browser_click", "browser_search", "desktop_start", "desktop_type", "desktop_click", "generate_image", "generate_video"}
 NEEDS_APPROVAL.update({"notepad_start", "notepad_replace"})
+NEEDS_APPROVAL.update({"document_save"})
 ARBITRARY_URL_TOOLS = {"browser_open", "fetch_page"}
 NETWORK_TOOLS = ARBITRARY_URL_TOOLS | {"browser_click", "browser_search"}
 # Unknown tools are denied too. Downloads have no executable entry or model schema.
@@ -54,6 +61,7 @@ RISK_TIERS = {
     "generate_image": "high", "generate_video": "high",
     "create_artifact": "low", "revise_artifact": "low", "list_artifacts": "low", "read_artifact": "low",
     "notepad_start": "high", "notepad_read": "low", "notepad_replace": "high",
+    "document_list":"medium", "document_read":"medium", "document_save":"high",
 }
 TOOL_ARGUMENTS = {
     "add": {"a": int, "b": int}, "multiply": {"a": int, "b": int},
@@ -68,6 +76,8 @@ TOOL_ARGUMENTS = {
     "revise_artifact": {"artifact": int, "revision": int, "content": str},
     "list_artifacts": {}, "read_artifact": {"artifact": int},
     "notepad_start": {}, "notepad_read": {}, "notepad_replace": {"element": int, "text": str},
+    "document_list":{}, "document_read":{"document":int,"version":int},
+    "document_save":{"artifact":int,"revision":int,"document":int,"version":int},
 }
 
 
@@ -189,6 +199,7 @@ available_functions = {
     'create_artifact': create_artifact, 'revise_artifact': revise_artifact,
     'list_artifacts': list_artifacts, 'read_artifact': read_artifact,
     'notepad_start': notepad_start, 'notepad_read': notepad_read, 'notepad_replace': notepad_replace,
+    'document_list':document_list, 'document_read':document_read, 'document_save':document_save,
 }
 
 
@@ -258,6 +269,7 @@ def compact(messages, model, log=print):
 def forget_sites():
     """New chat: forget every website you allowed during the old one."""
     fetch.session_hosts.clear()
+    reset_workspace()
 
 
 MAX_PLAN_STEPS = 5
@@ -389,7 +401,8 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                             tools=[add, multiply, read_file, fetch_page, browser_open, browser_read, browser_click, browser_search, propose_plan,
                                    desktop_start, desktop_read, desktop_type, desktop_click,
                                    generate_image, generate_video, create_artifact, revise_artifact,
-                                   list_artifacts, read_artifact, notepad_start, notepad_read, notepad_replace], think=True,
+                                   list_artifacts, read_artifact, notepad_start, notepad_read, notepad_replace,
+                                   document_list, document_read, document_save], think=True,
                             options={'num_ctx': NUM_CTX})
         except Exception:
             return ("Error: local model request failed. Check Ollama and the installed allowed models.",
@@ -402,7 +415,7 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
 
         notepad_barrier=False
         notepad_pause=None
-        for tc in response.message.tool_calls:
+        for tc_index,tc in enumerate(response.message.tool_calls):
             name = tc.function.name
             args = tc.function.arguments
 
@@ -438,11 +451,43 @@ def run_turn(messages, user_text, ask_approval, log=print, model=MODEL, stop_eve
                       name, args, model, note=problem)
                 log(f"[blocked] {name}: {problem}")
                 messages.append({'role': 'tool', 'tool_name': name, 'content': f"Error: {problem}"})
+                if name in {"document_list","document_read","document_save"}:
+                    cancel_workspace()
+                    for deferred in response.message.tool_calls[tc_index+1:]:
+                        messages.append({'role':'tool','tool_name':deferred.function.name,'content':'Error: document workflow paused; queued action not run.'})
+                    return f"Error: {problem}. Document workflow paused. Send a new request.",total
                 if name in {"notepad_start","notepad_read","notepad_replace"}:
                     cancel_notepad()
                     notepad_barrier=True
                     notepad_pause=f"Error: {problem}\nNotepad workflow paused. Send a new request and read the current draft."
                     log("[notepad] paused")
+                continue
+
+            if name in {"document_list","document_read","document_save"}:
+                # Folder reading is person-approved per chat; each write has a separate exact preview.
+                result=None
+                if not workspace_allowed():
+                    if approved(ask_approval,"workspace_access",{"folder":str(DOCUMENT_ROOT)}):
+                        if not stopped(stop_event):grant_workspace()
+                    if stopped(stop_event) or not workspace_allowed():
+                        result="Error: document workspace access denied or stopped."
+                if result is None and name=="document_save":
+                    proposal=prepare_save(**args)
+                    if "error" in proposal:result="Error: "+proposal["error"]
+                    elif not approved(ask_approval,"document_save_exact",proposal["preview"]):
+                        result="Error: this exact document save was denied."
+                    elif stopped(stop_event):result="Error: stopped before saving."
+                    else:result=commit_save(proposal["token"],stop_event)
+                elif result is None:
+                    result=available_functions[name](**args)
+                audit("document_refused" if result.startswith("Error:") else "document_result",name,args,model,note=result)
+                messages.append({'role':'tool','tool_name':name,'content':result})
+                if result.startswith("Error:"):
+                    cancel_workspace();log(f"[blocked] {name}: {result}")
+                    # End the turn, including queued actions, rather than silently retrying a refused save.
+                    for deferred in response.message.tool_calls[tc_index+1:]:
+                        messages.append({'role':'tool','tool_name':deferred.function.name,'content':'Error: document workflow paused; queued action not run.'})
+                    return ("(stopped by you)" if stopped(stop_event) else result+" Document workflow paused. Review it and send a new request."),total
                 continue
 
             if name == "propose_plan":

@@ -23,3 +23,11 @@ A separate, approved classic Notepad scratch process now supports semantic reads
 and preview-bound text replacement with read-back verification. It cannot attach
 to existing windows or expose file/menu/keyboard commands. This does not broaden
 the practice app's tools or grant general desktop control. See NOTEPAD.md.
+
+## Saved document workspace
+
+Plain-text document Artifacts can now be saved to a fixed local folder after an
+exact approval, with fresh version files instead of overwriting existing text.
+The Documents view loads saved history for review and recovery. Folder permission
+expires at New chat; saved files remain. No model-selected paths, general file
+editing, Word automation or code execution are added. See DOCUMENTS.md.

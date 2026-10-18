@@ -12,9 +12,11 @@ from artifact_media import prepare_preview
 
 
 class ArtifactPanel(ttk.Frame):
-    def __init__(self, parent, stop_event, answer=lambda: ""):
+    def __init__(self, parent, stop_event, answer=lambda: "", confirm=None):
         super().__init__(parent, padding=20)
         self.stop_event, self.answer = stop_event, answer
+        self.confirm=confirm
+        from workspace_panel import save_selected
         self.selected = self.version = None
         self.dirty = False
         self.signature = None
@@ -35,8 +37,9 @@ class ArtifactPanel(ttk.Frame):
         actions=ttk.Frame(self)
         actions.pack(fill="x",pady=(0,14))
         for text,callback in (("New",self.new),("From answer",self.from_answer),("Import",self.import_file)):
-            ttk.Button(actions,text=text,command=callback,width=12 if text=="From answer" else 7).pack(side="left",padx=(0,5))
-        ttk.Button(actions,text="Export",command=self.export,style="Accent.TButton",width=8).pack(side="right")
+            ttk.Button(actions,text=text,command=callback,width=0).pack(side="left",padx=(0,5))
+        ttk.Button(actions,text="Export",command=self.export,style="Accent.TButton",width=0).pack(side="right")
+        ttk.Button(actions,text="Save new",command=lambda:save_selected(self,self.confirm),width=0).pack(side="right",padx=(0,5))
         history=ttk.Frame(self)
         history.pack(fill="x",pady=(0,12))
         ttk.Label(history,text="VERSION",style="Muted.TLabel").pack(side="left")

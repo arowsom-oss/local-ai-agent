@@ -19,5 +19,6 @@ __pycache__/
 
 model_cache/
 generated/
+document_workspace/
 benchmark_results.json
 .venv/

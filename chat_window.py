@@ -19,6 +19,7 @@ from artifacts import store as artifact_store
 from artifact_panel import ArtifactPanel
 from ui_theme import PALETTES, configure_styles
 from notepad_tools import start_notepad, close_notepad
+from workspace_documents import reset_workspace, cancel_workspace
 
 # ---- shared state -------------------------------------------------------
 messages = []            # the conversation; lives as long as the window is open
@@ -139,6 +140,21 @@ def high_risk_confirm(title, lines):
 
 def confirm(name, args):
     """Pop up the approval question. Returns True only if the person clicks Yes."""
+    if name == "workspace_access":
+        return high_risk_confirm("Allow document workspace", [
+            "ALLOW LOCAL AI TO READ SAVED WORKSPACE DOCUMENTS FOR THIS CHAT", "",
+            "Fixed folder:",args.get("folder",""),"",
+            "Only numbered, bounded plain-text documents in this folder are supported.",
+            "Every save needs a separate exact preview. Saved documents remain after New chat.",
+            "New chat forgets access approval. No existing file is overwritten or deleted. Allow?"])
+    if name == "document_save_exact":
+        return high_risk_confirm("Approve exact document save",[
+            "SAVE A NEW PLAIN TEXT VERSION ON DISK", "", "Folder:",args.get("folder",""),
+            "New file:",args.get("file",""),"", "Before (JSON text):",
+            json.dumps(args.get("before"),ensure_ascii=False),"", "After (exact JSON text):",
+            json.dumps(args.get("after"),ensure_ascii=False),"",
+            "Earlier files remain as recovery copies. Code verifies the complete saved bytes.",
+            "Saved documents persist after New chat. This approval covers only the displayed text. Allow?"])
     if name == "notepad_start":
         return high_risk_confirm("Open scratch Notepad", [WHAT_IT_DOES[name], "",
             "This is a separate classic Notepad process, starting with an empty document.",
@@ -353,6 +369,7 @@ def stop_agent():
     stop_all()  # Kill owned process trees; does not wait for a blocked UIA call.
     close_desktop()
     close_notepad()
+    cancel_workspace()
     set_notepad_phase("closed")
     artifact_panel.stop()
     for window in root.winfo_children():
@@ -664,7 +681,7 @@ def new_chat():
         show("New chat", "wait for the answer first")
         return
     if messagebox.askyesno("New chat", "Start a new chat?\n\nThe agent will forget this conversation.\n"
-                          "Artifact drafts, version history and scratch Notepad will be discarded. Exported files remain.",
+                          "Artifact drafts, version history and scratch Notepad will be discarded. Exported files and saved Documents remain. Workspace read permission is forgotten.",
                           default="no") is not True:
         return
     closed = close_browser()    # close the browser BEFORE wiping anything: no half-reset chats
@@ -912,6 +929,8 @@ def build_window():
     label(sidebar,"WORKSPACE",9,background="sidebar",bold=True).pack(anchor="w",padx=22,pady=(0,12))
     make_button(sidebar,"Practice",open_practice).pack(fill="x",padx=16,pady=4)
     make_button(sidebar,"Notepad",open_notepad).pack(fill="x",padx=16,pady=4)
+    from workspace_panel import show_documents
+    make_button(sidebar,"Documents",lambda:show_documents(artifact_panel,confirm)).pack(fill="x",padx=16,pady=4)
     notepad_status=tk.StringVar(value=NOTEPAD_PHASES["closed"])
     label(sidebar,"",9,background="sidebar",textvariable=notepad_status,wraplength=140).pack(fill="x",padx=20,pady=(2,8))
     make_button(sidebar,"Audit log",show_log).pack(fill="x",padx=16,pady=4)
@@ -976,7 +995,7 @@ def build_window():
         spacing1=0,spacing2=3,spacing3=8,relief="flat",bd=0,padx=22,pady=18,highlightthickness=0)
     chat_holder.pack(fill="both",expand=True)
     workspace.add(conversation,weight=3)
-    artifact_panel=ArtifactPanel(workspace,stop_event,answer=lambda:last_raw_answer)
+    artifact_panel=ArtifactPanel(workspace,stop_event,answer=lambda:last_raw_answer,confirm=confirm)
     workspace.add(artifact_panel,weight=3)
     root.after(100,lambda:workspace.sashpos(0,int(workspace.winfo_width()*0.50)))
     from emergency_hotkey import start_hotkey
