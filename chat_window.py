@@ -38,6 +38,17 @@ UI_FONT = "Segoe UI"
 THEMES = PALETTES
 theme_name = "dark"
 buttons = []             # every button made by make_button, so apply_theme can repaint them
+notepad_status=None
+NOTEPAD_PHASES={"closed":"Notepad · closed","ready":"Notepad · ready to read",
+    "observed":"Notepad · draft observed","review":"Notepad · awaiting approval",
+    "applying":"Notepad · applying & verifying","verified":"Notepad · edit verified",
+    "paused":"Notepad · paused — review draft"}
+
+
+def set_notepad_phase(phase):
+    if phase not in NOTEPAD_PHASES:return
+    if stop_event.is_set() and phase!="closed":return
+    if notepad_status is not None:notepad_status.set(NOTEPAD_PHASES[phase])
 
 
 def T(key):
@@ -342,6 +353,7 @@ def stop_agent():
     stop_all()  # Kill owned process trees; does not wait for a blocked UIA call.
     close_desktop()
     close_notepad()
+    set_notepad_phase("closed")
     artifact_panel.stop()
     for window in root.winfo_children():
         if getattr(window, "_approval_dialog", False):
@@ -584,7 +596,7 @@ def open_notepad():
     stop_event.clear()
     if confirm("notepad_start", {}) is not True or stop_event.is_set():
         return
-    start_background(lambda: events.put(("practice_ready", start_notepad(stop_event))), reset_stop=False)
+    start_background(lambda: events.put(("notepad_ready", start_notepad(stop_event))), reset_stop=False)
 
 
 def attach_clip():
@@ -661,6 +673,7 @@ def new_chat():
         return
     close_desktop()
     close_notepad()
+    set_notepad_phase("closed")
     stop_all()
     messages.clear()            # empty the SAME list (don't make a new one)
     artifact_store.clear()
@@ -764,6 +777,8 @@ def poll():
             if kind == "log":
                 remove_pending()
                 line = item[1]
+                if line.startswith("[notepad] "):
+                    set_notepad_phase(line[len("[notepad] "):])
                 if line.startswith("[blocked] "):      # code refused something: say so in the chat
                     show("Blocked", line[len("[blocked] "):])
                 else:
@@ -794,6 +809,11 @@ def poll():
             elif kind == "practice_ready":
                 remove_pending()
                 show("Practice", item[1])
+                finish_turn()
+            elif kind == "notepad_ready":
+                remove_pending()
+                set_notepad_phase("paused" if item[1].startswith("Error:") else "ready")
+                show("Notepad",item[1])
                 finish_turn()
     except queue.Empty:
         pass
@@ -863,6 +883,7 @@ def toggle_theme():
 
 
 def build_window():
+    global notepad_status
     global root, style, bottom, toolbar, vision_toolbar, chat_holder, chat_box, copy_button, attach_button, model_var, model_box, theme_button, send_button, stop_button, entry, artifact_panel, theme_surfaces, theme_labels, welcome_visible
     root = tk.Tk()
     root.title("Local Studio")
@@ -891,6 +912,8 @@ def build_window():
     label(sidebar,"WORKSPACE",9,background="sidebar",bold=True).pack(anchor="w",padx=22,pady=(0,12))
     make_button(sidebar,"Practice",open_practice).pack(fill="x",padx=16,pady=4)
     make_button(sidebar,"Notepad",open_notepad).pack(fill="x",padx=16,pady=4)
+    notepad_status=tk.StringVar(value=NOTEPAD_PHASES["closed"])
+    label(sidebar,"",9,background="sidebar",textvariable=notepad_status,wraplength=140).pack(fill="x",padx=20,pady=(2,8))
     make_button(sidebar,"Audit log",show_log).pack(fill="x",padx=16,pady=4)
     theme_button = make_button(sidebar,"Light appearance",toggle_theme)
     theme_button.pack(side="bottom",fill="x",padx=16,pady=(8,22))

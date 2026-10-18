@@ -108,7 +108,7 @@ def test_model_cannot_supply_pid_window_path_url_or_save_tool():
                       ("notepad_replace",{"element":True,"text":"new"}),
                       ("notepad_replace",{"element":1,"text":"new","url":"https://evil.example"})):
         with patch.object(h.core,"prepare_notepad",side_effect=AssertionError("bad arguments reached lookup")):
-            result=h.run_calls([h.tool_call(tool,args)])
+            result=h.run_calls([h.tool_call(tool,args)],expected_answer=None)
         assert not result.popups
     for name in ("notepad_save","notepad_open_file","notepad_click","notepad_close","commit_notepad"):
         assert name not in h.core.available_functions
@@ -121,7 +121,7 @@ def test_notepad_popup_required_inside_approved_plan_and_denial_prevents_commit(
         with patch.object(h.core,"prepare_notepad",return_value={"token":"private-token","preview":preview}), \
              patch.object(h.core,"commit_notepad",return_value="Verified") as commit:
             result=h.run_calls([h.tool_call("propose_plan",{"goal":"read","steps":["open https://approved.example/"]}),
-                h.tool_call("notepad_replace",{"element":1,"text":"new"})],decisions={"notepad_action":allow})
+                h.tool_call("notepad_replace",{"element":1,"text":"new"})],decisions={"notepad_action":allow},expected_answer="Done" if allow else None)
         assert [x[0] for x in result.popups]==["plan","notepad_action"]
         assert commit.call_count==int(allow)
         assert "private-token" not in str(result.messages)
@@ -137,10 +137,10 @@ def test_callback_cannot_change_frozen_proposal():
 
 def test_start_denial_and_invalid_lookup_never_launch_or_popup():
     with patch.object(h.core,"start_notepad",side_effect=AssertionError("launch denied")):
-        result=h.run_calls([h.tool_call("notepad_start",{})],decisions={"notepad_start":False})
+        result=h.run_calls([h.tool_call("notepad_start",{})],decisions={"notepad_start":False},expected_answer=None)
     assert result.popups[0][0]=="notepad_start"
     with patch.object(h.core,"prepare_notepad",return_value={"error":"stale"}),patch.object(h.core,"commit_notepad",side_effect=AssertionError("must not commit")):
-        result=h.run_calls([h.tool_call("notepad_replace",{"element":1,"text":"new"})])
+        result=h.run_calls([h.tool_call("notepad_replace",{"element":1,"text":"new"})],expected_answer=None)
     assert not result.popups and any(event[0]=="notepad_refused" for event in result.audit)
 
 

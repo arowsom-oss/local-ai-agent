@@ -42,6 +42,26 @@ blindly retries a mutation. A verification/backend/identity failure halts the
 session until the person closes it and starts another approved scratch window.
 Ordinary text changes between read/preview and commit are refused as stale.
 
+## Draft, revise and recover
+
+The sidebar shows when the draft was observed, awaits approval, is being verified,
+or is paused. Reads and successful edits report a session-local revision number.
+Each successful edit returns the full checked text as a verified read-back receipt.
+Code processes only one Notepad step per model response: remaining queued tool
+calls are deferred until the model has received that observation.
+
+A denied opening/edit, malformed Notepad request, stale document or failed check
+ends the current agent turn. Pending approval and recorded document numbers are
+revoked after an edit refusal. Code does not ask the model to retry in that turn.
+If you changed the text, send a new request: the model must read your current
+draft, preserve your changes and present a fresh exact edit for approval. A
+verification/backend/identity failure or menu activity requires Stop and a newly
+approved scratch window instead. Canceling a pending edit never clears a halt.
+
+Notepad reads have a 5,000-character output bound so the entire 2,000-character
+draft, including JSON escaping, fits beside the data prefix and revision details.
+Browser reads retain their separate existing bound.
+
 A process-specific WinEvent hook watches menu and dialog activity before the app
 starts and while approval is pending. A menu or dialog event permanently taints
 that session, including after it closes. This prevents continued automation after
@@ -104,6 +124,12 @@ and replayed tokens, verification failure without retry, callback mutation,
 mandatory per-edit approval during plans, launch denial, Stop during approval,
 text/UTF-16 budgets, read/action budgets and fresh session numbering.
 
+Eight additional offline workflow tests cover revision receipts, preservation of
+human changes, token revocation, a pause without another model request after
+denial/conflict/failure, queued-action barriers, malformed calls and full escaped
+text observation. The real Notepad fixture also recovers from a human edit with
+a fresh approved proposal that retains the human text.
+
 Real classic Notepad tests passed empty launch, UIA reads and two successive
 edits from different caller threads, replay/stale refusal, human change after
 preview, and termination of only the owned worker and scratch process. A real
@@ -115,3 +141,9 @@ Actual local gemma4:e2b completed start/read/approved replacement with exactly
 SYNTHETIC NOTEPAD CHECK in 15.57 seconds. Test approval callbacks allowed only
 that synthetic scratch operation and are not installed in production UI. This
 single run does not establish general model reliability or absence of bugs.
+
+A subsequent actual gemma4:e2b two-turn draft/revise workflow passed in 24.01
+seconds, with a launch approval and two separate exact-edit approvals. Both final
+document values matched; revision 2 was read back. This tests normal drafting and
+revision with the local model. Human-interference recovery was tested with the
+real app fixture and deterministic core fakes, not with a local-model recovery run.

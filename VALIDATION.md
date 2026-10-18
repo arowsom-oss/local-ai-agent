@@ -87,6 +87,15 @@ C:/dev/agent source files were changed.
 
 ## Limits and unverified claims
 
+The Notepad workflow update passed all 150 offline assertions across eight test
+suites and all five existing real Windows/Tk/Chromium fixture suites. New checks
+cover per-response observation barriers, immediate turn termination on refusal,
+token revocation and recovery preserving a human edit. Actual gemma4:e2b drafted
+and revised the scratch document in two turns in 24.01 seconds; each exact edit
+had its own fixture approval and successful read-back. Fixture approval callbacks
+are never installed in the production UI. This is a single model run; recovery
+after human interference was verified by real-app and deterministic core tests.
+
 This is not a new exhaustive security audit, a VM, a least-privilege OS sandbox
 or a proof of no remaining bugs. UIA state rechecks are not atomic against a
 simultaneous human edit. Desktop mutations are confined to a RAM-only app to

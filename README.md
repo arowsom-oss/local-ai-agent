@@ -231,6 +231,7 @@ python -B test_model_vision.py
 python -B test_computer_features.py
 python -B test_artifacts.py
 python -B test_notepad.py
+python -B test_notepad_workflow.py
 python -B test_desktop_live.py
 python -B test_vision_ui.py
 python -B test_browser_live.py
@@ -238,7 +239,7 @@ python -B test_artifact_ui.py
 python -B test_notepad_live.py
 ```
 
-The first seven contain 142 offline tests with fakes. The last five use real
+The first eight contain 150 offline tests with fakes. The last five use real
 Windows UIA/Tk/Chromium with synthetic data or mocked HTTPX and no Internet.
 See VALIDATION.md and TOP10_STATUS.md for what actually passed. Tests do not
 prove freedom from vulnerabilities. Wider app integration, OS/VM isolation,

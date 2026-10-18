@@ -26,6 +26,13 @@ if __name__ == "__main__":
     ui.root.focus_force()  # Activate our own fixture, as when the person clicks its button.
     ui.root.update()
     errors = []
+    ui.set_notepad_phase('observed')
+    assert 'observed' in ui.notepad_status.get()
+    ui.set_notepad_phase('unknown model-written state')
+    assert 'observed' in ui.notepad_status.get()
+    ui.stop_event.set();ui.set_notepad_phase('closed');ui.set_notepad_phase('verified')
+    assert ui.notepad_status.get()==ui.NOTEPAD_PHASES['closed']
+    ui.stop_event.clear()
 
     def callback_error(kind, value, trace):
         errors.append(value)

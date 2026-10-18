@@ -40,6 +40,12 @@ def test_real_notepad_two_caller_threads_exact_edits_and_stale_refusal():
         assert "Human edit after preview" in n.notepad_read()
         assert "error" in n.prepare_notepad(element,"stale")
         assert "error" in n.prepare_notepad(number(n.notepad_read()),"x"*2001)
+        fresh=n.notepad_read()
+        recovered=n.prepare_notepad(number(fresh),"Human edit after preview\nApproved addition.")
+        assert recovered.get("preview",{}).get("before")=="Human edit after preview",recovered
+        receipt=n.commit_notepad(recovered["token"])
+        assert "verified by exact read-back" in receipt,receipt
+        assert "Human edit after preview" in receipt and "Approved addition." in receipt,receipt
         kernel=C.WinDLL("kernel32",use_last_error=True)
         kernel.OpenProcess.argtypes=[W.DWORD,W.BOOL,W.DWORD];kernel.OpenProcess.restype=W.HANDLE
         kernel.WaitForSingleObject.argtypes=[W.HANDLE,W.DWORD];kernel.CloseHandle.argtypes=[W.HANDLE]

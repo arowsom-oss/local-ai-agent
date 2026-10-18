@@ -207,7 +207,7 @@ def tool_call(name, args):
     return types.SimpleNamespace(function=types.SimpleNamespace(name=name, arguments=args))
 
 
-def run_calls(calls, session=None, decisions=None, after_popup=None, open_result="Page opened.", initial_hosts=()):
+def run_calls(calls, session=None, decisions=None, after_popup=None, open_result="Page opened.", initial_hosts=(), expected_answer="Done"):
     """Run the real model/tool loop with a scripted model and approval recorder."""
     session = session or session_with()
     popups, audit_events, logs, opened, messages, tool_schemas = [], [], [], [], [], []
@@ -250,10 +250,11 @@ def run_calls(calls, session=None, decisions=None, after_popup=None, open_result
             patch.dict(core.available_functions, {"browser_open": open_url}), \
             patch.object(core, "link_labels", return_value=["Next"]):
         answer, _ = core.run_turn(messages, "Search the library", ask, log=logs.append)
-    assert answer == "Done"
+    if expected_answer is None:assert "Notepad workflow paused" in answer
+    else:assert answer == expected_answer
     return types.SimpleNamespace(
         popups=popups, audit=audit_events, logs=logs, opened=opened,
-        messages=messages, schemas=tool_schemas, lookups=lookups,
+        messages=messages, schemas=tool_schemas, lookups=lookups, answer=answer,
     )
 
 
