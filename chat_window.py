@@ -19,7 +19,7 @@ from artifacts import store as artifact_store
 from artifact_panel import ArtifactPanel
 from ui_theme import PALETTES, configure_styles
 from notepad_tools import start_notepad, close_notepad
-from workspace_documents import reset_workspace, cancel_workspace
+from workspace_documents import reset_workspace, cancel_workspace, save_uncertain
 from task_progress import TaskProgress
 from progress_panel import ProgressPanel
 
@@ -153,9 +153,10 @@ def confirm(name, args):
             "Every save needs a separate exact preview. Saved documents remain after New chat.",
             "New chat forgets access approval. No existing file is overwritten or deleted. Allow?"])
     if name == "document_save_exact":
+        from workspace_panel import comparison
         return high_risk_confirm("Approve exact document save",[
             "SAVE A NEW PLAIN TEXT VERSION ON DISK", "", "Folder:",args.get("folder",""),
-            "New file:",args.get("file",""),"", "Before (JSON text):",
+            "New file:",args.get("file",""),"", "Text comparison:",comparison(args.get('before',''),args.get('after','')),"", "Before (JSON text):",
             json.dumps(args.get("before"),ensure_ascii=False),"", "After (exact JSON text):",
             json.dumps(args.get("after"),ensure_ascii=False),"",
             "Earlier files remain as recovery copies. Code verifies the complete saved bytes.",
@@ -687,7 +688,7 @@ def new_chat():
         show("New chat", "wait for the answer first")
         return
     if messagebox.askyesno("New chat", "Start a new chat?\n\nThe agent will forget this conversation.\n"
-                          "Artifact drafts, version history and scratch Notepad will be discarded. Exported files and saved Documents remain. Workspace read permission is forgotten.",
+                          "Artifact drafts, version history and scratch Notepad will be discarded. Exported files and saved Documents remain. Workspace read permission is forgotten; last-save recovery remains available.",
                           default="no") is not True:
         return
     closed = close_browser()    # close the browser BEFORE wiping anything: no half-reset chats
@@ -772,6 +773,9 @@ def show_log():
 
 def resume_task():
     if busy or pending_image is not None or pending_media is not None:return
+    if save_uncertain():
+        show('Task','The last save is unconfirmed. Open Documents and choose Check last save before resuming.')
+        return
     if entry.get().strip():
         show('Task','Your unsent message is preserved. Send or clear it before resuming the checkpoint.')
         return
@@ -1018,6 +1022,9 @@ def build_window():
     chat_holder.pack(fill="both",expand=True)
     workspace.add(conversation,weight=3)
     artifact_panel=ArtifactPanel(workspace,stop_event,answer=lambda:last_raw_answer,confirm=confirm)
+    artifact_panel.model_busy=lambda:busy
+    artifact_panel.document_busy=lambda active:stop_button.configure(
+        state='normal' if active or busy else 'disabled',text='Stop')
     workspace.add(artifact_panel,weight=3)
     root.after(100,lambda:workspace.sashpos(0,int(workspace.winfo_width()*0.50)))
     from emergency_hotkey import start_hotkey

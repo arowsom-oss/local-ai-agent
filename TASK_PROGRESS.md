@@ -19,6 +19,8 @@ RAM-only records for the current task, not a persistent job scheduler.
 - Returned means a tool returned a status without one of these explicit
   verification contracts. It does not count as a verified task result.
 - Refused and Deferred show blocked requests and queued actions that were not run.
+- Unconfirmed means a document save might have published without a verified reply.
+  Documents provides Check last save; Resume does not repeat an uncertain write.
 - Reply ready means the model produced a reply. It never means the whole user
   goal was independently verified. Only trusted core outcomes determine Paused,
   Failed and Stopped; model reply text cannot forge those states either.

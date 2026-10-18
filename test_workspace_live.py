@@ -65,6 +65,13 @@ def test_native():
 def test_ui():
     import chat_window as ui
     from workspace_panel import show_documents,save_selected
+    def wait(panel):
+        import time
+        deadline=time.monotonic()+5
+        while getattr(panel,'document_jobs',None) and panel.document_jobs.active and time.monotonic()<deadline:
+            ui.root.update();time.sleep(.01)
+        ui.root.update()
+        assert not panel.document_jobs.active
     def buttons(parent):
         for child in parent.winfo_children():
             if isinstance(child,(ui.tk.Button,ui.ttk.Button)):yield child
@@ -90,14 +97,14 @@ def test_ui():
                 panel.refresh();panel.load(a.number);ui.root.update()
                 approvals=[]
                 def approve(name,args):approvals.append(name);return True
-                save_selected(panel,approve);assert approvals==['workspace_access','document_save_exact']
+                save_selected(panel,approve);wait(panel);assert approvals==['workspace_access','document_save_exact']
                 assert len(list(w.files.root.glob('*.txt')))==1
-                show_documents(panel,approve);ui.root.update()
+                show_documents(panel,approve);wait(panel)
                 win=next(x for x in panel.winfo_children() if isinstance(x,ui.tk.Toplevel) and x.title()=='Saved Documents')
                 listing=next(x for x in win.winfo_children() if isinstance(x,ui.tk.Listbox));listing.selection_set(0)
-                next(b for b in buttons(win) if b.cget('text')=='Load version').invoke();ui.root.update()
+                next(b for b in buttons(win) if b.cget('text')=='Load version').invoke();wait(panel)
                 assert panel.editor.get('1.0','end-1c')=='Visible school draft'
-                next(b for b in buttons(win) if b.cget('text')=='Save Artifact here').invoke();ui.root.update()
+                next(b for b in buttons(win) if b.cget('text')=='Save Artifact here').invoke();wait(panel)
                 assert len(list(w.files.root.glob('*.txt')))==2
                 win.destroy()
                 with patch.object(ui.messagebox,'askyesno',return_value=True),patch.object(ui,'free_vram'):

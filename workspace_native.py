@@ -32,7 +32,9 @@ class NativeFiles:
     def handle(self,path,access,share,creation=3,directory=False):
         flags=0x00200000 | (0x02000000 if directory else 0) # OPEN_REPARSE_POINT, BACKUP_SEMANTICS
         h=self.k.CreateFileW(str(path),access,share,None,creation,flags,None)
-        if h==C.c_void_p(-1).value:raise OSError('workspace file is unavailable or locked')
+        if h==C.c_void_p(-1).value:
+            if C.get_last_error() in (2,3):raise FileNotFoundError('workspace file is not present')
+            raise OSError('workspace file is unavailable or locked')
         try:
             self.info(h,directory)
             yield h

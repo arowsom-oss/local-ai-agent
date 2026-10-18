@@ -90,6 +90,13 @@ New chat. See TASK_PROGRESS.md for states, tests and model-recovery limitations.
 
 ## Saved Documents
 
+Document I/O runs in owned worker processes with a ten-second transaction budget;
+the UI remains responsive and enables Stop during manual file operations.
+Uncertain saves require Check last save in Documents before another save can be
+proposed. The check reads the expected file and compares its hash without writing.
+Friendly labels come from the first nonempty line, and save previews include a
+text comparison alongside the complete approved text. See FILESYSTEM_WORKERS.md.
+
 Ask for a document Artifact and request saving it as a new Document. Workspace
 reading needs permission for this chat; every save needs a separate exact
 before/after preview. Code chooses UUID .txt filenames inside the fixed
@@ -261,6 +268,7 @@ python -B test_notepad.py
 python -B test_notepad_workflow.py
 python -B test_workspace_documents.py
 python -B test_task_progress.py
+python -B test_workspace_io.py
 python -B test_desktop_live.py
 python -B test_vision_ui.py
 python -B test_browser_live.py
@@ -268,14 +276,20 @@ python -B test_artifact_ui.py
 python -B test_notepad_live.py
 python -B test_workspace_live.py
 python -B test_progress_ui.py
+python -B test_workspace_io_live.py
 ```
 
-The first ten contain 185 offline tests with fakes. The last seven use real
+The first eleven contain 197 offline tests with fakes. The last eight use real
 Windows UIA/Tk/Chromium with synthetic data or mocked HTTPX and no Internet.
 See VALIDATION.md and TOP10_STATUS.md for what actually passed. Tests do not
 prove freedom from vulnerabilities. Wider app integration, OS/VM isolation,
 atomic protection against concurrent human edits, broad routing evaluation,
 full video/audio understanding and high-quality video generation remain future work.
+
+evaluate_workflows.py runs three dependent synthetic local-model document cases
+in a temporary folder. The first strict run failed its creation case and stopped;
+that evidence is retained. A separate two-turn worker-backed smoke run passed.
+These small runs show variability rather than general model reliability.
 
 The generated video smoke sample contains a watermark-like artifact produced by
 the model. It demonstrates that the pipeline runs, not publication-ready quality.

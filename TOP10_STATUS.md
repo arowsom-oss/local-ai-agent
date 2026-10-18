@@ -33,6 +33,13 @@ The panel does not certify whole-task completion. See TASK_PROGRESS.md.
 
 ## Saved document workspace
 
+Document work now uses short-lived owned filesystem processes and an asynchronous
+UI, with Stop, a transaction deadline and last-save hash reconciliation after an
+uncertain result. New saves cannot bypass that uncertainty check. Friendly titles
+and text comparisons improve the existing review flow. A standalone workflow
+evaluator records actual model task outcomes, including failures. See
+FILESYSTEM_WORKERS.md.
+
 Plain-text document Artifacts can now be saved to a fixed local folder after an
 exact approval, with fresh version files instead of overwriting existing text.
 The Documents view loads saved history for review and recovery. Folder permission

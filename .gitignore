@@ -21,4 +21,5 @@ model_cache/
 generated/
 document_workspace/
 benchmark_results.json
+workflow_evaluation*.json
 .venv/

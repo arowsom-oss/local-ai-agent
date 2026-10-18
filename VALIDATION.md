@@ -1,4 +1,19 @@
-# Current task progress and checkpoints
+# Current filesystem workers and recovery
+
+197 offline assertions passed across eleven suites, including 12 new I/O-worker
+cases with sockets blocked. Five real Windows/Tk suites passed after integration:
+the new file-worker/receipt/responsiveness fixture, plus task progress, approvals,
+Artifacts and Documents. Owned real workers were terminated on deadline and Stop;
+an actual published version with a lost reply was independently hash-checked
+without rewriting. The UI heartbeat continued during blocked work and Stop was
+enabled. Friendly titles and diff previews were visually inspected. A separate
+local gemma4:e2b worker-backed create/read/revise smoke passed in 25.53 seconds.
+The standalone strict three-case evaluator failed its first creation case in
+13.56 seconds with one approval refusal and no saved file; dependent cases were
+not attempted. Results were retained. No broad reliability claim is made.
+See FILESYSTEM_WORKERS.md for budgets, uncertainty gates and remaining OS limits.
+
+# Earlier task progress and checkpoints
 
 185 offline assertions passed in ten suites, including 17 new task-progress cases
 with sockets blocked. A real Tk/fake-backend workflow passed denial, pause, a

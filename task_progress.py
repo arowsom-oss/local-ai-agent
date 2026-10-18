@@ -152,7 +152,8 @@ class TurnEvidence:
         text=str(text)
         if text.startswith('Error:'):
             if 'queued action not run' not in text:self.refused.add(name)
-            status='Deferred' if 'queued action not run' in text else 'Refused'
+            status=('Unconfirmed' if name=='document_save' and ('outcome uncertain' in text or 'outcome unconfirmed' in text) else
+                    'Deferred' if 'queued action not run' in text else 'Refused')
         elif name in VERIFIED and text.startswith(VERIFIED[name]):status='Verified'
         elif name in READS:status='Observed'
         else:status='Returned' # A successful status is not independent verification of an entire task.

@@ -21,7 +21,9 @@ class Files:
         return result
     def filename(self,key,version):return f'doc-{key}-v{version:03}.txt'
     @contextmanager
-    def reader(self,key,version):yield self.data[key,version]
+    def reader(self,key,version):
+        if (key,version) not in self.data:raise FileNotFoundError('missing fixture file')
+        yield self.data[key,version]
     def publish(self,key,version,data,stop):
         if stop is not None and stop.is_set():raise ValueError('stopped')
         assert (key,version) not in self.data

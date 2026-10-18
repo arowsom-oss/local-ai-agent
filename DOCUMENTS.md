@@ -64,10 +64,11 @@ files manually rather than letting the agent delete them.
 This retains recovery copies instead of modifying documents in place. It does
 not guarantee durability across power loss, prevent another same-user process
 from editing files later, or provide an OS sandbox. A Stop arriving after the
-final prepublication check can coincide with a completed save. Slow/blocking local
-filesystem calls do not have a worker hard-timeout. If publication succeeds but
-confirmation fails, a new version may exist; inspect the folder before retrying.
-The old versions remain. Never assume an Error means no new file exists.
+final prepublication check can coincide with a completed save. Filesystem work now
+uses owned workers with a ten-second transaction budget and an asynchronous UI.
+An uncertain publication blocks new saves until Check last save reconciles the
+expected output. The old versions remain. Never assume an Error means no new file
+exists. See FILESYSTEM_WORKERS.md for recovery, cancellation and OS limitations.
 
 ## Validation
 
