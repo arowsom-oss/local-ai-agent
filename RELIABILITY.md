@@ -147,3 +147,43 @@ stale-preview refusal and lost-publication-reply reconciliation. The running
 project record was updated with both reliability rounds, code changes and limits.
 The private build/evidence package retains all 32 new evaluation cases, the Auto
 smoke and both route-probe reports. No new dependency was added.
+
+## Stale-edit quote diagnosis and fix
+
+The earlier records omitted the specific refusal reason. New fixed diagnostic
+codes and bounded argument-comparison flags reproduced two pre-approval failures:
+find was absent from the current saved text. A separate confirmation proved the
+model used json.dumps(before), including the delimiter quotes, rather than the
+actual document text. That run had find_is_json_quoted_fixture=true and never
+simulated the human edit. All three diagnostic failures remain retained.
+
+document_read now ends with {"text":...}, replacing a bare JSON string. The core
+prompt and tool description distinguish the decoded field value from wrapper
+syntax while preserving genuine document quotes. Tool arguments and metadata
+line are unchanged. Literal matching is unchanged; it neither strips quotes nor
+repairs model input. A missing find now has its own not-found error. Manual
+parsers of document_read results should read the object's text field.
+
+The evaluator saves fixed refusal reasons and human_edit_simulated, without
+copying document text, arbitrary error messages or tokens. --case selects distinct
+named cases with unchanged pass criteria; a targeted pass is not a whole-suite
+pass. New tests prove quoted-find refusal, true quote preservation, diagnostic
+privacy and the actual approval/mutation/refusal sequence.
+
+At the same seeds 42/43, both targeted stale controls passed (19.65/8.44 s), and
+both stale controls also passed within a subsequent full extended run. Each
+preview matched exactly, the fixture then changed the file, and commit refused
+with saved_text_changed_after_preview. The human edit remained the only version.
+
+The full larger-model run passed 11/12 document tasks and 4/4 controls. One
+quoted-append case at seed 42 proposed unexpected text: its correct before text
+was retained, exact approval was denied and no new version was created. Seed 43
+passed that case. Its exact content mismatch remains a model formatting failure;
+the full report's all_passed is false. Before this change that sample scored
+12/12 tasks and 2/4 controls. Do not hide the new task failure or treat a small
+sample as a general improvement guarantee. No weaker approval or retry was added.
+
+231 offline tests across thirteen suites passed, including five new regression
+tests. Three Windows/Tk suites passed again. Earlier reports remain unchanged;
+the running project record includes diagnosis, targeted/full results and this
+remaining limitation. Routing, model weights and dependencies are unchanged.

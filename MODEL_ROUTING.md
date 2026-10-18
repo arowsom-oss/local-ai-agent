@@ -36,6 +36,11 @@ An actual Auto append then selected 12b for all four model requests, obtained
 one exact fixture save approval and retained the earlier version in 21.14 seconds.
 See RELIABILITY.md for failures, setup and scope. Test callbacks stay outside UI.
 
+A subsequent read-format/quote fix, without a routing change, measured 12b at
+11/12 document tasks and 4/4 controls. The old stale failures were now exercised
+and passed; a different append proposal was denied and remains failed. The
+initial 12/12 task sample above is historical, not a current perfect-score claim.
+
 ## Measurements from this laptop
 
 Single development runs on an RTX 5070 Ti Laptop GPU (12 GB) and approximately

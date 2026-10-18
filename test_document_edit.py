@@ -1,5 +1,6 @@
 """Offline plain assertions: scripted model, fake files/approvals, blocked sockets."""
 import socket
+import json
 import threading
 import types
 from unittest.mock import patch
@@ -52,6 +53,24 @@ def test_replacement_is_literal_and_preserves_all_other_bytes():
     w.commit(w.prepare_edit(1, '[red].*', r'blue\1 $value')['token'])
     assert f.data[key, 2].decode() == 'List\nblue\\1 $value\nKeep this line.'
     assert f.data[key, 1].decode() == 'List\n[red].*\nKeep this line.'
+
+
+def test_read_returns_named_text_and_preserves_real_quotes_and_escapes():
+    text='"Quoted title"\nC:\\notes\tCafé ✓'
+    w, f, _ = saved(text)
+    result=w.read(1,0)
+    assert json.loads(result.splitlines()[-1])=={'text':text}
+    assert 'saved version 1' in result
+
+
+def test_json_wrapper_quotes_are_refused_and_real_document_quotes_stay_literal():
+    w, f, key = saved('SYNTHETIC ORIGINAL NOTE')
+    with patch.object(d,'_workspace',w):
+        result=d.prepare_edit(document=1,find=json.dumps('SYNTHETIC ORIGINAL NOTE'),replacement='Revised')
+    assert 'find text was not found' in result['error'] and len(f.data)==1 and not w.pending
+    w, f, key = saved('"Actually quoted text"')
+    w.commit(w.prepare_edit(1,'"Actually quoted text"','New text')['token'])
+    assert f.data[key,1]==b'"Actually quoted text"' and f.data[key,2]==b'New text'
 
 
 def test_missing_duplicate_and_overlapping_matches_are_refused():

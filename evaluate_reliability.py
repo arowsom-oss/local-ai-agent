@@ -62,6 +62,33 @@ TOOL_NAMES = ('outline_task', 'create_artifact', 'revise_artifact', 'read_artifa
               'list_artifacts', 'document_list', 'document_read', 'document_save', 'document_edit')
 HUMAN_EDIT = 'SYNTHETIC HUMAN EDIT DURING PREVIEW'
 
+# Only fixed codes enter diagnostics. Never copy arbitrary tool text/arguments.
+REFUSAL_REASONS = {
+    'find text was not found': 'find_not_found',
+    'find must match exactly once': 'find_not_unique',
+    'use document_read of the latest saved document': 'latest_read_required',
+    'the read Artifact changed': 'read_artifact_changed',
+    'saved document changed': 'saved_text_changed',
+    'document changed after preview': 'saved_text_changed_after_preview',
+    'workspace changed after preview': 'inventory_changed_after_preview',
+    'select a current document Artifact revision': 'artifact_revision_mismatch',
+    'an existing document needs the positive saved version': 'saved_version_required',
+    'tool arguments do not match': 'argument_keys',
+    'invalid type for': 'argument_type',
+    'save outcome uncertain': 'save_uncertain',
+    'save outcome unconfirmed': 'save_uncertain',
+    'the proposed edit does not change': 'no_change',
+    'this exact document save was denied': 'exact_save_denied',
+}
+
+
+def refusal_reason(note):
+    text = str(note)
+    if text.startswith('Error: '):text = text[7:]
+    for prefix, code in REFUSAL_REASONS.items():
+        if text.startswith(prefix):return code
+    return 'other_refusal'
+
 
 def snapshot(workspace):
     """Read only fixture-generated files; return every version, not a model claim."""
@@ -80,9 +107,26 @@ def run_case(case, model, seed, directory, real_chat, menu='full'):
     workspace = documents.Workspace(RemoteFiles(root))
     artifacts.store.clear()
     key = 'a' * 32
-    approvals = []; events = []; calls = []; rounds = 0; mutated = False
+    approvals = []; events = []; calls = []; diagnostics = []; rounds = 0; mutated = False
     permitted = {name: core.available_functions[name] for name in TOOL_NAMES}
     full_menu = list(core.available_functions.values())
+    original_audit = core.audit
+
+    def audit(event, name, args, model, note=''):
+        original_audit(event, name, args, model, note=note)
+        if name in ('document_read','document_edit','document_save') and (
+                event.endswith('_refused') or event == 'arguments_refused') and len(diagnostics)<64:
+            record={'tool':name,'event':event,'reason':refusal_reason(note)}
+            if name=='document_edit' and isinstance(args,dict):
+                find=args.get('find'); replacement=args.get('replacement')
+                if isinstance(find,str):
+                    record.update(find_characters=len(find),find_equals_fixture_text=find==case.before,
+                                  find_is_star=find=='*',find_present=bool(find) and find in case.before,
+                                  find_is_json_quoted_fixture=find==json.dumps(case.before,ensure_ascii=False))
+                if isinstance(replacement,str):
+                    record.update(replacement_characters=len(replacement),replacement_matches_expected=replacement==case.after,
+                                  replacement_is_json_quoted_expected=replacement==json.dumps(case.after,ensure_ascii=False))
+            diagnostics.append(record)
 
     def approve(kind, args):
         nonlocal mutated
@@ -133,7 +177,7 @@ def run_case(case, model, seed, directory, real_chat, menu='full'):
             for obj, name, value in (
                 (documents, '_workspace', workspace), (core, 'DOCUMENT_ROOT', root),
                 (core, 'available_functions', permitted), (core, 'AUDIT_LOG', Path(directory) / 'audit.jsonl'),
-                (core, 'chat', chat)):
+                (core, 'chat', chat), (core, 'audit', audit)):
                 stack.enter_context(patch.object(obj, name, value))
             answer, _ = core.run_turn([], case.prompt, approve, model=model,
                                       log=lambda text: None, on_progress=progress)
@@ -157,26 +201,35 @@ def run_case(case, model, seed, directory, real_chat, menu='full'):
         return {'case': case.name, 'category': 'control' if case.control else 'task', 'passed': bool(passed),
                 'seconds': round(time.perf_counter() - started, 2), 'seed': seed,
                 'model_requests': rounds, 'tools': calls, 'saved_files': len(actual),
-                'approvals': approvals, 'events': events, 'failure': error}
+                'approvals': approvals, 'events': events, 'diagnostics':diagnostics,
+                'human_edit_simulated':mutated, 'failure': error}
     except Exception:
         return {'case': case.name, 'category': 'control' if case.control else 'task', 'passed': False,
                 'seed': seed, 'seconds': round(time.perf_counter() - started, 2),
                 'model_requests': rounds, 'tools': calls, 'approvals': approvals,
-                'events': events, 'failure': 'fixture or model operation failed'}
+                'events': events, 'diagnostics':diagnostics, 'human_edit_simulated':mutated,
+                'failure': 'fixture or model operation failed'}
     finally:
         workspace.cancel()
         artifacts.store.clear()
 
 
-def evaluate(model=FAST_MODEL, repeats=1, real_chat=None, menu='full', extended=False):
+def evaluate(model=FAST_MODEL, repeats=1, real_chat=None, menu='full', extended=False, case_names=None):
     """Separate fixtures and fixed seeds prevent one failed task hiding later cases."""
     if (model not in ALLOWED_MODELS or type(repeats) is not int or not 1 <= repeats <= 3
             or menu not in ('full', 'documents') or type(extended) is not bool):
         raise ValueError('choose an allowed installed model and 1 to 3 repetitions')
+    cases=CASES + (HOLDOUT_CASES if extended else ())
+    if case_names is not None:
+        if (not isinstance(case_names,(tuple,list)) or not case_names or
+                any(not isinstance(n,str) for n in case_names) or len(case_names)!=len(set(case_names)) or
+                not set(case_names)<={c.name for c in cases}):
+            raise ValueError('choose distinct known cases; additional cases require extended=True')
+        cases=tuple(c for c in cases if c.name in case_names)
     results = []; real_chat = real_chat or core.chat
     try:
         for repetition in range(repeats):
-            for case in CASES + (HOLDOUT_CASES if extended else ()):
+            for case in cases:
                 with tempfile.TemporaryDirectory(prefix='studio-reliability-') as directory:
                     result = run_case(case, model, 42 + repetition, directory, real_chat, menu)
                     results.append(result)
@@ -187,6 +240,7 @@ def evaluate(model=FAST_MODEL, repeats=1, real_chat=None, menu='full', extended=
     controls = [r for r in results if r['category'] == 'control']
     return {'suite': 'independent-documents-v1' + ('+holdout1' if extended else ''),
             'model': model, 'temperature': 0.2, 'tool_menu': menu,
+            'selected_cases':[c.name for c in cases],
             'repetitions': repeats, 'task_passes': sum(r['passed'] for r in tasks), 'task_cases': len(tasks),
             'control_passes': sum(r['passed'] for r in controls), 'control_cases': len(controls),
             'all_passed': all(r['passed'] for r in results), 'cases': results,
@@ -202,10 +256,12 @@ if __name__ == '__main__':
     parser.add_argument('--menu', choices=('full', 'documents'), default='full',
                         help='Full app menu (distraction check), or only executable document tools.')
     parser.add_argument('--extended', action='store_true', help='Include two additional document tasks.')
+    parser.add_argument('--case', action='append', choices=[c.name for c in CASES+HOLDOUT_CASES],
+                        help='Run only named cases; may repeat this option for distinct cases.')
     parser.add_argument('--output', required=True, help='New report path; never overwrites an existing file.')
     args = parser.parse_args()
     # Reserve the result before inference so an existing report cannot be overwritten.
     with Path(args.output).open('x', encoding='utf-8') as target:
-        report = evaluate(args.model, args.repeats, menu=args.menu, extended=args.extended)
+        report = evaluate(args.model, args.repeats, menu=args.menu, extended=args.extended, case_names=args.case)
         target.write(json.dumps(report, indent=2) + '\n')
     print(json.dumps({k: v for k, v in report.items() if k != 'cases'}), flush=True)

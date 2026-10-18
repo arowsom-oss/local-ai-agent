@@ -1,5 +1,6 @@
 """Offline plain assertions for the evaluator and tool dispatch; no real model/network."""
 from contextlib import contextmanager
+import json
 from pathlib import Path
 import socket
 import tempfile
@@ -123,6 +124,44 @@ def test_denial_and_human_edit_are_independent_control_checks():
     for case in evaluation.CASES[4:]:
         result = run(case)
         assert result['passed'] and result['category'] == 'control', result
+
+
+def test_stale_diagnostics_identify_quoted_find_without_storing_document_text():
+    case=evaluation.CASES[5];stage=0
+    def chat(**kwargs):
+        nonlocal stage
+        stage+=1
+        if stage==1:return response(h.tool_call('document_read',{'document':1,'version':0}))
+        return response(h.tool_call('document_edit',{'document':1,'find':json.dumps(case.before),'replacement':case.after}))
+    result=run(case,chat)
+    assert not result['passed'] and not result['human_edit_simulated'] and result['saved_files']==1
+    diagnostic=result['diagnostics'][-1]
+    assert diagnostic['reason']=='find_not_found' and diagnostic['find_is_json_quoted_fixture']
+    assert diagnostic['replacement_matches_expected'] and not diagnostic['find_present']
+    assert case.before not in json.dumps(diagnostic) and case.after not in json.dumps(diagnostic)
+
+
+def test_stale_diagnostics_prove_preview_mutation_and_refusal_were_reached():
+    result=run(evaluation.CASES[5])
+    assert result['passed'] and result['human_edit_simulated'] and result['saved_files']==1
+    assert result['diagnostics'][-1]['reason']=='saved_text_changed_after_preview'
+    for arbitrary in ('Error: Sensitive payload', 'find_missing Sensitive payload', None):
+        assert evaluation.refusal_reason(arbitrary)=='other_refusal'
+
+
+def test_targeted_case_selection_keeps_exact_case_and_success_criteria():
+    calls=[]
+    def result(case,model,seed,directory,real_chat,menu):
+        calls.append((case.name,seed))
+        return {'case':case.name,'category':'control','passed':False,'seed':seed,'seconds':0,'failure':'fixture'}
+    with patch.object(evaluation,'run_case',side_effect=result),patch.object(evaluation,'release_models'):
+        report=evaluation.evaluate(repeats=2,case_names=['stale_approval'])
+    assert calls==[('stale_approval',42),('stale_approval',43)]
+    assert report['selected_cases']==['stale_approval'] and report['control_cases']==2 and not report['all_passed']
+    for bad in ([],['stale_approval','stale_approval'],['unknown'],'stale_approval',[True]):
+        try:evaluation.evaluate(case_names=bad)
+        except ValueError:pass
+        else:raise AssertionError('invalid case filter')
 
 
 def test_wrong_text_is_refused_and_never_reported_as_a_pass():

@@ -1,4 +1,22 @@
-# Current bounded edits and routing
+# Current stale-edit quote fix and diagnostic coverage
+
+231 offline tests passed in thirteen suites, including five new checks for the
+named text field, real versus framing quotes, diagnostic privacy, actual simulated
+human edits and bounded targeted selection. Three Windows/Tk suites passed again.
+
+Three diagnostic failures were retained before changing behavior: the confirmation
+proved that JSON quote delimiters had been included in find. A named read text
+field plus clear guidance fixes the representation confusion; literal matching,
+approval and file-state guards remain. Both targeted stale tests and both stale
+tests in the full run reached the human-edit simulation and passed with the
+saved_text_changed_after_preview reason, retaining only the human-edited version.
+
+Full extended 12b run: 11/12 document tasks, 4/4 controls. The quoted append at
+seed 42 still proposed unexpected text and was denied, saving no new version;
+it remains a failure. Seed 43 passed. This is not an all-passing live suite or a
+general quality guarantee. See RELIABILITY.md for old/new scores and limits.
+
+# Earlier bounded edits and routing
 
 226 offline tests passed in thirteen suites. 17 new edit checks cover literal
 preservation, exact/ambiguous matching, bounds, read provenance, stored draft

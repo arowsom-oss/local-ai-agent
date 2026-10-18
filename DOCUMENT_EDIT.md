@@ -19,6 +19,14 @@ text: the code does not decode escapes or silently repair arguments.
 
 ## Code checks
 
+document_read's final JSON line is now an object, such as {"text":"Hello"}.
+Its text value is Hello, without JSON delimiter quotes. Quotes inside the actual
+value remain document characters. This replaces the earlier bare JSON string;
+manual consumers of that result should read its text field. Tool arguments,
+metadata line and approval flow are unchanged. A missing find now returns a
+specific not-found error, distinct from repeated matches. No unquoting or fuzzy
+repair is performed by the edit backend.
+
 Only a successful latest document_read records edit provenance: numbered file
 identity, saved version/hash, plus the returned Artifact revision. Historical
 reads, Stop, New chat, manual save observations and commits revoke it. Read again
@@ -48,12 +56,14 @@ Uncertain publication appears as Unconfirmed and requires Check last save.
 
 ## Verification
 
-17 offline edit tests fake files/model/approvals and block Internet sockets.
+19 offline edit tests fake files/model/approvals and block Internet sockets.
 They cover literal preservation, overlapping/absent matches, bounds, latest reads,
 history, cancel/reset, stored draft changes, limits, actual parameter checks,
 exact approval during plans, queued fallback refusal, Stop, frozen proposals,
 Resume and uncertain-save recovery. The evaluator also tests its byte oracle
-with this tool and additional tasks.
+with this tool and additional tasks. New checks distinguish JSON framing from
+genuine quoted text, preserve fixed refusal codes without storing draft content,
+and prove a human edit actually happened before awarding a stale-control pass.
 
 Real Windows worker fixtures passed append/history, a human change during preview,
 refusal without an extra version, and lost confirmation after actual edit

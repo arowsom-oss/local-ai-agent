@@ -281,7 +281,7 @@ python -B test_progress_ui.py
 python -B test_workspace_io_live.py
 ```
 
-The first thirteen contain 226 offline tests with fakes. The last eight use real
+The first thirteen contain 231 offline tests with fakes. The last eight use real
 Windows UIA/Tk/Chromium with synthetic data or mocked HTTPX and no Internet.
 See VALIDATION.md and TOP10_STATUS.md for what actually passed. Tests do not
 prove freedom from vulnerabilities. Wider app integration, OS/VM isolation,
@@ -295,7 +295,7 @@ These small runs show variability rather than general model reliability.
 
 evaluate_reliability.py has six independent cases and --extended adds two further
 document tasks. Scores check actual files, with controls reported separately.
-After adding document_edit, e2b completed 5/12 document attempts and 12b completed
+Initially after adding document_edit, e2b completed 5/12 document attempts and 12b completed
 12/12; controls were 4/4 and 2/4. Failed control attempts stopped before the
 intended preview, so do not count as guard verification. See RELIABILITY.md for
 all retained failures, historical results and limits. No broad quality rating is
@@ -307,6 +307,16 @@ exact preview; stale files/drafts and uncertain saves refuse. See DOCUMENT_EDIT.
 In Auto, common English document/action wording now selects the installed 12b
 model in code. Other text retains the constrained classifier; image routes and
 manual selection remain. This is a bounded heuristic, not a permission gate.
+
+document_read now ends with a named JSON text field rather than a bare JSON
+string. Use that decoded value for edits; wrapper quotes are not document text.
+Missing finds have a distinct error. The evaluator records fixed refusal codes
+and whether a human edit was actually simulated. --case stale_approval selects
+the unchanged stale-edit scenario for diagnosis, without relaxing its pass rules.
+With this read-format correction, the subsequent full 12b run passed 11/12
+document tasks and all 4 controls. Both stale-edit simulations were exercised;
+one append proposal still had unexpected text and was denied. The full live run
+is therefore still marked failed. Earlier failed reports remain retained.
 
 The generated video smoke sample contains a watermark-like artifact produced by
 the model. It demonstrates that the pipeline runs, not publication-ready quality.

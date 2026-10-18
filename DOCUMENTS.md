@@ -27,6 +27,8 @@ operation previews the current saved text and appends the chosen draft as a new
 latest version. Save new in the Artifacts panel creates a separate document.
 
 See DOCUMENT_EDIT.md for examples, ambiguity checks and read provenance.
+document_read returns the text value in a final JSON object: {"text":...}.
+Treat the wrapper syntax as encoding, rather than as extra document characters.
 
 ## Approval and storage
 
