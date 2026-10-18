@@ -269,6 +269,7 @@ python -B test_notepad_workflow.py
 python -B test_workspace_documents.py
 python -B test_task_progress.py
 python -B test_workspace_io.py
+python -B test_reliability.py
 python -B test_desktop_live.py
 python -B test_vision_ui.py
 python -B test_browser_live.py
@@ -279,7 +280,7 @@ python -B test_progress_ui.py
 python -B test_workspace_io_live.py
 ```
 
-The first eleven contain 197 offline tests with fakes. The last eight use real
+The first twelve contain 206 offline tests with fakes. The last eight use real
 Windows UIA/Tk/Chromium with synthetic data or mocked HTTPX and no Internet.
 See VALIDATION.md and TOP10_STATUS.md for what actually passed. Tests do not
 prove freedom from vulnerabilities. Wider app integration, OS/VM isolation,
@@ -290,6 +291,13 @@ evaluate_workflows.py runs three dependent synthetic local-model document cases
 in a temporary folder. The first strict run failed its creation case and stopped;
 that evidence is retained. A separate two-turn worker-backed smoke run passed.
 These small runs show variability rather than general model reliability.
+
+evaluate_reliability.py adds six independent synthetic cases, including exact
+edits and human-text preservation, repeated seeds and separate task/control
+scores. Updated e2b and 12b each completed 5/8 document attempts; the larger model
+did not improve this small task score. See RELIABILITY.md for failures, control
+results, baseline limits and commands. Approval/stale-state checks remain in
+place; failed saves are never automatically retried.
 
 The generated video smoke sample contains a watermark-like artifact produced by
 the model. It demonstrates that the pipeline runs, not publication-ready quality.

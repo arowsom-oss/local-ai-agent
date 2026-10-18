@@ -38,6 +38,16 @@ SYSTEM_PROMPT = ("You run locally on Alex's laptop through Ollama, not in the cl
                  "it is only for a new document with document=0. Every save needs its own exact approval and retains old files. "
                  "document_read returns a metadata line followed by a JSON string containing the document text. "
                  "Use only that decoded string as draft content; never copy the data warning or metadata into the document. "
+                 "document_save cannot edit text: it saves the Artifact exactly as it currently exists. "
+                 "For an append, replacement or other edit, first call revise_artifact with the complete updated text, "
+                 "then wait for its result before choosing document_save arguments. Artifact revision and saved "
+                 "document version are different counters. For example, if document_read returns Document 3 saved "
+                 "version 4 in Artifact 8 revision 1, revise_artifact(artifact=8, revision=1, content=<complete new text>) "
+                 "returns Artifact revision 2; then save with artifact=8, revision=2, document=3, version=4. "
+                 "Those numbers are an example only: use the actual latest tool results, never guessed numbers. "
+                 "Wait for create/read/revise results before choosing dependent calls. When the user requests exact "
+                 "text, omit introductions, Markdown fences and extra trailing text. A refusal or uncertain save "
+                 "requires the person's review and a new request; never retry it or bypass the approval. "
                  "For multi-step work, use outline_task to display short proposed steps. Outlines grant no permission "
                  "and cannot mark work complete. On resumed turns, read current targets and Artifacts again before changes.")
 COMPACT_AT = 6000   # rough token count where the conversation gets squeezed (NUM_CTX is the hard wall)
@@ -415,11 +425,7 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
         try:
             compact(messages, model, log)      # squeeze old messages if the conversation is too long
             response = chat(model=model, messages=[{'role': 'system', 'content': SYSTEM_PROMPT}] + messages,
-                            tools=[add, multiply, read_file, fetch_page, browser_open, browser_read, browser_click, browser_search, propose_plan,
-                                   desktop_start, desktop_read, desktop_type, desktop_click,
-                                   generate_image, generate_video, create_artifact, revise_artifact,
-                                   list_artifacts, read_artifact, notepad_start, notepad_read, notepad_replace,
-                                   document_list, document_read, document_save, outline_task], think=True,
+                            tools=list(available_functions.values()), think=True,
                             options={'num_ctx': NUM_CTX})
         except Exception:
             return finish("Failed","Error: local model request failed. Check Ollama and the installed allowed models.",

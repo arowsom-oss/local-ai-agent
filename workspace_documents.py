@@ -274,7 +274,11 @@ def document_read(document: int,version: int) -> str:
 
 
 def document_save(artifact: int,revision: int,document: int,version: int) -> str:
-    """Request a preview and approval to save an exact document Artifact as a new text version.
+    """Request approval to save an Artifact's CURRENT text as a new saved version.
+
+    This does not edit text. For edits, first revise_artifact with the full updated
+    text, wait for its result, then use its NEW Artifact revision here. The saved
+    document version is the separate positive counter from document_read.
 
     Args:
         artifact: Current document Artifact number; code/media Artifacts are refused.

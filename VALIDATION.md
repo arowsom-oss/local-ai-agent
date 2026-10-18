@@ -1,4 +1,20 @@
-# Current filesystem workers and recovery
+# Current independent document reliability checks
+
+206 offline tests passed across twelve suites. Nine new cases fake model/workers,
+block network sockets and verify evaluator byte checks, version retention,
+refusal before preview for wrong revisions, denial and changed-file controls,
+unknown tool refusal, fixture setup failure reporting, schema registry alignment,
+independent cases and bounded repetitions. Existing guard tests remain passing.
+
+Actual local inference: previous code e2b seed 42 passed 1/4 document tasks and
+2/2 control cases. Updated code, seeds 42/43, passed 5/8 document tasks with both
+e2b and 12b; controls were 4/4 and 3/4 respectively. The larger model's failed
+control case did not reach the intended approval stage; no extra saved version
+was created. All failed attempts were retained. See RELIABILITY.md for timings,
+the deliberate full-schema distraction check, scope and comparison limitations.
+This is progress toward measuring consistency, not proof of an 8/10 assistant.
+
+# Earlier filesystem workers and recovery
 
 197 offline assertions passed across eleven suites, including 12 new I/O-worker
 cases with sockets blocked. Five real Windows/Tk suites passed after integration:
