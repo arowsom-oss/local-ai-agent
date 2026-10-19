@@ -66,13 +66,14 @@ def run(case, chat=None):
 
 def test_offered_tools_match_the_trusted_dispatch_table():
     def only(): return 'inert'
-    menus = []
+    menus = [];options=[]
     def chat(**kwargs):
-        menus.append(kwargs['tools']); return response()
+        menus.append(kwargs['tools']);options.append(kwargs['options']);return response()
     with patch.object(h.core, 'available_functions', {'only': only}), \
          patch.object(h.core, 'chat', side_effect=chat), patch.object(h.core, 'compact', return_value=False):
         h.core.run_turn([], 'Test', lambda *args: False, log=lambda text: None)
     assert menus == [[only]]
+    assert options==[{'num_ctx':h.core.NUM_CTX,'temperature':0.2}]
 
 
 def test_no_model_claim_can_pass_without_the_expected_saved_bytes():
@@ -96,13 +97,16 @@ def test_evaluator_accepts_approved_exact_edits_and_additional_cases():
             stage += 1
             if stage == 1:return response(h.tool_call('document_read', {'document': 1, 'version': 0}))
             if stage == 2:
+                if evaluation.documents.requested_append_text(case.prompt) is not None:
+                    return response(h.tool_call('document_append_requested',{'document':1}))
                 find = '' if case.after.startswith(case.before) else case.before
                 replacement = case.after[len(case.before):] if find == '' else case.after
                 return response(h.tool_call('document_edit', {'document': 1, 'find': find, 'replacement': replacement}))
             return response()
         result = run(case, chat)
         assert result['passed'] and result['saved_files'] == 2, result
-        assert 'document_edit' in result['tools']
+        expected='document_append_requested' if evaluation.documents.requested_append_text(case.prompt) is not None else 'document_edit'
+        assert expected in result['tools']
 
 
 def test_wrong_artifact_revision_stays_refused_before_save_popup():
@@ -176,6 +180,104 @@ def test_wrong_text_is_refused_and_never_reported_as_a_pass():
     result = run(evaluation.CASES[0], chat)
     assert not result['passed'] and result['saved_files'] == 0
     assert result['failure'] == 'nonmatching save proposal refused'
+    assert result['safe_saved_state']
+
+
+def test_broader_cases_keep_exact_bytes_and_real_denial_and_stale_stages():
+    for case in evaluation.QUALIFICATION_CASES:
+        result=run(case)
+        assert result['passed'] and result['safe_saved_state'],result
+        if case.control=='stale':assert result['human_edit_simulated']
+        if case.control=='deny':assert result['saved_files']==1
+
+
+def test_append_diagnostics_recognize_double_encoding_without_retaining_text():
+    fixture=evaluation.HOLDOUT_CASES[1]
+    # Exercise ordinary edits, outside the supported leading literal syntax.
+    case=evaluation.Case(fixture.name,'Read then '+fixture.prompt,fixture.before,fixture.after);stage=0
+    suffix=case.after[len(case.before):]
+    def chat(**kwargs):
+        nonlocal stage
+        stage+=1
+        if stage==1:return response(h.tool_call('document_read',{'document':1,'version':0}))
+        return response(h.tool_call('document_edit',{'document':1,'find':'',
+                                                    'replacement':json.dumps(suffix)}))
+    result=run(case,chat)
+    assert not result['passed'] and result['safe_saved_state'] and result['saved_files']==1
+    record=next(a for a in result['approvals'] if a['kind']=='document_save_exact')
+    assert record['append_is_json_string'] and record['append_is_quoted_escaped']
+    assert record['expected_append_characters']==len(suffix)
+    assert record['proposed_append_characters']==len(json.dumps(suffix))
+    assert suffix not in json.dumps(record) and case.before not in json.dumps(record)
+
+
+def qualification_results():
+    return [{'case':c.name,'seed':seed,'category':'control' if c.control else 'task',
+             'passed':True,'safe_saved_state':True,'seconds':10}
+            for c in evaluation.CASES+evaluation.HOLDOUT_CASES+evaluation.QUALIFICATION_CASES
+            for seed in (42,43)]
+
+
+def test_qualification_requires_broad_coverage_and_all_controls_and_safe_states():
+    results=qualification_results()
+    assert evaluation.qualification_summary(results)['target_met']
+    results[0]['passed']=False
+    assert evaluation.qualification_summary(results)['target_met'] # 27/28 is above 95%.
+    results[1]['passed']=False
+    assert not evaluation.qualification_summary(results)['target_met']
+    results=qualification_results();next(r for r in results if r['category']=='control')['passed']=False
+    assert not evaluation.qualification_summary(results)['target_met']
+    results=qualification_results();results[0].update(passed=False,safe_saved_state=False)
+    assert not evaluation.qualification_summary(results)['target_met']
+    assert not evaluation.qualification_summary(qualification_results()[:-1])['target_met']
+    assert not evaluation.qualification_summary([])['target_met']
+    assert not evaluation.qualification_summary(qualification_results(),menu='documents')['target_met']
+    results=qualification_results();results[0]['seed']=43 # duplicate/missing combination
+    assert not evaluation.qualification_summary(results)['target_met']
+
+
+def test_qualification_latency_and_selection_cannot_claim_a_full_pass_from_subset():
+    results=qualification_results()
+    for r in [r for r in results if r['category']=='task'][:2]:r['seconds']=91
+    summary=evaluation.qualification_summary(results)
+    assert summary['task_p95_seconds']==91 and not summary['target_met']
+    calls=[]
+    def result(case,model,seed,directory,real_chat,menu):
+        calls.append(case.name)
+        return {'case':case.name,'seed':seed,'category':'task','passed':True,
+                'safe_saved_state':True,'seconds':1,'failure':''}
+    with patch.object(evaluation,'run_case',side_effect=result),patch.object(evaluation,'release_models'):
+        report=evaluation.evaluate(qualification=True,repeats=2,case_names=['qual_append_plain'])
+    assert calls==['qual_append_plain','qual_append_plain']
+    assert report['all_passed'] and not report['qualification']['target_met']
+    try:evaluation.evaluate(qualification=1)
+    except ValueError:pass
+    else:raise AssertionError('qualification must be boolean')
+
+
+def test_read_without_a_save_is_a_failure_even_if_model_says_done():
+    stage=0
+    def chat(**kwargs):
+        nonlocal stage
+        stage+=1
+        if stage==1:return response(h.tool_call('document_read',{'document':1,'version':0}))
+        return response()
+    result=run(evaluation.HOLDOUT_CASES[1],chat)
+    assert not result['passed'] and result['safe_saved_state'] and result['saved_files']==1
+    assert not any(a['kind']=='document_save_exact' for a in result['approvals'])
+
+
+def test_model_diagnostics_keep_only_fixed_reasons_lengths_and_token_counts():
+    def chat(**kwargs):
+        value=response();value.message.content='SYNTHETIC PRIVATE ANSWER'
+        value.message.thinking='SYNTHETIC PRIVATE REASONING'
+        value.done_reason='arbitrary private server text';value.prompt_eval_count=123;value.eval_count=5
+        return value
+    result=run(evaluation.CASES[0],chat)
+    assert result['model_stats']==[{'done_reason':'other','content_characters':24,
+                                   'thinking_characters':27,'prompt_eval_count':123,'eval_count':5,
+                                   'thinking_requested':True}]
+    assert 'PRIVATE' not in json.dumps(result['model_stats'])
 
 
 def test_disallowed_tool_is_not_dispatched_even_with_full_menu():

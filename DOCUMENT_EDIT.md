@@ -16,6 +16,11 @@ replacement="blue folder") changes that exact excerpt once. To append a line,
 use find="" and a replacement containing an actual newline followed by the line.
 JSON encodes an actual newline as \n. A literal backslash plus n is different
 text: the code does not decode escapes or silently repair arguments.
+Pass only the new suffix for append, without JSON-encoding it into a second
+string or adding wrapper quotes. Real quote/backslash characters stay literal.
+Do not add a final newline unless requested. The save comparison now includes
+character/newline/tab counts, final-newline presence and the number of lines
+ending in spaces/tabs; full exact text still governs approval and publication.
 
 ## Code checks
 
@@ -54,9 +59,33 @@ A document Resume fresh-read failure also ends that turn, preventing an automati
 read/retry. A new person request can read current state and review a new proposal.
 Uncertain publication appears as Unconfirmed and requires Check last save.
 
+## Literal text bound from the current request
+
+A request starting `Append exactly "\nNew line." to ...` supports the narrower
+document_append_requested(document) path. Code parses one JSON string layer from
+the current person's request and preserves its target/context instructions.
+The literal is held in code and is omitted from the model's current user message;
+the model supplies only a document number. It does not serialize replacement text.
+The ordinary document_edit/document_save tools are omitted for this request and
+also refused by actual dispatch, preventing a model-supplied replacement override.
+
+Only a bounded, nonempty, printable string (with tabs/newlines) qualifies. The
+whole request is at most 16000 characters and the text remains at most 8000.
+Unsupported framing, multiple append instructions, invalid JSON, controls and
+wrong types do not create a binding. Other wording retains the ordinary reviewed
+edit workflow. This is a narrow syntax, not general intent parsing.
+
+The binding supplies data only. It is one attempt per current turn, requires an
+actual latest document_read in that turn, and feeds the same prepare_edit/exact
+approval/guarded commit path. Extra model arguments and missing/used bindings
+refuse. Plans cannot approve it. A prior turn or wrapped Resume request cannot
+replay the binding; send a new explicit literal request to use this path again.
+Denial, stale files, changed drafts, Stop and uncertainty keep their existing
+guards and halt behavior. Literal model-supplied edits are never unquoted/repaired.
+
 ## Verification
 
-19 offline edit tests fake files/model/approvals and block Internet sockets.
+27 offline edit tests fake files/model/approvals and block Internet sockets.
 They cover literal preservation, overlapping/absent matches, bounds, latest reads,
 history, cancel/reset, stored draft changes, limits, actual parameter checks,
 exact approval during plans, queued fallback refusal, Stop, frozen proposals,

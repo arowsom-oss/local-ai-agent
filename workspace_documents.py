@@ -21,6 +21,35 @@ def valid_text(text):
     return text
 
 
+@dataclass(frozen=True)
+class RequestedAppend:
+    text: str
+    instructions: str
+
+
+def requested_append(request):
+    """Decode one bounded literal from the current person's explicit request only.
+
+    This supplies data, not authority. No model/tool/page output is a source.
+    Unsupported wording is deliberately left to the ordinary reviewed edit tool.
+    """
+    if type(request) is not str or len(request)>16000:return None
+    request=request.lstrip();prefix='append exactly '
+    if request[:len(prefix)].casefold()!=prefix:return None
+    try:
+        tail=request[len(prefix):].lstrip()
+        value,end=json.JSONDecoder().raw_decode(tail)
+        remainder=tail[end:].strip().casefold()
+        if remainder and (not remainder.startswith('to ') or 'append exactly' in remainder):return None
+        return RequestedAppend(valid_text(value),tail[end:].lstrip())
+    except (ValueError,TypeError,RecursionError):return None
+
+
+def requested_append_text(request):
+    bound=requested_append(request)
+    return bound.text if bound is not None else None
+
+
 def digest(data):return hashlib.sha256(data).hexdigest()
 
 
@@ -349,14 +378,33 @@ def document_edit(document: int,find: str,replacement: str) -> str:
 
     First call document_read(document, version=0) and wait for its result. Code
     preserves all other text and uses that read's version; no revision arguments.
+    Example JSON arguments for appending a line after reading Document 1:
+    {"document":1,"find":"","replacement":"\\nReady."}
+    This appends a real line break then Ready. including the period, with no final newline.
 
     Args:
         document: Positive saved document number just read at its latest version.
         find: Exact text occurring once to replace. Empty string means append at the end.
         replacement: Literal replacement or appended text, at most 8000 characters.
-            Include a leading newline for a new line. Empty deletes the matched excerpt.
+            For append, supply only the new suffix. Pass its text value directly,
+            not a JSON-encoded string with extra delimiter quotes. Include an actual
+            leading newline for a new line, and no final newline unless requested.
+            Empty deletes the matched excerpt. Genuine quotes/backslashes stay literal.
     """
     return 'Error: document edits require an exact approval in the agent loop.'
+
+
+def document_append_requested(document: int) -> str:
+    """Append the exact text already bound from this person's current request, once.
+
+    Offered only for a request starting Append exactly followed by one JSON string.
+    Code has already decoded that string. Do not copy or serialize it yourself.
+    First read the latest document. A separate full exact-save approval is required.
+
+    Args:
+        document: Positive saved document number just read at its latest version.
+    """
+    return 'Error: bound appends require a current request and exact approval in the agent loop.'
 
 
 

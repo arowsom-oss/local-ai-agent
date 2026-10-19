@@ -1,3 +1,24 @@
+# Current bound-text and document quality update
+
+245 offline tests in thirteen suites and three real Windows/Tk suites passed.
+The final fixed qualification run completed 28/28 exact tasks
+and 8/8 controls, with all saved states safe.
+Median task time 11.69 s; p95 20.51 s.
+Declared supervised-document target met: True; all_passed: True.
+Failed final cases: none.
+
+Request-bound text is parsed in code, omitted from the model's current message,
+and passed through the existing exact approval and guarded save path. Both the
+offered menu and actual dispatch disallow ordinary replacement writers during
+that literal append request. Current-turn reads, single use and no replay are
+enforced. Provider length responses refuse before dispatch and revoke document
+observations. Normal text/tool sampling matches the measured temperature 0.2.
+
+Earlier failed configurations are retained in RELIABILITY.md, including the
+rejected direct-generation experiment. This is a narrow workflow measurement,
+not a general intelligence/security guarantee. Source publication uses the
+existing branch/draft PR; no new dependencies or broader authority were added.
+
 # Current stale-edit quote fix and diagnostic coverage
 
 231 offline tests passed in thirteen suites, including five new checks for the

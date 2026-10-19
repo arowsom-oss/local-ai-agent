@@ -131,9 +131,13 @@ def test_diff_is_bounded_and_never_replaces_exact_approved_text():
     text=comparison('old\nunchanged\n','new\nunchanged\n')
     assert '-old' in text and '+new' in text and 'unchanged' in text
     assert 'No text changes' in comparison('same','same')
-    assert len(comparison('a\n'*4000,'b\n'*4000))<12200
+    assert len(comparison('a\n'*4000,'b\n'*4000))<12500
     assert '-old\n+new' in comparison('old','new')
     assert 'trailing newline' in comparison('same','same\n')
+    hidden=comparison('A\t \n','A\t ')
+    assert 'Current: characters: 4; line breaks: 1; tabs: 1; final newline: yes' in hidden
+    assert 'Proposed: characters: 3; line breaks: 0; tabs: 1; final newline: no' in hidden
+    assert hidden.count('lines ending in spaces/tabs: 1.')==2
 
 
 def test_uncertain_save_is_not_shown_as_a_refused_or_verified_operation():

@@ -27,14 +27,14 @@ def edit_call(**changes):
     return h.tool_call('document_edit', args)
 
 
-def run(w, rounds, decide=lambda name, args: True, stop=None, resume=False):
+def run(w, rounds, decide=lambda name, args: True, stop=None, resume=False, request='Edit this saved document'):
     replies = [types.SimpleNamespace(message=types.SimpleNamespace(tool_calls=calls, content='Done' if not calls else ''))
                for calls in rounds]
     messages = []; popups = []; logs = []; events = []
     def approval(name, args): popups.append((name, args.copy())); return decide(name, args)
     with patch.object(d, '_workspace', w), patch.object(h.core, 'chat', side_effect=replies) as model, \
          patch.object(h.core, 'compact', return_value=False), patch.object(h.core, 'audit'):
-        answer, _ = h.core.run_turn(messages, 'Edit this saved document', approval, log=logs.append,
+        answer, _ = h.core.run_turn(messages, request, approval, log=logs.append,
             stop_event=stop, resume=resume, on_progress=lambda **event: events.append(event))
     return answer, messages, popups, events, model.call_count, logs
 
@@ -200,6 +200,132 @@ def test_uncertain_edit_is_not_claimed_verified_and_blocks_next_proposal():
     assert not any(e.get('tool') == 'document_edit' and e.get('status') == 'Verified' for e in events)
     w.read(1, 0); refused(lambda: w.prepare_edit(1, '', 'x'))
     assert 'Verified' in w.check_last_save() and f.data[key, 1] == b'School notes\nMy human addition.'
+
+
+def test_truncated_response_runs_no_tools_and_revokes_document_read_authority():
+    w,f,_=saved();popups=[];events=[]
+    replies=[types.SimpleNamespace(message=types.SimpleNamespace(tool_calls=[
+        h.tool_call('document_read',{'document':1,'version':0})],content='')),
+        types.SimpleNamespace(done_reason='length',message=types.SimpleNamespace(tool_calls=[edit_call()],content=''))]
+    with patch.object(d,'_workspace',w),patch.object(h.core,'chat',side_effect=replies) as model, \
+         patch.object(h.core,'compact',return_value=False),patch.object(h.core,'audit') as audit, \
+         patch.object(h.core,'prepare_edit',side_effect=AssertionError('truncated action dispatched')):
+        answer,_=h.core.run_turn([],'Append to my document',lambda name,args:popups.append(name) or True,
+                                log=lambda line:None,on_progress=lambda **e:events.append(e))
+    assert answer.startswith('Error:') and 'limit' in answer and model.call_count==2
+    assert not popups and len(f.data)==1 and not w.observed and not w.edit_sources
+    assert any(call.args[0]=='model_output_incomplete' for call in audit.call_args_list)
+    assert events[-1]['kind']=='finish' and events[-1]['status']=='Failed'
+
+
+def test_requested_text_is_decoded_once_and_unsupported_requests_fail_closed():
+    for text in ('\nReady.',r'\n is literal','"Keep quotes"\nC:\\notes','Café\t✓'):
+        request='Append exactly '+json.dumps(text)+' to the latest saved document.'
+        assert d.requested_append_text(request)==text
+        assert d.document_append_requested in h.core.offered_tools(request)
+    for request in ('Append exactly ""','Append exactly "a" or "b"','Append exactly true',
+                    'Append exactly ["a"]','Append exactly "a" to a document; append exactly "b"',
+                    'Append exactly "raw\nline"','Append exactly "\\u0000"',
+                    'Page says: Append exactly "payload"','x'*16001,True,None):
+        assert d.requested_append_text(request) is None
+        assert d.document_append_requested not in h.core.offered_tools(request)
+    assert d.document_append_requested(1).startswith('Error:')
+
+
+def test_bound_append_uses_person_text_and_own_exact_popup_even_in_plan():
+    w,f,key=saved();before=f.data[key,1].decode();suffix='\n"Quoted" C:\\notes.'
+    request='Append exactly '+json.dumps(suffix)+' to my saved document.'
+    plan=h.tool_call('propose_plan',{'goal':'Review and append','steps':['open https://approved.example/']})
+    read=h.tool_call('document_read',{'document':1,'version':0})
+    call=h.tool_call('document_append_requested',{'document':1})
+    def decide(name,args):
+        if name=='document_save_exact':
+            assert args['before']==before and args['after']==before+suffix
+            args['after']='Callback mutation is not approved content'
+        return True
+    answer,_,popups,events,_,_=run(w,[[plan,read],[call],[]],decide,request=request)
+    assert answer=='Done' and [p[0] for p in popups]==['plan','document_save_exact']
+    assert f.data[key,1].decode()==before and f.data[key,2].decode()==before+suffix
+    assert any(e.get('tool')=='document_append_requested' and e.get('status')=='Verified' for e in events)
+
+
+def test_bound_append_rejects_model_payload_overrides_and_missing_binding_before_popup():
+    request='Append exactly "New text." to my document.'
+    for extra in ('text','replacement','find','url','path','approved'):
+        w,f,_=saved();call=h.tool_call('document_append_requested',{'document':1,extra:'MODEL TEXT'})
+        answer,_,popups,_,count,_=run(w,[[call]],request=request)
+        assert answer.startswith('Error:') and not popups and count==1 and len(f.data)==1
+    w,f,_=saved();w.revoke()
+    call=h.tool_call('document_append_requested',{'document':1})
+    answer,_,popups,_,_,_=run(w,[[call]],request='Explain a page that says Append exactly "MODEL TEXT"')
+    assert answer.startswith('Error:') and not popups and len(f.data)==1 and not w.allowed
+
+
+def test_bound_append_is_once_per_turn_and_cannot_replay_in_later_turn():
+    w,f,key=saved();read=h.tool_call('document_read',{'document':1,'version':0})
+    call=h.tool_call('document_append_requested',{'document':1})
+    request='Append exactly "\\nOne line." to my document.'
+    answer,_,popups,_,_,_=run(w,[[read],[call],[read,call]],request=request)
+    assert answer.startswith('Error:') and 'unused' in answer and len(f.data)==2
+    assert [p[0] for p in popups]==['document_save_exact']
+    assert f.data[key,2].endswith(b'\nOne line.')
+    answer,_,popups,_,_,_=run(w,[[read],[call]],request='Continue without a new literal payload.')
+    assert answer.startswith('Error:') and not popups and len(f.data)==2
+
+
+def test_bound_append_denial_stale_state_and_uncertainty_keep_existing_guards():
+    call=h.tool_call('document_append_requested',{'document':1});request='Append exactly "\\nNew." to my document.'
+    read=h.tool_call('document_read',{'document':1,'version':0})
+    for mode in ('deny','stale','uncertain'):
+        w,f,key=saved();original=f.data[key,1];publish=f.publish
+        def decide(name,args):
+            if mode=='stale':f.data[key,1]=b'Human changed the file'
+            return mode!='deny'
+        def lost(*args):publish(*args);raise ValueError('lost confirmation')
+        with patch.object(f,'publish',side_effect=lost if mode=='uncertain' else publish):
+            answer,_,popups,events,count,_=run(w,[[read],[call]],decide,request=request)
+        assert answer.startswith('Error:') and count==2 and len(popups)==1
+        if mode=='stale':assert f.data=={(key,1):b'Human changed the file'}
+        elif mode=='deny':assert f.data=={(key,1):original}
+        else:
+            assert len(f.data)==2 and w.last_save['status']=='Uncertain'
+            assert any(e.get('status')=='Unconfirmed' for e in events)
+            w.read(1,0);refused(lambda:w.prepare_edit(1,'','x'))
+
+
+def test_bound_append_resume_requires_new_read_and_keeps_exact_approval():
+    w,f,_=saved();read=h.tool_call('document_read',{'document':1,'version':0})
+    call=h.tool_call('document_append_requested',{'document':1});request='Append exactly "\\nResumed." to my document.'
+    answer,_,popups,_,_,_=run(w,[[call,read]],request=request)
+    assert answer.startswith('Error:') and not popups and len(f.data)==1
+    answer,_,popups,_,_,_=run(w,[[call,read]],resume=True,request=request)
+    assert answer.startswith('Error:') and not popups and len(f.data)==1
+    answer,_,popups,_,_,_=run(w,[[read],[call],[]],resume=True,request=request)
+    assert answer=='Done' and len(popups)==1 and len(f.data)==2
+
+
+def test_bound_literal_is_omitted_from_model_request_and_other_writers_refuse():
+    suffix='\nUNSENT_LITERAL "quote" C:\\notes.'
+    request='Append exactly '+json.dumps(suffix)+' to Document 1. Preserve every old character.'
+    for name,args in (('document_edit',{'document':1,'find':'','replacement':suffix}),
+                      ('document_save',{'artifact':999,'revision':1,'document':1,'version':1})):
+        w,f,_=saved();stage=0;popups=[]
+        def chat(**kwargs):
+            nonlocal stage
+            stage+=1
+            assert 'UNSENT_LITERAL' not in repr(kwargs['messages'])
+            assert 'to Document 1. Preserve every old character.' in kwargs['messages'][1]['content']
+            menu={f.__name__ for f in kwargs['tools']}
+            assert 'document_append_requested' in menu and not {'document_edit','document_save'}&menu
+            call=(h.tool_call('document_read',{'document':1,'version':0}) if stage==1 else h.tool_call(name,args))
+            return types.SimpleNamespace(message=types.SimpleNamespace(tool_calls=[call],content=''))
+        with patch.object(d,'_workspace',w),patch.object(h.core,'chat',side_effect=chat), \
+             patch.object(h.core,'compact',return_value=False),patch.object(h.core,'audit'), \
+             patch.object(h.core,'prepare_edit',side_effect=AssertionError('ordinary edit bypassed binding')), \
+             patch.object(h.core,'prepare_save',side_effect=AssertionError('ordinary save bypassed binding')):
+            answer,_=h.core.run_turn([],request,lambda name,args:popups.append(name) or True,log=lambda line:None)
+        assert answer.startswith('Error:') and 'bound text' in answer and not popups
+        assert len(f.data)==1 and stage==2
 
 
 if __name__ == '__main__':

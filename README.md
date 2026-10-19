@@ -281,7 +281,7 @@ python -B test_progress_ui.py
 python -B test_workspace_io_live.py
 ```
 
-The first thirteen contain 231 offline tests with fakes. The last eight use real
+The first thirteen contain 245 offline tests with fakes. The last eight use real
 Windows UIA/Tk/Chromium with synthetic data or mocked HTTPX and no Internet.
 See VALIDATION.md and TOP10_STATUS.md for what actually passed. Tests do not
 prove freedom from vulnerabilities. Wider app integration, OS/VM isolation,
@@ -318,5 +318,25 @@ document tasks and all 4 controls. Both stale-edit simulations were exercised;
 one append proposal still had unexpected text and was denied. The full live run
 is therefore still marked failed. Earlier failed reports remain retained.
 
+For the broader, predeclared supervised-document target, use --qualification
+--repeats 2. This adds ten fixed scenarios without changing the historical cases
+or their exact expected bytes. The report separates task success, control success,
+safe retained file states and latency. Subset/one-seed runs cannot meet the full
+target. This is a practical workflow target, not a model intelligence benchmark.
+Append guidance now explicitly excludes double JSON encoding and unwanted final
+newlines. Exact save previews also show character/newline/tab counts and whether
+each version ends in a newline, alongside the complete JSON text.
+
 The generated video smoke sample contains a watermark-like artifact produced by
 the model. It demonstrates that the pipeline runs, not publication-ready quality.
+
+Current literal-text workflow: document_append_requested(document) binds a JSON
+string from a person request starting Append exactly, keeps that value in code,
+and projects only the target instructions to the model. For that request the
+model cannot use ordinary document writers to override the payload. It still
+requires a current read and a separate full exact approval. See DOCUMENT_EDIT.md.
+Normal text/tool turns now explicitly use the evaluated temperature 0.2;
+truncated provider responses stop before dispatch. Latest full qualification:
+28/28 tasks, 8/8 controls;
+target met: True. This applies only to short supervised documents.
+All earlier failures and benchmark limits remain in RELIABILITY.md.

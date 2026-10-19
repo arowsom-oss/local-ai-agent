@@ -10,7 +10,8 @@ from task_progress import TurnEvidence, outline_task
 from fetch import fetch_page
 from audit_privacy import private_arguments, private_note
 from artifacts import create_artifact, revise_artifact, list_artifacts, read_artifact, record_generated
-from workspace_documents import (document_list, document_read, document_save, document_edit, workspace_allowed,
+from workspace_documents import (document_list, document_read, document_save, document_edit, document_append_requested,
+    requested_append, requested_append_text, workspace_allowed,
     grant_workspace, reset_workspace, cancel_workspace, prepare_save, prepare_edit, commit_save, ROOT as DOCUMENT_ROOT)
 from notepad_tools import notepad_start, notepad_read, notepad_replace, start_notepad, prepare_notepad, commit_notepad, cancel_notepad
 from desktop_tools import desktop_start, desktop_read, desktop_type, desktop_click, prepare_action, execute_approved, start_practice
@@ -32,10 +33,16 @@ SYSTEM_PROMPT = ("You run locally on Alex's laptop through Ollama, not in the cl
                  "draft unless they requested changing it. Only report an edit as complete after verified read-back. "
                  "A paused Notepad workflow needs a new request from the person and a fresh read; do not retry it. "
                  "For new saved documents, create a document Artifact and use document_save with its returned "
-                 "artifact/revision and document=0, version=0. For saved document edits, prefer document_edit: "
-                 "document_list, then document_read(document, version=0), wait for its result, then "
+                 "artifact/revision and document=0, version=0. For saved document edits, first use "
+                 "document_list, then document_read(document, version=0), and wait for its result. "
+                 "If the request begins Append exactly followed by a JSON string, code binds that exact text: "
+                 "after a latest read use document_append_requested(document). Supply only the document number; "
+                 "do not copy, escape or analyze the payload again. This can be used once per request. Otherwise use "
                  "document_edit(document, find, replacement). Empty find means append; include a leading newline "
-                 "in replacement for a new line. Otherwise find must be an exact excerpt occurring once. Code "
+                 "in replacement for a new line. For append, replacement is ONLY the new suffix, not the whole "
+                 "document. Pass the text value directly: do not JSON-encode it into another string or wrap it "
+                 "in extra quote marks. Include no final newline unless requested. Otherwise find must be an "
+                 "exact excerpt occurring once. Code "
                  "preserves all other saved text and uses that read's version; you supply no revision counters. "
                  "Every edit/save requires its own exact approval and retains old files. "
                  "document_read ends with a JSON object whose text field holds the exact document. Use that "
@@ -43,6 +50,11 @@ SYSTEM_PROMPT = ("You run locally on Alex's laptop through Ollama, not in the cl
                  "find is Hello, without extra quote marks. JSON delimiters and escape syntax are not document "
                  "characters; preserve quotes only when they are inside the decoded value. Never copy the "
                  "text key, data warning or metadata into the document. "
+                 "Tool arguments are already JSON: to append a new line containing Ready. to Document 1, "
+                 "the arguments are {\"document\":1,\"find\":\"\",\"replacement\":\"\\nReady.\"}. "
+                 "The decoded replacement begins with one real line break and ends with a period. Do not "
+                 "encode that string a second time. Preserve the requested text's punctuation, including "
+                 "a final period; no final newline does not mean removing punctuation. "
                  "If explicitly saving an already revised Artifact, document_save needs its CURRENT Artifact "
                  "revision and the separate positive saved document version returned by document_read. "
                  "document_save cannot edit text, and version=0 cannot update an existing document. "
@@ -53,7 +65,8 @@ SYSTEM_PROMPT = ("You run locally on Alex's laptop through Ollama, not in the cl
                  "and cannot mark work complete. On resumed turns, read current targets and Artifacts again before changes.")
 COMPACT_AT = 6000   # rough token count where the conversation gets squeezed (NUM_CTX is the hard wall)
 KEEP_RECENT = 6     # the newest messages are always kept word for word
-NUM_CTX = 8192   # how many tokens of conversation the model can hold (Ollama default is 4096)
+NUM_CTX = 8192   # Bounded context for each normal text/tool request.
+TOOL_TEMPERATURE = 0.2  # Match measured text/tool turns; this is not a permission gate.
 
 DATA_ROOT = Path(__file__).resolve().parent
 SAFE = DATA_ROOT / "sandbox"
@@ -65,8 +78,9 @@ AUDIT_LOG = DATA_ROOT / "audit.log"
 # Tools that must be approved by a human before they run.
 NEEDS_APPROVAL = {"read_file", "browser_open", "fetch_page", "browser_click", "browser_search", "desktop_start", "desktop_type", "desktop_click", "generate_image", "generate_video"}
 NEEDS_APPROVAL.update({"notepad_start", "notepad_replace"})
-NEEDS_APPROVAL.update({"document_save", "document_edit"})
-DOCUMENT_TOOLS={"document_list","document_read","document_save","document_edit"}
+DOCUMENT_WRITES={"document_save","document_edit","document_append_requested"}
+NEEDS_APPROVAL.update(DOCUMENT_WRITES)
+DOCUMENT_TOOLS={"document_list","document_read"}|DOCUMENT_WRITES
 ARBITRARY_URL_TOOLS = {"browser_open", "fetch_page"}
 NETWORK_TOOLS = ARBITRARY_URL_TOOLS | {"browser_click", "browser_search"}
 # Unknown tools are denied too. Downloads have no executable entry or model schema.
@@ -81,6 +95,7 @@ RISK_TIERS = {
     "create_artifact": "low", "revise_artifact": "low", "list_artifacts": "low", "read_artifact": "low",
     "notepad_start": "high", "notepad_read": "low", "notepad_replace": "high",
     "document_list":"medium", "document_read":"medium", "document_save":"high", "document_edit":"high",
+    "document_append_requested":"high",
 }
 TOOL_ARGUMENTS = {
     "outline_task":{"steps":list},
@@ -99,6 +114,7 @@ TOOL_ARGUMENTS = {
     "document_list":{}, "document_read":{"document":int,"version":int},
     "document_save":{"artifact":int,"revision":int,"document":int,"version":int},
     "document_edit":{"document":int,"find":str,"replacement":str},
+    "document_append_requested":{"document":int},
 }
 
 
@@ -222,8 +238,16 @@ available_functions = {
     'list_artifacts': list_artifacts, 'read_artifact': read_artifact,
     'notepad_start': notepad_start, 'notepad_read': notepad_read, 'notepad_replace': notepad_replace,
     'document_list':document_list, 'document_read':document_read, 'document_save':document_save,
-    'document_edit':document_edit,
+    'document_edit':document_edit,'document_append_requested':document_append_requested,
 }
+
+
+def offered_tools(request):
+    """Keep a request-bound text capability absent when no eligible data exists."""
+    eligible=requested_append_text(request) is not None
+    return [function for name,function in available_functions.items()
+            if (name!='document_append_requested' or eligible) and
+               (not eligible or name not in {'document_edit','document_save'})]
 
 
 def audit(event, name, args, model, note=""):
@@ -417,7 +441,19 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
                          {"role": "assistant", "content": answer}])
         audit("media_observed" if observation_text is not None else "image_observed", "-", {}, model)
         return finish("Reply ready",answer,time.perf_counter()-started)
-    messages.append({'role': 'user', 'content': user_text})
+    bound_append=requested_append(user_text)
+    append_text=bound_append.text if bound_append is not None else None
+    # The model chooses a numbered target; it need not see, copy or re-escape
+    # this exact literal. Preserve the person's target/context instructions.
+    model_request=(
+        'Append the exact text bound in code for this request '+bound_append.instructions+
+        '\nThe literal value is held by code and is not repeated in this model message. '
+        'List/read the latest target, then use document_append_requested(document) once. '
+        'Code preserves all old text. A separate exact approval is still required.'
+        if bound_append is not None else user_text)
+    messages.append({'role': 'user', 'content': model_request})
+    append_used=False
+    tool_menu=offered_tools(user_text)
     total = time.perf_counter() - started
 
     plan = None        # an approved plan lasts for this one message only
@@ -429,12 +465,18 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
         try:
             compact(messages, model, log)      # squeeze old messages if the conversation is too long
             response = chat(model=model, messages=[{'role': 'system', 'content': SYSTEM_PROMPT}] + messages,
-                            tools=list(available_functions.values()), think=True,
-                            options={'num_ctx': NUM_CTX})
+                            tools=tool_menu, think=True,
+                            options={'num_ctx': NUM_CTX, 'temperature': TOOL_TEMPERATURE})
         except Exception:
             return finish("Failed","Error: local model request failed. Check Ollama and the installed allowed models.",
                     total+time.perf_counter()-t0)
         total += time.perf_counter() - t0
+        # Reject even parsed calls from an incomplete response, without retry.
+        if field(response,'done_reason')=='length':
+            cancel_workspace()
+            audit('model_output_incomplete','-',{},model,note='response reached its generation or context limit')
+            return finish('Failed','Error: local model response reached its generation or context limit; '
+                          'no tool calls from that incomplete response were run. Review before a new request.',total)
         messages.append(response.message)
 
         if not response.message.tool_calls:
@@ -512,13 +554,22 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
             if name in DOCUMENT_TOOLS:
                 # Folder reading is person-approved per chat; each write has a separate exact preview.
                 result=None
-                if not workspace_allowed():
+                proposal_args=args
+                if append_text is not None and name in {'document_edit','document_save'}:
+                    result='Error: this exact append must use its bound text, not model-supplied replacement text.'
+                if name=='document_append_requested':
+                    if append_text is None or append_used:
+                        result='Error: no unused exact append text is bound to this current request.'
+                    else:
+                        append_used=True
+                        proposal_args={'document':args['document'],'find':'','replacement':append_text}
+                if result is None and not workspace_allowed():
                     if approved(ask_approval,"workspace_access",{"folder":str(DOCUMENT_ROOT)}):
                         if not stopped(stop_event):grant_workspace()
                     if stopped(stop_event) or not workspace_allowed():
                         result="Error: document workspace access denied or stopped."
-                if result is None and name in {"document_save","document_edit"}:
-                    proposal=(prepare_edit if name=="document_edit" else prepare_save)(**args)
+                if result is None and name in DOCUMENT_WRITES:
+                    proposal=(prepare_save if name=="document_save" else prepare_edit)(**proposal_args)
                     if "error" in proposal:result="Error: "+proposal["error"]
                     elif not approved(ask_approval,"document_save_exact",proposal["preview"]):
                         result="Error: this exact document save was denied."

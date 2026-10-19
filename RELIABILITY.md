@@ -187,3 +187,81 @@ sample as a general improvement guarantee. No weaker approval or retry was added
 tests. Three Windows/Tk suites passed again. Earlier reports remain unchanged;
 the running project record includes diagnosis, targeted/full results and this
 remaining limitation. Routing, model weights and dependencies are unchanged.
+
+## Measured short-document quality target and bound literal text
+
+Before broadening the run, the project-specific target was fixed at >=95% exact
+task completion, all controls passing, safe saved states for every case and a
+task p95 <=90 seconds on this laptop. --qualification --repeats 2 runs the same
+eight historical scenarios plus ten fixed broader cases: 28 tasks and 8 controls.
+Only complete coverage at seeds 42/43 with the normal request-aware full tool
+menu can meet the target. --case, --menu documents or one-seed runs cannot.
+This is a subjective 8/10 supervised document-workflow target, not a general
+model intelligence score or a standardized benchmark. Fixtures and expected
+bytes were fixed before the changes; after diagnosis they are regression cases.
+
+| Configuration | Exact tasks | Controls | Median task time | Task p95 | Target met |
+| --- | --- | --- | --- | --- | --- |
+| Broader initial guidance | 24/28 | 8/8 | 9.66 s | 61.90 s | False |
+| Rejected direct drafting | 21/28 | 8/8 | 12.02 s | 58.17 s | False |
+| Reasoning plus examples | 26/28 | 8/8 | 9.79 s | 64.11 s | False |
+| Binding with raw model message | 26/28 | 8/8 | 10.62 s | 32.00 s | False |
+| Binding with projected model message | 28/28 | 8/8 | 11.69 s | 20.51 s | True |
+
+All five runs retained safe saved-file states. Every earlier failure is retained.
+The final all_passed flag is True; final failed cases: none.
+The new cases include Unicode, repeated context, deletion, tabs, quoted paths,
+blank lines/spaces, untrusted document text, denial of an existing-file save and
+a changed quoted document during approval. Actual file bytes/history determine
+scores; a refusal only earns control credit at the intended stage.
+
+Diagnostics confirmed double encoding of an appended JSON string, omission of
+a requested period and context exhaustion. One failure used 3472 prompt tokens
+plus 4720 generated tokens, reaching the 8192-token context before an action.
+Counts, fixed comparison flags, requested thinking mode and known completion
+reasons are retained without copying draft or reasoning text. The punctuation
+trace inspected only a fixed synthetic fixture, not production documents.
+
+The app now fixes normal text/tool temperature at the evaluated 0.2, keeps
+reasoning enabled and explicitly fails done_reason=length responses before any
+of their parsed calls execute. That refusal revokes saved-document observations
+and requires review/new request; it never retries. The faster-generation
+experiment was rejected after its task success regressed. Prompt examples alone
+did not reach the target. Save comparisons now expose character/newline/tab
+counts and final-newline/trailing-whitespace facts beside the complete JSON text.
+
+document_append_requested(document) is a narrower alternative for a person
+request beginning Append exactly followed by one JSON string. Code decodes one
+literal layer from that current request, holds it in RAM, and gives the model
+only the preserved target/context instructions. It offers this tool instead of
+ordinary document_edit/document_save writers, and actual dispatch also refuses
+those writers for that request. The model supplies only a document number.
+An actual latest read in this turn, one binding attempt and the same full exact
+approval are mandatory. The same prepare_edit/native publish/read-back guards,
+quotas, retained versions and uncertainty recovery apply. No page/model output,
+earlier turn, extra argument or wrapped Resume can supply/replay this binding.
+Unsupported syntax retains the ordinary reviewed workflow; arbitrary model text
+is never silently decoded or repaired. See DOCUMENT_EDIT.md for limits.
+
+245 offline tests across thirteen suites passed. Seven new binding checks cover
+data framing, control/size bounds, exact preservation, omitted model payload,
+actual argument/dispatch restrictions, own approval during plans, callback
+mutation, single use, replay refusal, current reads, stale state and uncertainty.
+Six evaluator tests and the incomplete-response dispatch test also passed.
+Three real Windows/Tk suites passed again: Documents, task progress and file
+workers with Stop, fresh Resume, retained history and lost-confirmation recovery.
+
+For a familiar comparison, this is a focused local ChatGPT-like application.
+Its actual engines remain Gemma 4 E2B and Gemma 4 12B. Official Google model
+documentation describes their local reasoning/tool-use roles; official OpenAI
+model guidance distinguishes focused tasks from demanding workflows. There is
+no matched GPT/Claude/Gemini benchmark for this installation, so no named-model
+intelligence equivalence is claimed. Sources: https://ai.google.dev/gemma/docs/core/model_card_4
+and https://learn.chatgpt.com/docs/models .
+
+The declared target was met, supporting a provisional 8/10 for these short supervised document tasks.
+The rating does not cover general intelligence, long multi-turn work, coding,
+media quality or full Windows control. Two fixed seeds and developer-authored
+synthetic cases are a small sample; hardware/cache state can change results.
+No model weights, dependency, broader filesystem/network authority or mutation
+retry were added. Restart the existing launcher to import the changes.

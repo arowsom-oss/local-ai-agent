@@ -57,11 +57,17 @@ def access(panel,confirm):
 
 
 def comparison(before,after):
+    def formatting(label,text):
+        trailing=sum(line.endswith((' ','\t')) for line in text.split('\n'))
+        return (f'{label}: characters: {len(text)}; line breaks: {text.count(chr(10))}; '
+                f'tabs: {text.count(chr(9))}; final newline: {"yes" if text.endswith(chr(10)) else "no"}; '
+                f'lines ending in spaces/tabs: {trailing}.')
     diff='\n'.join(difflib.unified_diff(before.splitlines(),after.splitlines(),fromfile='Current saved text',tofile='Proposed text',lineterm=''))
     if not diff:
         diff=('No text changes. This still creates a new version.' if before==after else
               'Only line ending or trailing newline differences. Compare the exact JSON below.')
-    return diff[:12000]+('\n[Comparison shortened; complete approved text is shown below.]' if len(diff)>12000 else '')
+    return (formatting('Current',before)+'\n'+formatting('Proposed',after)+'\n\n'+
+            diff[:12000]+('\n[Comparison shortened; complete approved text is shown below.]' if len(diff)>12000 else ''))
 
 
 def save_selected(panel,confirm,document=0,version=0):
