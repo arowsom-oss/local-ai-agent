@@ -33,6 +33,9 @@ class ProgressPanel(ttk.Frame):
 
     def render(self,s):
         self.title.configure(text='Task progress · '+s.phase)
+        idle=(s.phase in ('Ready','Reply ready') and not s.verified and not s.observations
+              and not s.resumable and not s.proposed)
+        if getattr(self,'on_idle',None):self.on_idle(idle)
         self.summary.configure(text=f'Verified: {s.verified} · Reads: {s.observations}')
         state='normal' if s.resumable else 'disabled'
         self.resume_button.configure(state=state)

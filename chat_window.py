@@ -705,6 +705,7 @@ def new_chat():
     task_progress.reset()
     artifact_store.clear()
     artifact_panel.reset()
+    hide_artifacts()            # back to just the chat
     stop_event.clear()          # No turn is active; this is a person-approved fresh chat.
     forget_sites()              # websites allowed in the old chat are forgotten too
     last_answer = ""
@@ -859,6 +860,7 @@ def poll():
                 finish_turn()
     except queue.Empty:
         pass
+    sync_attachment_chip()
     root.after(100, poll)
 
 
@@ -913,7 +915,10 @@ def apply_theme():
                          activeforeground=T("on_accent" if accent else "text"),disabledforeground=T("subtle"))
     root.option_add("*TCombobox*Listbox.background",T("field"))
     root.option_add("*TCombobox*Listbox.foreground",T("text"))
-    theme_button.configure(text="Light appearance" if theme_name=="dark" else "Dark appearance")
+    for menu in (more_menu, attach_menu):
+        menu.configure(bg=T("card"), fg=T("text"), activebackground=T("select"),
+                       activeforeground=T("text"), disabledforeground=T("subtle"), bd=0)
+    more_menu.entryconfigure(theme_entry, label="Light appearance" if theme_name=="dark" else "Dark appearance")
     artifact_panel.apply_theme(palette)
     if 'progress_panel' in globals():progress_panel.render(task_progress.snapshot())
 
@@ -925,9 +930,46 @@ def toggle_theme():
 
 
 
+def popup_menu(menu, button):
+    """Open a menu right under the button that was clicked."""
+    menu.tk_popup(button.winfo_rootx(), button.winfo_rooty() + button.winfo_height())
+
+
+def artifacts_visible():
+    return str(artifact_panel) in workspace.panes()
+
+
+def show_artifacts():
+    if not artifacts_visible():
+        workspace.add(artifact_panel, weight=3)
+        root.after(50, lambda: workspace.sashpos(0, int(workspace.winfo_width() * 0.50)))
+    artifacts_button.configure(text="Hide artifacts")
+
+
+def hide_artifacts():
+    if artifacts_visible():
+        workspace.forget(artifact_panel)
+    artifacts_button.configure(text="Artifacts")
+
+
+def toggle_artifacts():
+    hide_artifacts() if artifacts_visible() else show_artifacts()
+
+
+def sync_attachment_chip():
+    """Show the remove-attachment chip only while an image or clip waits for the next message."""
+    waiting = pending_image is not None or pending_media is not None
+    clear_chip.configure(text="Clip attached  ✕" if pending_media is not None else "Image attached  ✕")
+    if waiting and not clear_chip.winfo_ismapped():
+        clear_chip.pack(side="left", padx=(0, 8), ipady=4, after=attach_button)
+    elif not waiting and clear_chip.winfo_ismapped():
+        clear_chip.pack_forget()
+
+
 def build_window():
     global notepad_status
-    global root, style, bottom, toolbar, vision_toolbar, chat_holder, chat_box, copy_button, attach_button, model_var, model_box, theme_button, send_button, stop_button, entry, artifact_panel, theme_surfaces, theme_labels, welcome_visible
+    global root, style, bottom, chat_holder, chat_box, copy_button, attach_button, model_var, model_box, send_button, stop_button, entry, artifact_panel, theme_surfaces, theme_labels, welcome_visible
+    global more_menu, attach_menu, theme_entry, workspace, artifacts_button, clear_chip
     root = tk.Tk()
     root.title("Local Studio")
     root.minsize(1100, 680)
@@ -951,62 +993,66 @@ def build_window():
     sidebar.pack_propagate(False)
     label(sidebar,"LOCAL",10,"accent","sidebar",True).pack(anchor="w",padx=22,pady=(30,2))
     label(sidebar,"Studio",24,"text","sidebar",True).pack(anchor="w",padx=20,pady=(0,24))
-    make_button(sidebar,"+  New chat",new_chat,kind="accent").pack(fill="x",padx=16,pady=(0,30))
-    label(sidebar,"WORKSPACE",9,background="sidebar",bold=True).pack(anchor="w",padx=22,pady=(0,12))
-    make_button(sidebar,"Practice",open_practice).pack(fill="x",padx=16,pady=4)
-    make_button(sidebar,"Notepad",open_notepad).pack(fill="x",padx=16,pady=4)
+    make_button(sidebar,"+  New chat",new_chat,kind="accent").pack(fill="x",padx=16,pady=(0,24))
     from workspace_panel import show_documents
-    make_button(sidebar,"Documents",lambda:show_documents(artifact_panel,confirm)).pack(fill="x",padx=16,pady=4)
+    make_button(sidebar,"Documents",lambda:(show_artifacts(),show_documents(artifact_panel,confirm))).pack(fill="x",padx=16,pady=4)
+    artifacts_button=make_button(sidebar,"Artifacts",toggle_artifacts)
+    artifacts_button.pack(fill="x",padx=16,pady=4)
     notepad_status=tk.StringVar(value=NOTEPAD_PHASES["closed"])
-    label(sidebar,"",9,background="sidebar",textvariable=notepad_status,wraplength=140).pack(fill="x",padx=20,pady=(2,8))
-    make_button(sidebar,"Audit log",show_log).pack(fill="x",padx=16,pady=4)
-    theme_button = make_button(sidebar,"Light appearance",toggle_theme)
-    theme_button.pack(side="bottom",fill="x",padx=16,pady=(8,22))
-    make_button(sidebar,"Free VRAM",free_vram).pack(side="bottom",fill="x",padx=16,pady=4)
-    make_button(sidebar,"Model check",model_check).pack(side="bottom",fill="x",padx=16,pady=4)
-    label(sidebar,"LOCAL UTILITIES",9,background="sidebar",bold=True).pack(side="bottom",anchor="w",padx=22,pady=(0,10))
+    notepad_label=label(sidebar,"",9,background="sidebar",textvariable=notepad_status,wraplength=140)
+    def notepad_label_sync(*_):     # only show Notepad's state while it is actually open
+        if notepad_status.get()==NOTEPAD_PHASES["closed"]:notepad_label.pack_forget()
+        else:notepad_label.pack(fill="x",padx=20,pady=(8,8))
+    notepad_status.trace_add("write",notepad_label_sync)
+    # One menu for everything you don't need every day.
+    more_menu=tk.Menu(root,tearoff=0)
+    more_menu.add_command(label="Practice",command=open_practice)
+    more_menu.add_command(label="Notepad",command=open_notepad)
+    more_menu.add_command(label="Audit log",command=show_log)
+    more_menu.add_separator()
+    more_menu.add_command(label="Model check",command=model_check)
+    more_menu.add_command(label="Free VRAM",command=free_vram)
+    more_menu.add_separator()
+    more_menu.add_command(label="Bigger text",command=lambda:change_size(2))
+    more_menu.add_command(label="Smaller text",command=lambda:change_size(-2))
+    more_menu.add_command(label="Light appearance",command=toggle_theme)
+    theme_entry=more_menu.index("end")
+    more_button=make_button(sidebar,"More  ...",lambda:popup_menu(more_menu,more_button))
+    more_button.pack(side="bottom",fill="x",padx=16,pady=(8,22))
 
     main = surface(root)
     main.pack(side="left",fill="both",expand=True,padx=22,pady=20)
     header = surface(main)
     header.pack(fill="x",pady=(0,18))
-    header_left=surface(header)
-    header_left.pack(side="left")
-    label(header_left,"Your workspace",23,"text",bold=True).pack(anchor="w")
-    label(header_left,"Think it through. Make something useful.",11).pack(anchor="w",pady=(5,0))
     header_right=surface(header)
     header_right.pack(side="right")
-    label(header_right,"●  On this device",10,"green").pack(anchor="e",pady=(0,6))
     model_row=surface(header_right)
     model_row.pack(anchor="e")
+    label(model_row,"Model",10).pack(side="left",padx=(0,8))
     model_var=tk.StringVar(value="auto")
     model_box=ttk.Combobox(model_row,textvariable=model_var,values=MODEL_CHOICES,state="readonly",width=18,font=(UI_FONT,10))
     model_box.pack(side="left",padx=(0,6))
 
     bottom=surface(main)
     bottom.pack(side="bottom",fill="x",pady=(12,0))
-    label(bottom,"MESSAGE",9,bold=True).pack(anchor="w",pady=(0,7))
     compose=surface(bottom)
     compose.pack(fill="x")
     send_button=make_button(compose,"Send  →",send,kind="accent")
     send_button.pack(side="right",padx=(8,0),ipady=4)
     stop_button=make_button(compose,"Stop",stop_agent,kind="danger",state="disabled")
     stop_button.pack(side="right",padx=(8,0),ipady=4)
+    attach_menu=tk.Menu(root,tearoff=0)
+    attach_menu.add_command(label="File",command=attach_file)
+    attach_menu.add_command(label="Image",command=attach_image)
+    attach_menu.add_command(label="Clip",command=attach_clip)
+    attach_menu.add_command(label="Screenshot of practice window",command=screenshot)
+    attach_button=make_button(compose,"+  Attach",lambda:popup_menu(attach_menu,attach_button))
+    attach_button.pack(side="left",padx=(0,8),ipady=4)
+    clear_chip=make_button(compose,"Image attached  ✕",clear_image)
     entry=tk.Entry(compose,width=60,relief="flat",bd=0,highlightthickness=1)
     entry.pack(side="left",fill="x",expand=True,ipady=13)
     entry.bind("<Return>",send)
-    label(bottom,"Enter to send  ·  F12 or Ctrl+Alt+F9 to stop",9).pack(anchor="w",pady=(8,0))
-
-    vision_toolbar=surface(main)
-    vision_toolbar.pack(side="bottom",fill="x",pady=(10,0))
-    attach_button=make_button(vision_toolbar,"Attach file",attach_file)
-    attach_button.pack(side="left")
-    for text,callback in (("Attach image",attach_image),("Attach clip",attach_clip),("Screenshot",screenshot),("Clear image",clear_image)):
-        make_button(vision_toolbar,text,callback).pack(side="left",padx=(6,0))
-    toolbar=surface(model_row)
-    toolbar.pack(side="left")
-    make_button(toolbar,"A-",lambda:change_size(-2)).pack(side="left",padx=3)
-    make_button(toolbar,"A+",lambda:change_size(2)).pack(side="left")
+    label(bottom,"Enter to send  ·  F12 stops",9).pack(anchor="w",pady=(8,0))
 
     workspace=ttk.Panedwindow(main,orient="horizontal")
     workspace.pack(fill="both",expand=True)
@@ -1018,17 +1064,19 @@ def build_window():
     copy_button.pack(side="right")
     global progress_panel
     progress_panel=ProgressPanel(conversation,task_progress,resume_task)
-    progress_panel.pack(fill='x',padx=20,pady=(0,6))
     chat_holder,chat_box=scroll_box(conversation,state="disabled",wrap="word",width=42,height=20,
         spacing1=0,spacing2=3,spacing3=8,relief="flat",bd=0,padx=22,pady=18,highlightthickness=0)
     chat_holder.pack(fill="both",expand=True)
+    def progress_sync(idle):
+        if idle:progress_panel.pack_forget()
+        elif not progress_panel.winfo_ismapped():progress_panel.pack(fill='x',padx=20,pady=(0,6),before=chat_holder)
+    progress_panel.on_idle=progress_sync
     workspace.add(conversation,weight=3)
     artifact_panel=ArtifactPanel(workspace,stop_event,answer=lambda:last_raw_answer,confirm=confirm)
     artifact_panel.model_busy=lambda:busy
     artifact_panel.document_busy=lambda active:stop_button.configure(
         state='normal' if active or busy else 'disabled',text='Stop')
-    workspace.add(artifact_panel,weight=3)
-    root.after(100,lambda:workspace.sashpos(0,int(workspace.winfo_width()*0.50)))
+    artifact_panel.on_change=show_artifacts
     from emergency_hotkey import start_hotkey
     start_hotkey(lambda:(stop_event.set(),stop_all(),emergency_ui.set()),lambda text:events.put(("memory",text)))
     root.after(50,watch_emergency)

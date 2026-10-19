@@ -41,9 +41,16 @@ if __name__ == "__main__":
                 child.destroy()
 
     ui.root.report_callback_exception = callback_error
-    for text in ("Screenshot", "Attach image", "Clear image", "Free VRAM", "Practice", "Notepad", "Attach clip", "Model check"):
+    # Chat-first layout: two visible buttons, everything else in their menus.
+    for text in ("+  Attach", "More  ..."):
         button = next(b for b in buttons(ui.root) if b.cget("text") == text)
         assert button.winfo_ismapped() and button.winfo_width() > 10
+    labels = lambda menu: [menu.entrycget(i, "label") for i in range(menu.index("end") + 1)
+                           if menu.type(i) == "command"]
+    assert labels(ui.attach_menu) == ["File", "Image", "Clip", "Screenshot of practice window"]
+    for text in ("Practice", "Notepad", "Audit log", "Model check", "Free VRAM"):
+        assert text in labels(ui.more_menu)
+    assert not ui.clear_chip.winfo_ismapped()          # nothing attached yet
 
     def act(action, yes_label="Use this image"):
         win = next(w for w in ui.root.winfo_children() if isinstance(w, ui.tk.Toplevel))
