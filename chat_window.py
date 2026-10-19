@@ -197,7 +197,8 @@ def confirm(name, args):
         lines = ["WANTS TO FOLLOW THIS PLAN (open approved sites and click links only)", "",
                  f"Goal: {args.get('goal')}", ""]
         lines += [f"{i}. {s}" for i, s in enumerate(args.get("steps", []), 1)]
-        lines += ["", "Model-written addresses, searches and new websites still need separate approval.",
+        lines += ["", "Each open step sends exactly the address shown. Plans can't hold ? or #.",
+                  "Other addresses, searches and new websites still need separate approval.",
                   "Approve the whole plan?"]
         return messagebox.askyesno("Approve plan", "\n".join(lines), default="no", icon="warning") is True
     if name == "plan_changed":
@@ -208,6 +209,7 @@ def confirm(name, args):
     if name == "new_site":                       # the site name here was read by code, not the model
         lines = [WHAT_IT_DOES["new_site"], "", f"Site:  {args.get('host')}", "",
                  f"Full address: {args.get('url')}", "",
+                 "Yes also sends this exact address. It can hold private data in its path.",
                  "Check the site name carefully. Allow reading it for this chat?"]
         return high_risk_confirm("New website", lines)
     if name == "browser_search":

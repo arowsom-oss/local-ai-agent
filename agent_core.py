@@ -347,7 +347,10 @@ def parse_plan(args):
         verb, _, rest = str(raw).strip().partition(" ")
         verb, rest = verb.lower().rstrip(":"), rest.strip()
         if verb == "open" and rest.startswith("https://") and " " not in rest:
-            parsed.append(("open", rest[:300]))
+            if len(rest) > 300 or "?" in rest or "#" in rest or outbound_url_problem(rest):
+                return None, (f'bad step "{_plan_text(raw, 60)}": plans can only open plain '
+                              'addresses up to 300 characters, with no ? or #. Use browser_search for searches.')
+            parsed.append(("open", rest))
         elif verb == "click" and _norm(rest.strip("'\"")):
             parsed.append(("click", _plan_text(rest.strip("'\""), 40)))
         else:
@@ -681,6 +684,7 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
 
             site_ok_now = False
             on_plan = False
+            exact_url_ok = None      # the exact address a popup in THIS step already showed and got Yes on
             url = str(args.get("url", "")) if isinstance(args, dict) else ""
             if name == "browser_search":
                 # Strict keys: the model may choose a number and text, NEVER an address.
@@ -734,12 +738,15 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
                 fetch.session_hosts.add(host)
                 audit("site_allowed", name, args, model, note=host)
                 site_ok_now = True          # that popup already covered this one fetch
+                exact_url_ok = url          # and it showed this full address
 
             if plan is not None and name in ("browser_open", "browser_click"):
                 step = plan["steps"][plan["index"]]
                 label = args.get("link", "") if name == "browser_click" else ""
                 if step_matches(step, name, url, label):
                     on_plan = True                       # covered by the plan popup
+                    if step[0] == "open":
+                        exact_url_ok = url               # the plan popup listed this exact address
                 else:
                     wanted = f'open {url}' if name == "browser_open" else f'click the link "{_plan_text(label, 40)}"'
                     if not approved(ask_approval, "plan_changed", {"planned": show_step(step), "new": wanted}):
@@ -751,10 +758,14 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
                         continue
                     audit("plan_changed", name, args, model, note=wanted)
                     site_ok_now = True                   # that popup approved this one action
+                    # but NOT the data in the address: "leave the plan?" is a different question
 
             # An approved hostname or plan is not consent to send model-written data.
             # Paths, query names, values, and encodings all require the same gate.
-            if name in ARBITRARY_URL_TOOLS and not approved(
+            # A popup that already showed this EXACT address counts; one popup per address, not two.
+            if name in ARBITRARY_URL_TOOLS and exact_url_ok == url:
+                audit("outbound_covered", name, args, model, note="exact URL shown in the popup above")
+            elif name in ARBITRARY_URL_TOOLS and not approved(
                     ask_approval, "outbound_request", {"tool": name, "url": url}):
                 audit("outbound_refused", name, args, model, note="outbound URL not approved")
                 log(f"[blocked] {name}: outbound URL not approved")

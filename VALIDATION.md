@@ -1,3 +1,17 @@
+# One popup per address, 2026-10-19 review
+
+- Before: a brand-new site asked twice, new_site then outbound_request, both showing
+  the same full URL, and an approved plan's open step asked again. Two popups per
+  action trains you to click Yes without reading.
+- Now: a popup that already showed the EXACT URL and got Yes covers it. That means the
+  new_site popup, which now says Yes also sends this address, and a plan's open step.
+  The audit log records outbound_covered.
+- Plan open steps are refused before the plan popup if they have ? or #, are over
+  300 characters, or fail the outbound URL check. Data can't hide in step 4 of 5.
+- Still asked separately: other addresses on an approved site, fetch_page during a
+  plan, off-plan opens even after Yes on plan_changed, searches and desktop actions.
+- All offline suites pass on Linux. Windows-only live tests still need a laptop run.
+
 # Current bound-text and document quality update
 
 245 offline tests in thirteen suites and three real Windows/Tk suites passed.

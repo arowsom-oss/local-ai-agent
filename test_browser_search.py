@@ -292,7 +292,7 @@ def test_popup_even_mid_plan_without_consuming_plan_step():
         search_call(),
         tool_call("browser_open", {"url": "https://approved.example/next"}),
     ])
-    assert [name for name, _ in result.popups] == ["plan", "browser_search", "outbound_request"]
+    assert [name for name, _ in result.popups] == ["plan", "browser_search"]
     assert len(result.opened) == 2
     assert sum(event[0] == "step_done" for event in result.audit) == 1
     assert not any(event[0] == "plan_changed" for event in result.audit)
@@ -327,16 +327,24 @@ def test_every_arbitrary_url_tool_requires_exact_data_approval():
                 assert (allowed.opened if name == "browser_open" else sent) == [url]
 
 
-def test_plan_cannot_approve_model_written_data_urls():
-    for name in ("browser_open", "fetch_page"):
-        url = "https://approved.example/?q=DEMO_PRIVATE_TEXT"
+def test_plan_refuses_query_or_fragment():
+    for url in ("https://approved.example/?q=DEMO_PRIVATE_TEXT", "https://approved.example/a#DEMO",
+                "https://approved.example/" + "a" * 300, "https://user:pw@approved.example/",
+                "https://approved.example/\u200bhidden", "https://192.168.1.1/"):
+        result = run_calls([tool_call("propose_plan", {"goal": "Read", "steps": ["open " + url]})])
+        assert result.popups == [], url              # refused before you ever see it
+        assert any(e[0] == "plan_refused" for e in result.audit)
+
+
+def test_plan_does_not_cover_fetch_page_or_off_plan_urls():
+    url = "https://approved.example/page"
+    for name, other in (("fetch_page", url), ("browser_open", url + "2")):
         result = run_calls([
             tool_call("propose_plan", {"goal": "Read", "steps": ["open " + url]}),
-            tool_call(name, {"url": url}),
-        ], decisions={"outbound_request": False})
-        assert [name for name, _ in result.popups] == ["plan", "outbound_request"]
+            tool_call(name, {"url": other}),
+        ], decisions={"outbound_request": False, "plan_changed": True})
+        assert [n for n, _ in result.popups][-1] == "outbound_request", (name, result.popups)
         assert not result.opened
-        assert not any(e[0] == "step_done" for e in result.audit)
 
 
 def test_session_host_grant_does_not_approve_data():
@@ -346,11 +354,24 @@ def test_session_host_grant_does_not_approve_data():
     assert not result.opened
 
 
-def test_new_site_grant_does_not_approve_data():
+def test_new_site_popup_covers_only_the_address_it_showed():
     result = run_calls([tool_call("browser_open", {"url": "https://new.example/private"})],
                        decisions={"outbound_request": False})
-    assert [name for name, _ in result.popups] == ["new_site", "outbound_request"]
-    assert not result.opened
+    assert result.popups == [("new_site", {"host": "new.example", "url": "https://new.example/private"})]
+    assert result.opened == ["https://new.example/private"]
+    assert any(e[0] == "outbound_covered" for e in result.audit)
+    # the SECOND address on that now-approved site is not covered
+    result = run_calls([tool_call("browser_open", {"url": "https://new.example/a"}),
+                        tool_call("browser_open", {"url": "https://new.example/b?q=DEMO"})],
+                       decisions={"outbound_request": False})
+    assert [n for n, _ in result.popups] == ["new_site", "outbound_request"]
+    assert result.opened == ["https://new.example/a"]
+
+
+def test_new_site_no_means_nothing_sent():
+    result = run_calls([tool_call("browser_open", {"url": "https://new.example/private"})],
+                       decisions={"new_site": False})
+    assert [n for n, _ in result.popups] == ["new_site"] and not result.opened
 
 
 def test_malformed_urls_refused_before_popup():
@@ -464,9 +485,9 @@ def test_existing_click_plan_still_works():
     assert sum(event[0] == "step_done" for event in result.audit) == 1
 
 
-def test_open_new_site_needs_site_and_data_approval():
+def test_open_new_site_needs_one_popup():
     result = run_calls([tool_call("browser_open", {"url": "https://new.example/"})])
-    assert [name for name, _ in result.popups] == ["new_site", "outbound_request"]
+    assert [name for name, _ in result.popups] == ["new_site"]
     assert result.opened == ["https://new.example/"]
 
 

@@ -31,7 +31,7 @@ def test_desktop_is_never_covered_by_a_browser_plan():
             h.tool_call("propose_plan", {"goal": "open", "steps": ["open https://approved.example/"]}),
             h.tool_call("desktop_type", {"element": 1, "text": "hello"}),
             h.tool_call("browser_open", {"url": "https://approved.example/"})])
-    assert [p[0] for p in result.popups] == ["plan", "desktop_action", "outbound_request"]
+    assert [p[0] for p in result.popups] == ["plan", "desktop_action"]   # the plan covers the open, never the desktop
     execute.assert_called_once_with("private-token")
     assert "private-token" not in json.dumps(result.messages, default=str)
 
