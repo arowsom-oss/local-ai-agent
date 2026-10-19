@@ -16,3 +16,10 @@ __pycache__/
 *_pre_*.py
 *_backup*.py
 *_before_*.py
+
+model_cache/
+generated/
+document_workspace/
+benchmark_results.json
+workflow_evaluation*.json
+.venv/

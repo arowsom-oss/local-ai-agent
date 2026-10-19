@@ -1,0 +1,105 @@
+# Artifacts: first local version
+
+The right-hand panel is a workspace for a document, source code, image or video.
+The draggable divider changes its share of the window. It adds no cloud API or
+model dependency. A document is displayed as editable plain text, including any
+Markdown markers. Source code, HTML and SVG stay inert text: there is no browser
+renderer, run button, external URL handling or Python/JavaScript bridge.
+
+## Try it
+
+1. Start the updated window with the supplied workspace launcher.
+2. Ask: "Create a document artifact called Biology notes about cells."
+3. Select it in Artifacts. Edit the text and choose Save edit to retain a version.
+4. Select a previous Version to inspect it; Restore makes a new revision from it.
+5. Choose Export and select a new filename. No file is written just by creating,
+   revising, viewing or restoring a text artifact.
+
+New creates a blank document. From answer copies the last raw response into a
+document, retaining Markdown/code fences. Import lets the person choose local
+UTF-8 text/code or a supported image/MP4. Imported text becomes available to the
+local model through artifact tools; media is previewed only, without automatically
+sending its pixels to the model. Imported images are normalized to PNG.
+
+The model receives four strictly validated tools: create_artifact(title, kind,
+content), list_artifacts(), read_artifact(artifact), and revise_artifact(artifact,
+revision, content). Only document/code can be created through these tools; they
+accept no filesystem path, URL, destination or executable artifact kind.
+Read/list output is marked as untrusted data. Draft creation is a bounded RAM
+operation; it does not approve any other tool or bypass existing action popups.
+The normal chat/tool history can include draft text; the persistent audit contains
+only redacted metadata. Drafts are shared with the local AI, not a secrets vault.
+
+Every generated image/video is registered from its fixed local generated-output
+location, with an expected unique filename. Bytes are captured once so later
+file changes cannot silently alter the preview or export. Preview failure or a
+full artifact store does not delete a successfully generated file. An existing
+local generated file can also be imported through the person's picker.
+
+## Version and export behavior
+
+Each update names the current revision. If another model turn or the person has
+changed it, a stale update is refused. Unsaved editor text is not replaced when
+an external revision arrives; copy that text before explicitly choosing Reload.
+Historical versions are read-only; Restore appends a new version. A newly selected
+artifact asks before discarding unsaved edits.
+
+Export freezes the selected artifact/version before opening the picker. A later
+model revision cannot change those chosen bytes. Code exports are .txt, documents
+.md, image snapshots .png, video snapshots .mp4. Code is not saved as an executable
+extension. Existing destination files are refused even if the picker offers to
+replace one. A write failure can leave an incomplete destination file; the UI
+reports failure, and does not overwrite or clean up another file.
+
+Artifacts/history live only in this process for the chat. New chat clears them;
+IDs are never reused. Stop pauses playback, kills owned decoder workers and
+discards stale decoder replies; text drafts remain. No background playback or
+external media application is opened. After Stop, start a fresh turn/New chat
+before requesting another decoder preview. Ordinary OS/process memory is not a
+secure-erasure boundary. Exports/generated files persist until the person removes
+them, and this feature does not add a model file-delete tool.
+
+## Fixed limits
+
+- 20 artifacts per chat; 12 versions per text artifact; 32,000 text characters
+  per version, with control codes refused except tabs/newlines.
+- 64 MB total retained artifact payload, counting every historical version.
+- Media input/snapshot at most 20 MB. Imported image decoding retains the existing
+  10 MB, 20-megapixel, single-frame PNG/JPEG/WebP rules; prepared image exports
+  contain normalized PNG bytes, without source metadata.
+- Silent MP4 preview: one video stream, known duration up to 10 seconds, at most
+  120 decoded frames and 1,048,576 pixels per frame. Timestamps must be ordered;
+  retained decoded PNG frames total at most 12 MB. Video audio is not played.
+- Image/video decoding: 512 MB Windows Job memory bound, 15-second worker timeout,
+  local byte streams only, MP4 protocol allowlist pipe/data. Missing codecs or
+  malformed media fail closed; no download or fallback web viewer is started.
+
+## Verification
+
+13 offline plain-assert artifact tests cover real core dispatch, strict tool
+arguments, inert kinds, stale/conflicting edits, concurrent callers, memory/count/
+history limits, immutable snapshots, reset IDs, untrusted-data labels, hidden media
+bytes, generated path constraints, exact-version exports, cancellation/Stop,
+non-overwrite and protocol/duration checks. With the previous suites: 128 offline
+tests passed.
+
+A real Windows/Tk fixture passed split-panel visibility, editing/version restore,
+preservation of unsaved edits across a model change, inert script text, chosen-path
+export, actual PNG and 16-frame MP4 decoding/playback, Stop and JPEG-to-PNG import.
+Those fixtures use synthetic data and no Internet or model inference. They are
+regression checks, not proof of OS isolation, decoder safety or no remaining bugs.
+
+Actual local Ollama smoke check also passed: gemma4:e2b called create_artifact
+with code content print(42), then confirmed creation. The draft remained inert;
+no code was executed. This single run took 15.66 seconds and does not establish
+that every model request will choose the right artifact tool or produce good text.
+
+## Updated native editor appearance
+
+Artifacts shares the main window's dark/light palette. Documents use proportional
+text with emphasized Markdown heading lines; source characters remain unchanged.
+Code uses a monospace line gutter and simple display-only keyword/string/comment
+colors. The heuristic colors do not establish syntax correctness or a language
+parser. Horizontal scrolling appears when a source line exceeds the view width.
+A shorter pane omits its decorative subtitle; editor controls and safety behavior
+remain. Appearance changes do not grant execution or external network access.

@@ -1,5 +1,6 @@
 import ipaddress
 import socket
+import time
 
 import httpx
 from htmltext import html_to_text
@@ -18,6 +19,8 @@ REGIONS = {"en.wikipedia.org": "mw-content-text"}
 # click Yes. It is NOT a tool parameter, so the model has no way to add a site itself.
 session_hosts = set()
 BLOCKED_ENDINGS = (".local", ".localhost", ".internal", ".lan", ".home", ".arpa")
+MAX_PAGE_BYTES = 5_000_000
+FETCH_TIMEOUT = 10.0
 
 
 def check_new_site(url):
@@ -89,8 +92,11 @@ def fetch_page(url: str) -> str:
     """
     if not is_allowed(url):
         return "Error: site not allowed"
+    host, problem = check_new_site(url)
+    if problem or host is None:
+        return f"Error: {problem or 'invalid website address'}"
     parts = urlparse(url)
-    host = parts.hostname
+    started = time.monotonic()
     try:
         ip = safe_ip(host)
     except ValueError as e:
@@ -100,14 +106,37 @@ def fetch_page(url: str) -> str:
     ip_text = f"[{ip}]" if ip.version == 6 else str(ip)
     pinned = parts._replace(netloc=ip_text).geturl()
     try:
-        with httpx.Client(timeout=10, follow_redirects=False) as client:
-            r = client.get(pinned,
-                           headers={"User-Agent": USER_AGENT, "Host": host},   # which site we want
-                           extensions={"sni_hostname": host})   # check the certificate against the NAME
-    except httpx.HTTPError:
+        if time.monotonic() - started >= FETCH_TIMEOUT:
+            return "Error: fetch timed out"
+        with httpx.Client(timeout=FETCH_TIMEOUT, follow_redirects=False, trust_env=False) as client:
+            with client.stream("GET", pinned,
+                               headers={"User-Agent": USER_AGENT, "Host": host,
+                                        "Accept-Encoding": "identity"},
+                               extensions={"sni_hostname": host}) as r:
+                if r.is_redirect:
+                    return "Error: redirects are not followed"
+                if r.status_code != 200:
+                    return f"Error: page returned status {r.status_code}"
+                if r.headers.get("content-encoding", "identity").lower() != "identity":
+                    return "Error: compressed responses are not allowed"
+                if "attachment" in r.headers.get("content-disposition", "").lower():
+                    return "Error: attachments are not allowed"
+                length = r.headers.get("content-length")
+                if length is not None and (int(length) < 0 or int(length) > MAX_PAGE_BYTES):
+                    return "Error: response exceeds 5 MB or has an invalid length"
+                body = bytearray()
+                for chunk in r.iter_raw(chunk_size=64 * 1024):
+                    if time.monotonic() - started >= FETCH_TIMEOUT:
+                        return "Error: fetch timed out"
+                    if len(body) + len(chunk) > MAX_PAGE_BYTES:
+                        return "Error: response exceeds 5 MB"
+                    body.extend(chunk)
+                if time.monotonic() - started >= FETCH_TIMEOUT:
+                    return "Error: fetch timed out"
+                try:
+                    text = bytes(body).decode(r.encoding or "utf-8", errors="replace")
+                except LookupError:
+                    text = bytes(body).decode("utf-8", errors="replace")
+    except (httpx.HTTPError, ValueError):
         return "Error: could not fetch that page"
-    if r.is_redirect:
-        return "Error: redirects are not followed"
-    if r.status_code != 200:
-        return f"Error: page returned status {r.status_code}"
-    return html_to_text(r.text, REGIONS.get(urlparse(url).hostname))[:2000]
+    return html_to_text(text, REGIONS.get(host))[:2000]

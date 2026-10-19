@@ -7,38 +7,52 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, ttk
 from urllib.parse import urlparse
 
-from ollama import generate
-
 import attach
-from agent_core import run_turn, ALLOWED_MODELS, MODEL, SAFE, AUDIT_LOG, forget_sites
+from model_router import release_models
+from vision_input import load_image
+from desktop_tools import desktop_start, close_desktop, capture_practice, start_practice
+from process_guard import stop_all
+from media_input import prepare_media
+from browser_tool import close_browser
+from agent_core import run_turn, MODEL_CHOICES, SAFE, AUDIT_LOG, forget_sites
+from artifacts import store as artifact_store
+from artifact_panel import ArtifactPanel
+from ui_theme import PALETTES, configure_styles
+from notepad_tools import start_notepad, close_notepad
+from workspace_documents import reset_workspace, cancel_workspace, save_uncertain
+from task_progress import TaskProgress
+from progress_panel import ProgressPanel
 
 # ---- shared state -------------------------------------------------------
 messages = []            # the conversation; lives as long as the window is open
 stop_event = threading.Event()   # set by the Stop button, checked by the worker between steps
+emergency_ui = threading.Event()  # Separate watcher also runs inside modal Tk wait loops.
 events = queue.Queue()   # worker thread -> window: things to show or ask about
 busy = False             # True while the model is working on a question
+task_progress=TaskProgress()
 last_answer = ""         # the newest agent reply, for the "Copy last answer" button
-last_model = None        # the model used for the previous message
+last_raw_answer = ""     # Preserve code fences when the person copies an answer to Artifacts.
+pending_image = None     # immutable preview-approved bytes, for one turn only
+pending_media = None
 
 # Reading settings. Change these and re-run if they don't feel right for you.
-FONT_NAME = "Verdana"    # wide letters, ships with Windows
-font_size = 14
-UI_FONT = "Segoe UI"     # buttons and labels; the chat itself stays in FONT_NAME
-
-# Apple-style colors. Every widget reads its colors from here, so switching modes
-# is just "pick the other dictionary, then repaint everything".
-THEMES = {
-    "light": dict(window="#F5F5F7", card="#FFFFFF", text="#1D1D1F", subtle="#6E6E73",
-                  border="#D2D2D7", button="#E8E8ED", pressed="#D2D2D7",
-                  accent="#007AFF", on_accent="#FFFFFF", select="#B3D7FF",
-                  red="#D70015", green="#248A3D", orange="#C93400"),
-    "dark": dict(window="#1C1C1E", card="#2C2C2E", text="#F5F5F7", subtle="#98989D",
-                 border="#3A3A3C", button="#3A3A3C", pressed="#48484A",
-                 accent="#0A84FF", on_accent="#FFFFFF", select="#3F638B",
-                 red="#FF6961", green="#30DB5B", orange="#FFB340"),
-}
-theme_name = "light"
+FONT_NAME = "Segoe UI"
+font_size = 12
+UI_FONT = "Segoe UI"
+THEMES = PALETTES
+theme_name = "dark"
 buttons = []             # every button made by make_button, so apply_theme can repaint them
+notepad_status=None
+NOTEPAD_PHASES={"closed":"Notepad · closed","ready":"Notepad · ready to read",
+    "observed":"Notepad · draft observed","review":"Notepad · awaiting approval",
+    "applying":"Notepad · applying & verifying","verified":"Notepad · edit verified",
+    "paused":"Notepad · paused — review draft"}
+
+
+def set_notepad_phase(phase):
+    if phase not in NOTEPAD_PHASES:return
+    if stop_event.is_set() and phase!="closed":return
+    if notepad_status is not None:notepad_status.set(NOTEPAD_PHASES[phase])
 
 
 def T(key):
@@ -56,6 +70,12 @@ WHAT_IT_DOES = {
     "fetch_page": "CONTACTS THE INTERNET",
     "new_site": "WANTS TO READ A NEW WEBSITE (read only, this chat only)",
     "download_file": "SAVES A FILE onto your computer from the internet",
+    "browser_open": "OPENS A WEB PAGE in the read-only browser",
+    "browser_click": "CLICKS A LINK in the read-only browser",
+    "browser_search": "SUBMITS A SEARCH on a website",
+    "outbound_request": "SENDS THIS EXACT ADDRESS TO A WEBSITE",
+    "desktop_start": "OPENS AN OWNED PRACTICE WINDOW (RAM-only draft; no real applications)",
+    "notepad_start": "OPENS A NEW CLASSIC NOTEPAD SCRATCH WINDOW",
 }
 
 
@@ -67,38 +87,145 @@ def ask_approval(name, args):
     return answer_box.get() is True   # blocks until the window answers; only True means yes
 
 
-def unload(model):
-    """Ask Ollama to free the VRAM a model is using. Best effort: a failure is shown, not hidden."""
+def worker(text, model, image=None, observation=None, progress_serial=None, resume=False):
     try:
-        generate(model=model, keep_alive=0)
-    except Exception as e:
-        events.put(("log", f"could not unload {model}: {e}"))
-
-
-def worker(text, model, old_model):
-    try:
-        if old_model and old_model != model:
-            unload(old_model)
         answer, seconds = run_turn(
             messages, text, ask_approval,
             log=lambda line: events.put(("log", line)),
-            model=model, stop_event=stop_event)
+            model=model, stop_event=stop_event, image=image, observation_text=observation,
+            on_progress=lambda **event:task_progress.event(progress_serial,**event),resume=resume)
         events.put(("answer", answer, seconds))
     except Exception as e:            # top of the thread: show the error instead of dying silently
+        task_progress.event(progress_serial,'finish',status='Failed')
         events.put(("error", str(e)))
 
 
 # ---- the window (everything below runs on the main thread) ---------------
+def high_risk_confirm(title, lines):
+    """Modal red approval dialog. No starts focused; Enter, Escape and close deny."""
+    answer = False
+    win = tk.Toplevel(root)
+    win._approval_dialog = True
+    win.title(title)
+    win.transient(root)
+    win.configure(bg=T("window"))
+    width, height = min(720, win.winfo_screenwidth() - 80), min(480, win.winfo_screenheight() - 120)
+    x, y = max(0, (win.winfo_screenwidth() - width) // 2), max(0, (win.winfo_screenheight() - height) // 2)
+    win.geometry(f"{width}x{height}+{x}+{y}")
+    win.minsize(540, 360)
+    tk.Label(win, text="HIGH RISK - EXPLICIT APPROVAL REQUIRED", bg="#B91C1C", fg="white",
+             font=(UI_FONT, 12, "bold"), padx=16, pady=14).pack(fill="x")
+    # Reserve button space FIRST so the scrolling text cannot hide the controls.
+    row = tk.Frame(win, bg=T("window"))
+    row.pack(side="bottom", fill="x", padx=12, pady=(0, 12))
+    holder, box = scroll_box(win, wrap="word", bg=T("card"), fg=T("text"),
+                             font=(FONT_NAME, 12), padx=14, pady=12, relief="flat")
+    holder.pack(fill="both", expand=True, padx=12, pady=12)
+    box.insert("end", "\n".join(lines))
+    box.configure(state="disabled")
+
+    def finish(allow=False):
+        nonlocal answer
+        answer = allow is True
+        win.destroy()
+
+    tk.Button(row, text="Yes, allow this action", command=lambda: finish(True),
+              bg="#B91C1C", fg="white", padx=12, pady=8).pack(side="left")
+    no = tk.Button(row, text="No", command=finish, default="active", padx=24, pady=8)
+    no.pack(side="right")
+    win.protocol("WM_DELETE_WINDOW", finish)
+    win.bind("<Escape>", lambda event: finish())
+    win.bind("<Return>", lambda event: finish())
+    win.wait_visibility()
+    win.grab_set()
+    no.focus_set()
+    root.wait_window(win)
+    return answer
+
+
 def confirm(name, args):
     """Pop up the approval question. Returns True only if the person clicks Yes."""
+    if name == "workspace_access":
+        return high_risk_confirm("Allow document workspace", [
+            "ALLOW LOCAL AI TO READ SAVED WORKSPACE DOCUMENTS FOR THIS CHAT", "",
+            "Fixed folder:",args.get("folder",""),"",
+            "Only numbered, bounded plain-text documents in this folder are supported.",
+            "Every save needs a separate exact preview. Saved documents remain after New chat.",
+            "New chat forgets access approval. No existing file is overwritten or deleted. Allow?"])
+    if name == "document_save_exact":
+        from workspace_panel import comparison
+        return high_risk_confirm("Approve exact document save",[
+            "SAVE A NEW PLAIN TEXT VERSION ON DISK", "", "Folder:",args.get("folder",""),
+            "New file:",args.get("file",""),"", "Text comparison:",comparison(args.get('before',''),args.get('after','')),"", "Before (JSON text):",
+            json.dumps(args.get("before"),ensure_ascii=False),"", "After (exact JSON text):",
+            json.dumps(args.get("after"),ensure_ascii=False),"",
+            "Earlier files remain as recovery copies. Code verifies the complete saved bytes.",
+            "Saved documents persist after New chat. This approval covers only the displayed text. Allow?"])
+    if name == "notepad_start":
+        return high_risk_confirm("Open scratch Notepad", [WHAT_IT_DOES[name], "",
+            "This is a separate classic Notepad process, starting with an empty document.",
+            "Existing windows and modern Notepad tabs are not connected.",
+            "Edits are limited to 2000 characters and each needs its own exact preview.",
+            "The agent cannot open, save, print, click menus or switch documents.", "",
+            "Stop, New chat or closing Local Studio discards this owned scratch window.",
+            "Keep personal work in your usual Notepad windows. Open this scratch session?"])
+    if name == "notepad_action":
+        return high_risk_confirm("Approve exact Notepad edit", [
+            "REPLACE TEXT IN THE OWNED NOTEPAD SCRATCH DOCUMENT", "",
+            f"Window: {args.get('window')}", "Before (JSON text):",
+            json.dumps(args.get("before"), ensure_ascii=False), "", "After (exact JSON text):",
+            json.dumps(args.get("after"), ensure_ascii=False), "",
+            "No file will be opened or saved by this action. Code rechecks the target and reads the result back.",
+            "This edit always needs its own approval. Allow?"])
+    if name == "desktop_action":
+        return high_risk_confirm("Approve exact practice change", [
+            "PRACTICE APP ONLY - THIS CHANGE NEEDS ITS OWN APPROVAL", "",
+            f"Control: {args.get('control')}", f"Action: {args.get('action')}", "",
+            "Before:", json.dumps(args.get("before"), ensure_ascii=False, indent=2), "",
+            "After (exact proposed values):", json.dumps(args.get("after"), ensure_ascii=False, indent=2), "",
+            "Code rechecks the target and verifies the result. Allow this one action?"])
+    if name == "generation":
+        return high_risk_confirm("Approve local generation", [
+            "GENERATES A NEW LOCAL FILE USING GPU/RAM", "", f"Kind: {args.get('kind')}",
+            "Exact prompt:", args.get("prompt", ""), "", f"Limits: {args.get('limits')}",
+            f"Output: {args.get('output')}", "", "No cloud inference or automatic weight download. Allow?"])
+    if name == "desktop_start":
+        return high_risk_confirm("Open practice app", [WHAT_IT_DOES[name], "",
+            "Desktop actions are restricted to that owned window. F12 stops owned workers.",
+            "This is a practice boundary, not an OS security sandbox. Open it?"])
+    if name == "plan":
+        lines = ["WANTS TO FOLLOW THIS PLAN (open approved sites and click links only)", "",
+                 f"Goal: {args.get('goal')}", ""]
+        lines += [f"{i}. {s}" for i, s in enumerate(args.get("steps", []), 1)]
+        lines += ["", "Each open step sends exactly the address shown. Plans can't hold ? or #.",
+                  "Other addresses, searches and new websites still need separate approval.",
+                  "Approve the whole plan?"]
+        return messagebox.askyesno("Approve plan", "\n".join(lines), default="no", icon="warning") is True
+    if name == "plan_changed":
+        lines = ["THE AGENT WANTS TO LEAVE ITS PLAN", "",
+                 f"Planned step:  {args.get('planned')}", f"Wants instead: {args.get('new')}", "",
+                 "Yes = allow just this one action.   No = stop the plan."]
+        return messagebox.askyesno("Plan changed", "\n".join(lines), default="no", icon="warning") is True
     if name == "new_site":                       # the site name here was read by code, not the model
         lines = [WHAT_IT_DOES["new_site"], "", f"Site:  {args.get('host')}", "",
                  f"Full address: {args.get('url')}", "",
+                 "Yes also sends this exact address. It can hold private data in its path.",
                  "Check the site name carefully. Allow reading it for this chat?"]
-        return messagebox.askyesno("New website", "\n".join(lines),
-                                   default="no", icon="warning") is True
+        return high_risk_confirm("New website", lines)
+    if name == "browser_search":
+        lines = [WHAT_IT_DOES["browser_search"], "", f"Box: {args.get('box')}", "",
+                 "Exact search text:", args.get("text", ""), "",
+                 f"Full URL: {args.get('url')}", "", "Allow this search?"]
+        return high_risk_confirm("Approve search", lines)
+    if name == "outbound_request":
+        lines = [WHAT_IT_DOES[name], "", f"Tool: {args.get('tool')}", "",
+                 "Full URL (exact address):", args.get("url", ""), "",
+                 "An address can contain private data in its path or query, even on an approved site.",
+                 "Site approval and plans do not approve sending this data.", "",
+                 "Allow this one request?"]
+        return high_risk_confirm("Approve outbound address", lines)
     lines = [WHAT_IT_DOES.get(name, "RUNS A TOOL"), "", f"Tool: {name}"]
-    if name in ("fetch_page", "download_file"):
+    if name in ("fetch_page", "download_file", "browser_open", "browser_click"):
         try:
             lines.append(f"Site: {urlparse(str(args.get('url', ''))).hostname}")
         except ValueError:
@@ -110,7 +237,7 @@ def confirm(name, args):
 
 def apply_font():
     chat_box.configure(font=(FONT_NAME, font_size))
-    chat_box.tag_configure("name", font=(FONT_NAME, font_size, "bold"))
+    chat_box.tag_configure("name", font=(UI_FONT, 9, "bold"), spacing1=12, spacing3=6)
     entry.configure(font=(FONT_NAME, font_size))
 
 
@@ -185,9 +312,16 @@ def clean(text):
 
 
 def show(who, text):
+    global welcome_visible
+    if who == "You" and welcome_visible:
+        chat_box.configure(state="normal")
+        ranges = chat_box.tag_ranges("welcome_block")
+        if ranges:
+            chat_box.delete(ranges[0],ranges[-1])
+        welcome_visible=False
     kind = {"You": "you", "Agent": "agent", "Error": "error", "Blocked": "blocked"}.get(who, "note")
     chat_box.configure(state="normal")
-    chat_box.insert("end", f"{who}: ", ("name", kind))       # a Tk tag list: both tags apply
+    chat_box.insert("end", f"{who.upper()}\n", ("name", kind))       # a Tk tag list: both tags apply
     chat_box.insert("end", f"{text}\n\n", (kind + "_body",))
     chat_box.configure(state="disabled")
     chat_box.see("end")
@@ -236,14 +370,34 @@ def start_spin():
 
 
 def stop_agent():
-    """Stop button (or Esc): the step already running finishes, then nothing new runs."""
-    if not busy or stop_event.is_set():
-        return
+    """Kill owned automation workers and revoke pending images/approvals."""
+    global pending_image, pending_media
     stop_event.set()
+    task_progress.stop()
+    pending_image = pending_media = None
+    stop_all()  # Kill owned process trees; does not wait for a blocked UIA call.
+    close_desktop()
+    close_notepad()
+    cancel_workspace()
+    set_notepad_phase("closed")
+    artifact_panel.stop()
+    for window in root.winfo_children():
+        if getattr(window, "_approval_dialog", False):
+            window.event_generate("<Escape>")
+    if not busy:
+        show("Stop", "owned workers stopped. Any owned scratch Notepad was closed and its draft discarded.")
+        return
     stop_button.configure(state="disabled", text="Stopping...")
     remove_pending()
-    show("Stop", "stopping after the current step. Nothing new will run.")
+    show("Stop", "owned workers stopped; any owned scratch Notepad was closed. A browser or Ollama call may still be finishing; no new action is allowed.")
     add_pending()
+
+
+def watch_emergency():
+    if emergency_ui.is_set():
+        emergency_ui.clear()
+        stop_agent()
+    root.after(50, watch_emergency)
 
 
 def finish_turn():
@@ -276,23 +430,292 @@ def attach_file():
         entry.focus_set()
 
 
+def preview_image(image, on_approve=None):
+    """The person approves the exact normalized pixels, not a model-supplied path."""
+    from io import BytesIO
+    from PIL import Image, ImageTk
+    answer = False
+    win = tk.Toplevel(root)
+    win._approval_dialog = True
+    win.title("Preview image for local analysis")
+    win.transient(root)
+    width = min(760, win.winfo_screenwidth() - 80)
+    height = min(640, win.winfo_screenheight() - 100)
+    win.geometry(f"{width}x{height}")
+    row = tk.Frame(win)
+    row.pack(side="bottom", fill="x", padx=12, pady=12)  # Keep No visible at display scaling.
+    tk.Label(win, text="This image will be sent only to the local model when you press Send.\n"
+                       "Check for passwords, private chats and other sensitive information.\n"
+                       "Analysis only: this image cannot trigger computer actions.",
+             wraplength=width - 40, padx=12, pady=12).pack()
+    original = image
+    display_width, display_height = max(100, width - 40), max(100, height - 240)
+    mode = tk.StringVar(value="hide")
+    tools = tk.Frame(win)
+    tools.pack()
+    tk.Radiobutton(tools, text="Drag to hide area", variable=mode, value="hide").pack(side="left")
+    tk.Radiobutton(tools, text="Drag to crop", variable=mode, value="crop").pack(side="left")
+    with Image.open(BytesIO(image.png)) as source:
+        source.thumbnail((display_width, display_height))
+        photo = ImageTk.PhotoImage(source)
+    canvas = tk.Canvas(win, width=photo.width(), height=photo.height(), highlightthickness=0)
+    canvas.pack(padx=12, pady=8)
+    canvas.create_image(0, 0, image=photo, anchor="nw")
+    origin = None
+
+    def render():
+        nonlocal photo
+        with Image.open(BytesIO(image.png)) as source:
+            source.thumbnail((display_width, display_height))
+            photo = ImageTk.PhotoImage(source)
+        canvas.configure(width=photo.width(), height=photo.height())
+        canvas.delete("all")
+        canvas.create_image(0, 0, image=photo, anchor="nw")
+        details.configure(text=f"Prepared image: {image.width} x {image.height}; {len(image.png):,} bytes")
+
+    def begin(event):
+        nonlocal origin
+        origin = (event.x, event.y)
+
+    def end(event):
+        nonlocal image, origin
+        if origin is None:
+            return
+        from image_privacy import edit_image
+        x1, x2 = sorted((origin[0], event.x))
+        y1, y2 = sorted((origin[1], event.y))
+        rectangle = (max(0, int(x1 * image.width / photo.width())),
+                     max(0, int(y1 * image.height / photo.height())),
+                     min(image.width, int(x2 * image.width / photo.width())),
+                     min(image.height, int(y2 * image.height / photo.height())))
+        origin = None
+        try:
+            image = edit_image(image, rectangle, crop=mode.get() == "crop")
+            render()
+        except ValueError:
+            pass  # An empty/outside drag changes nothing.
+
+    def reset():
+        nonlocal image
+        image = original
+        render()
+
+    tk.Button(tools, text="Reset", command=reset).pack(side="left")
+    canvas.bind("<ButtonPress-1>", begin)
+    canvas.bind("<ButtonRelease-1>", end)
+    details = tk.Label(win, text=f"Prepared image: {image.width} x {image.height}; {len(image.png):,} bytes")
+    details.pack()
+
+    def finish(allow=False):
+        nonlocal answer
+        answer = allow is True
+        if answer and on_approve is not None:
+            on_approve(image)  # Exact edited pixels, never the original behind them.
+        win.destroy()
+
+    tk.Button(row, text="Use this image", command=lambda: finish(True)).pack(side="left")
+    no = tk.Button(row, text="No", command=finish, default="active")
+    no.pack(side="right")
+    win.bind("<Return>", lambda event: finish())
+    win.bind("<Escape>", lambda event: finish())
+    win.protocol("WM_DELETE_WINDOW", finish)
+    win.wait_visibility()
+    win.grab_set()
+    no.focus_set()
+    root.wait_window(win)
+    return answer
+
+
+def stage_image(image):
+    global pending_image, pending_media
+    prepared = []
+    if (preview_image(image, on_approve=prepared.append) is not True or len(prepared) != 1
+            or stop_event.is_set()):
+        return
+    pending_image = prepared[0]
+    pending_media = None
+    show("Image", "One preview-approved image is ready for the next message. It is not saved to disk.")
+    if not entry.get().strip():
+        entry.insert(0, "Describe what is visible in this image and mention anything uncertain.")
+
+
+def attach_image():
+    if busy:
+        return
+    stop_event.clear()
+    path = filedialog.askopenfilename(title="Choose an image or saved screenshot",
+                                     filetypes=[("Images", "*.png *.jpg *.jpeg *.webp")])
+    if not path or stop_event.is_set():
+        return
+    try:
+        stage_image(load_image(path))
+    except Exception:
+        show("Error", "Could not prepare that image within the image limits.")
+
+
+def screenshot():
+    """One capture only; never a background watcher or model-callable tool."""
+    if busy:
+        return
+    stop_event.clear()
+    if messagebox.askyesno("Capture practice window?",
+            "Capture only the owned practice window once?\n"
+            "You will preview it before choosing whether to attach it.", default="no") is not True or stop_event.is_set():
+        return
+    root.withdraw()
+
+    def capture():
+        try:
+            image = capture_practice()
+        except Exception:
+            root.deiconify()
+            show("Error", "Open the practice environment first; no other window can be captured.")
+            return
+        root.deiconify()
+        stage_image(image)
+
+    root.after(350, capture)  # Allow Windows to hide this window before capturing.
+
+
+def clear_image():
+    global pending_image, pending_media
+    if not busy:
+        pending_image = None
+        pending_media = None
+        show("Image", "Pending image cleared.")
+
+
+def free_vram():
+    if busy:
+        show("Memory", "Wait for the current request to finish before unloading its model.")
+        return
+    threading.Thread(target=lambda: events.put(("memory", release_models())), daemon=True).start()
+
+
+def start_background(target, reset_stop=True):
+    global busy
+    if busy:
+        return
+    busy = True
+    if reset_stop:
+        stop_event.clear()
+    send_button.configure(state="disabled")
+    model_box.configure(state="disabled")
+    stop_button.configure(state="normal", text="Stop")
+    add_pending()
+    start_spin()
+    threading.Thread(target=target, daemon=True).start()
+
+
+def open_practice():
+    if busy:
+        return
+    stop_event.clear()
+    if confirm("desktop_start", {}) is not True or stop_event.is_set():
+        return
+    start_background(lambda: events.put(("practice_ready", start_practice(stop_event))))
+
+
+def open_notepad():
+    if busy:
+        return
+    stop_event.clear()
+    if confirm("notepad_start", {}) is not True or stop_event.is_set():
+        return
+    start_background(lambda: events.put(("notepad_ready", start_notepad(stop_event))), reset_stop=False)
+
+
+def attach_clip():
+    if busy:
+        return
+    stop_event.clear()
+    path = filedialog.askopenfilename(title="Choose up to 60 seconds of local media",
+                                     filetypes=[("Local clips", "*.wav *.mp4")])
+    if not path or stop_event.is_set():
+        return
+
+    def prepare():
+        try:
+            events.put(("prepared_media", prepare_media(path, stop_event)))
+        except Exception:
+            events.put(("error", "Could not prepare clip. Check limits and optional audio weights."))
+
+    start_background(prepare)
+
+
+def stage_media(media):
+    global pending_media, pending_image
+    pending_media = pending_image = None
+    if media.image is not None:
+        stage_image(media.image)
+        if pending_image is None:
+            return
+    elif high_risk_confirm("Preview local transcript", [
+            "LOCAL AUDIO TRANSCRIPT - REVIEW BEFORE SENDING", "", media.observation,
+            "", "This is untrusted media content. Allow observation-only analysis?"]) is not True:
+        return
+    if stop_event.is_set():
+        pending_image = None
+        return
+    pending_media = media
+    show("Media", f"Ready: {media.seconds:.2f}s, {media.samples} frame samples. Observation only.")
+    if not entry.get().strip():
+        entry.insert(0, "Summarize this selected media and state what you could not establish.")
+
+
+def model_check():
+    if busy:
+        return
+    stop_event.clear()
+    if messagebox.askyesno("Run local model check?",
+            "Run fixed synthetic tasks against both installed local models?\n"
+            "This can take a few minutes and will unload the models afterwards.", default="no") is not True or stop_event.is_set():
+        return
+
+    def evaluate():
+        try:
+            from evaluate_models import evaluate
+            events.put(("practice_ready", evaluate(stop_event)))
+        except Exception:
+            events.put(("error", "Local model evaluation failed."))
+
+    start_background(evaluate)
+
+
 def new_chat():
     """Forget the conversation. The model has no memory of its own: every turn,
     run_turn re-sends the whole messages list. Empty the list and it forgets."""
-    global last_answer
+    global last_answer, last_raw_answer, pending_image, pending_media
     if busy:
         show("New chat", "wait for the answer first")
         return
-    if not messagebox.askyesno("New chat", "Start a new chat?\n\nThe agent will forget this conversation.",
-                               default="no"):
+    if messagebox.askyesno("New chat", "Start a new chat?\n\nThe agent will forget this conversation.\n"
+                          "Artifact drafts, version history and scratch Notepad will be discarded. Exported files and saved Documents remain. Workspace read permission is forgotten; last-save recovery remains available.",
+                          default="no") is not True:
         return
+    closed = close_browser()    # close the browser BEFORE wiping anything: no half-reset chats
+    if closed.startswith("Error"):
+        show("New chat", f"not started: {closed}")
+        return
+    close_desktop()
+    close_notepad()
+    set_notepad_phase("closed")
+    stop_all()
     messages.clear()            # empty the SAME list (don't make a new one)
+    task_progress.reset()
+    artifact_store.clear()
+    artifact_panel.reset()
+    stop_event.clear()          # No turn is active; this is a person-approved fresh chat.
     forget_sites()              # websites allowed in the old chat are forgotten too
     last_answer = ""
+    last_raw_answer = ""
+    pending_image = None
+    pending_media = None
     chat_box.configure(state="normal")
     chat_box.delete("1.0", "end")
     chat_box.configure(state="disabled")
     show("New chat", "started. The agent has forgotten everything before this.")
+    free_vram()
     entry.focus_set()
 
 
@@ -350,8 +773,22 @@ def show_log():
     box.see("end")
 
 
-def send(event=None):
-    global busy, last_model
+def resume_task():
+    if busy or pending_image is not None or pending_media is not None:return
+    if save_uncertain():
+        show('Task','The last save is unconfirmed. Open Documents and choose Check last save before resuming.')
+        return
+    if entry.get().strip():
+        show('Task','Your unsent message is preserved. Send or clear it before resuming the checkpoint.')
+        return
+    try:text=task_progress.resume_request()
+    except ValueError:return
+    entry.delete(0,'end');entry.insert(0,text)
+    send(resume=True)
+
+
+def send(event=None,resume=False):
+    global busy, pending_image, pending_media
     text = entry.get().strip()
     if not text or busy:
         return
@@ -360,18 +797,21 @@ def send(event=None):
     add_pending()
     start_spin()
     model = model_var.get()                      # read it here, on the main thread
-    old_model, last_model = last_model, model
+    image, pending_image = pending_image, None
+    observation = pending_media.observation if pending_media is not None else None
+    pending_media = None
     busy = True
+    progress_serial=task_progress.begin('' if image is not None or observation is not None else text,resume=resume)
     send_button.configure(state="disabled")
     model_box.configure(state="disabled")
     stop_event.clear()                           # a fresh turn starts un-stopped
     stop_button.configure(state="normal", text="Stop")
-    threading.Thread(target=worker, args=(text, model, old_model), daemon=True).start()
+    threading.Thread(target=worker, args=(text, model, image, observation,progress_serial,resume), daemon=True).start()
 
 
 def poll():
     """Every 100 ms, look for news from the worker thread."""
-    global last_answer
+    global last_answer, last_raw_answer
     try:
         while True:
             item = events.get_nowait()
@@ -379,6 +819,8 @@ def poll():
             if kind == "log":
                 remove_pending()
                 line = item[1]
+                if line.startswith("[notepad] "):
+                    set_notepad_phase(line[len("[notepad] "):])
                 if line.startswith("[blocked] "):      # code refused something: say so in the chat
                     show("Blocked", line[len("[blocked] "):])
                 else:
@@ -386,15 +828,34 @@ def poll():
                 add_pending()          # still working, so thinking... goes back underneath
             elif kind == "ask":
                 _, name, args, answer_box = item
-                answer_box.put(confirm(name, args))
+                answer_box.put(False if stop_event.is_set() else confirm(name, args))
             elif kind == "answer":
                 remove_pending()
+                last_raw_answer = str(item[1] or "")
                 last_answer = clean(item[1])
                 show("Agent", f"{last_answer}\n[{item[2]:.2f}s]")
                 finish_turn()
             elif kind == "error":
                 remove_pending()
                 show("Error", item[1])
+                finish_turn()
+            elif kind == "memory":
+                show("Memory", item[1])
+            elif kind == "emergency_stop":
+                stop_agent()
+            elif kind == "prepared_media":
+                remove_pending()
+                finish_turn()
+                if not stop_event.is_set():
+                    stage_media(item[1])
+            elif kind == "practice_ready":
+                remove_pending()
+                show("Practice", item[1])
+                finish_turn()
+            elif kind == "notepad_ready":
+                remove_pending()
+                set_notepad_phase("paused" if item[1].startswith("Error:") else "ready")
+                show("Notepad",item[1])
                 finish_turn()
     except queue.Empty:
         pass
@@ -422,46 +883,39 @@ def make_button(parent, text, command, kind="plain", **extra):
 
 
 def apply_theme():
-    """Repaint every widget with the current mode's colors. Purely visual: no logic lives here."""
+    """Apply the shared palette to both workspaces and existing safety dialogs."""
+    palette = THEMES[theme_name]
     root.configure(bg=T("window"))
-    for frame in (toolbar, bottom, chat_holder):
-        frame.configure(bg=T("window"))
+    configure_styles(style, palette)
+    for widget, key in theme_surfaces:
+        widget.configure(bg=T(key))
+    for widget, foreground, background in theme_labels:
+        widget.configure(fg=T(foreground), bg=T(background))
     chat_box.configure(bg=T("card"), fg=T("text"), insertbackground=T("text"),
                        selectbackground=T("select"), selectforeground=T("text"),
-                       highlightbackground=T("border"), highlightcolor=T("border"))
-    chat_box.tag_configure("you", foreground=T("accent"))
-    chat_box.tag_configure("agent", foreground=T("text"))
-    chat_box.tag_configure("note", foreground=T("subtle"))
-    chat_box.tag_configure("note_body", foreground=T("subtle"))
-    chat_box.tag_configure("error", foreground=T("red"))
-    chat_box.tag_configure("error_body", foreground=T("red"))
-    chat_box.tag_configure("blocked", foreground=T("orange"))
-    chat_box.tag_configure("blocked_body", foreground=T("orange"))
-    chat_box.tag_configure("pending", foreground=T("subtle"))
-    entry.configure(bg=T("card"), fg=T("text"), insertbackground=T("text"),
-                    selectbackground=T("select"), selectforeground=T("text"),
-                    highlightbackground=T("border"), highlightcolor=T("accent"))
-    for b, kind in buttons:
-        if kind == "accent":
-            b.configure(bg=T("accent"), fg=T("on_accent"), activebackground=T("accent"),
-                        activeforeground=T("on_accent"), disabledforeground=T("select"))
-        else:
-            b.configure(bg=T("button"), fg=T("red") if kind == "danger" else T("text"),
-                        activebackground=T("pressed"), activeforeground=T("text"),
-                        disabledforeground=T("subtle"))
-    style.configure("TCombobox", fieldbackground=T("card"), background=T("button"),
-                    foreground=T("text"), arrowcolor=T("text"), bordercolor=T("border"),
-                    lightcolor=T("card"), darkcolor=T("card"))
-    style.map("TCombobox", fieldbackground=[("readonly", T("card"))],
-              foreground=[("readonly", T("text"))], selectbackground=[("readonly", T("card"))],
-              selectforeground=[("readonly", T("text"))])
-    style.configure("Vertical.TScrollbar", background=T("button"), troughcolor=T("card"),
-                    bordercolor=T("card"), arrowcolor=T("subtle"),
-                    lightcolor=T("button"), darkcolor=T("button"))
-    style.map("Vertical.TScrollbar", background=[("active", T("pressed"))])
-    root.option_add("*TCombobox*Listbox.background", T("card"))   # the drop-down list
-    root.option_add("*TCombobox*Listbox.foreground", T("text"))
-    theme_button.configure(text="Light mode" if theme_name == "dark" else "Dark mode")
+                       highlightbackground=T("card"), highlightcolor=T("card"))
+    for role, color in (("you", "accent"), ("agent", "text"), ("note", "subtle"),
+                        ("error", "red"), ("blocked", "orange"), ("pending", "subtle")):
+        chat_box.tag_configure(role, foreground=T(color))
+        chat_box.tag_configure(role + "_body", foreground=T(color if role in ("note","error","blocked") else "text"))
+    chat_box.tag_configure("you_body", background=T("bubble"), lmargin1=12, lmargin2=12,
+                           rmargin=12, spacing1=4, spacing3=8)
+    chat_box.tag_configure("welcome_title", foreground=T("text"), font=(UI_FONT,23,"bold"),spacing3=14)
+    chat_box.tag_configure("welcome_body",foreground=T("subtle"),font=(UI_FONT,12),spacing3=14)
+    entry.configure(bg=T("field"),fg=T("text"),insertbackground=T("accent"),
+                    selectbackground=T("select"),selectforeground=T("text"),
+                    highlightbackground=T("border"),highlightcolor=T("accent"))
+    for button, kind in buttons:
+        accent = kind == "accent"
+        button.configure(bg=T("accent" if accent else "button"),
+                         fg=T("on_accent" if accent else "red" if kind=="danger" else "text"),
+                         activebackground=T("accent" if accent else "pressed"),
+                         activeforeground=T("on_accent" if accent else "text"),disabledforeground=T("subtle"))
+    root.option_add("*TCombobox*Listbox.background",T("field"))
+    root.option_add("*TCombobox*Listbox.foreground",T("text"))
+    theme_button.configure(text="Light appearance" if theme_name=="dark" else "Dark appearance")
+    artifact_panel.apply_theme(palette)
+    if 'progress_panel' in globals():progress_panel.render(task_progress.snapshot())
 
 
 def toggle_theme():
@@ -470,56 +924,130 @@ def toggle_theme():
     apply_theme()
 
 
-root = tk.Tk()
-root.title("Local agent")
-root.minsize(860, 420)       # narrower than this and the toolbar gets cut off
-style = ttk.Style(root)
-style.theme_use("clam")      # the only built-in ttk look that accepts custom colors
 
-# Pack order matters: the bottom rows go in FIRST, so when the window is short
-# the chat area shrinks instead of the buttons getting pushed off the screen.
-bottom = tk.Frame(root)
-bottom.pack(side="bottom", fill="x", padx=12, pady=12)
-toolbar = tk.Frame(root)
-toolbar.pack(side="bottom", fill="x", padx=12)
-chat_holder, chat_box = scroll_box(
-    root, state="disabled", wrap="word", width=70, height=22,
-    spacing2=6, spacing3=10,             # extra space between lines and between messages
-    relief="flat", bd=0, padx=16, pady=12, highlightthickness=1)
-chat_holder.pack(padx=12, pady=(12, 6), fill="both", expand=True)
+def build_window():
+    global notepad_status
+    global root, style, bottom, toolbar, vision_toolbar, chat_holder, chat_box, copy_button, attach_button, model_var, model_box, theme_button, send_button, stop_button, entry, artifact_panel, theme_surfaces, theme_labels, welcome_visible
+    root = tk.Tk()
+    root.title("Local Studio")
+    root.minsize(1100, 680)
+    root.geometry("1440x900")
+    style = ttk.Style(root)
+    style.theme_use("clam")
+    theme_surfaces, theme_labels = [], []
 
-copy_button = make_button(toolbar, "Copy last answer", lambda: copy_text(last_answer))
-copy_button.pack(side="left")
-attach_button = make_button(toolbar, "Attach file", attach_file)
-attach_button.pack(side="left", padx=(6, 0))
-make_button(toolbar, "New chat", new_chat).pack(side="left", padx=(6, 0))
-make_button(toolbar, "Audit log", show_log).pack(side="left", padx=(6, 0))
-model_var = tk.StringVar(value=MODEL)
-model_box = ttk.Combobox(toolbar, textvariable=model_var, values=ALLOWED_MODELS,
-                         state="readonly", width=14, font=(UI_FONT, 10))
-model_box.pack(side="left", padx=8)
-make_button(toolbar, "A+", lambda: change_size(2)).pack(side="right")
-make_button(toolbar, "A-", lambda: change_size(-2)).pack(side="right", padx=(0, 6))
-theme_button = make_button(toolbar, "Dark mode", toggle_theme)
-theme_button.pack(side="right", padx=(0, 6))
+    def surface(parent, color="window", **options):
+        frame = tk.Frame(parent, bd=0, **options)
+        theme_surfaces.append((frame,color))
+        return frame
 
-# Same idea: buttons packed before the stretchy entry, so the entry can't squeeze them.
-send_button = make_button(bottom, "Send", send, kind="accent")
-send_button.pack(side="right", padx=(8, 0))
-stop_button = make_button(bottom, "Stop", stop_agent, kind="danger", state="disabled")
-stop_button.pack(side="right", padx=(8, 0))
-entry = tk.Entry(bottom, width=60, relief="flat", bd=0, highlightthickness=1)
-entry.pack(side="left", fill="x", expand=True, ipady=7)       # ipady = taller box, room to breathe
-entry.bind("<Return>", send)
-root.bind("<Escape>", lambda e: stop_agent())   # Esc works too, for fast reaction time
+    def label(parent, text, size=10, color="subtle", background="window", bold=False, **options):
+        widget = tk.Label(parent,text=text,font=(UI_FONT,size,"bold" if bold else "normal"),anchor="w",**options)
+        theme_labels.append((widget,color,background))
+        return widget
 
-apply_font()
-apply_theme()
-add_context_menu(chat_box, can_paste=False)
-add_context_menu(entry, can_paste=True)
-chat_box.bind("<Button-1>", lambda e: chat_box.focus_set())   # so Ctrl+C reaches the chat box
+    sidebar = surface(root,"sidebar",width=170)
+    sidebar.pack(side="left",fill="y")
+    sidebar.pack_propagate(False)
+    label(sidebar,"LOCAL",10,"accent","sidebar",True).pack(anchor="w",padx=22,pady=(30,2))
+    label(sidebar,"Studio",24,"text","sidebar",True).pack(anchor="w",padx=20,pady=(0,24))
+    make_button(sidebar,"+  New chat",new_chat,kind="accent").pack(fill="x",padx=16,pady=(0,30))
+    label(sidebar,"WORKSPACE",9,background="sidebar",bold=True).pack(anchor="w",padx=22,pady=(0,12))
+    make_button(sidebar,"Practice",open_practice).pack(fill="x",padx=16,pady=4)
+    make_button(sidebar,"Notepad",open_notepad).pack(fill="x",padx=16,pady=4)
+    from workspace_panel import show_documents
+    make_button(sidebar,"Documents",lambda:show_documents(artifact_panel,confirm)).pack(fill="x",padx=16,pady=4)
+    notepad_status=tk.StringVar(value=NOTEPAD_PHASES["closed"])
+    label(sidebar,"",9,background="sidebar",textvariable=notepad_status,wraplength=140).pack(fill="x",padx=20,pady=(2,8))
+    make_button(sidebar,"Audit log",show_log).pack(fill="x",padx=16,pady=4)
+    theme_button = make_button(sidebar,"Light appearance",toggle_theme)
+    theme_button.pack(side="bottom",fill="x",padx=16,pady=(8,22))
+    make_button(sidebar,"Free VRAM",free_vram).pack(side="bottom",fill="x",padx=16,pady=4)
+    make_button(sidebar,"Model check",model_check).pack(side="bottom",fill="x",padx=16,pady=4)
+    label(sidebar,"LOCAL UTILITIES",9,background="sidebar",bold=True).pack(side="bottom",anchor="w",padx=22,pady=(0,10))
+
+    main = surface(root)
+    main.pack(side="left",fill="both",expand=True,padx=22,pady=20)
+    header = surface(main)
+    header.pack(fill="x",pady=(0,18))
+    header_left=surface(header)
+    header_left.pack(side="left")
+    label(header_left,"Your workspace",23,"text",bold=True).pack(anchor="w")
+    label(header_left,"Think it through. Make something useful.",11).pack(anchor="w",pady=(5,0))
+    header_right=surface(header)
+    header_right.pack(side="right")
+    label(header_right,"●  On this device",10,"green").pack(anchor="e",pady=(0,6))
+    model_row=surface(header_right)
+    model_row.pack(anchor="e")
+    model_var=tk.StringVar(value="auto")
+    model_box=ttk.Combobox(model_row,textvariable=model_var,values=MODEL_CHOICES,state="readonly",width=18,font=(UI_FONT,10))
+    model_box.pack(side="left",padx=(0,6))
+
+    bottom=surface(main)
+    bottom.pack(side="bottom",fill="x",pady=(12,0))
+    label(bottom,"MESSAGE",9,bold=True).pack(anchor="w",pady=(0,7))
+    compose=surface(bottom)
+    compose.pack(fill="x")
+    send_button=make_button(compose,"Send  →",send,kind="accent")
+    send_button.pack(side="right",padx=(8,0),ipady=4)
+    stop_button=make_button(compose,"Stop",stop_agent,kind="danger",state="disabled")
+    stop_button.pack(side="right",padx=(8,0),ipady=4)
+    entry=tk.Entry(compose,width=60,relief="flat",bd=0,highlightthickness=1)
+    entry.pack(side="left",fill="x",expand=True,ipady=13)
+    entry.bind("<Return>",send)
+    label(bottom,"Enter to send  ·  F12 or Ctrl+Alt+F9 to stop",9).pack(anchor="w",pady=(8,0))
+
+    vision_toolbar=surface(main)
+    vision_toolbar.pack(side="bottom",fill="x",pady=(10,0))
+    attach_button=make_button(vision_toolbar,"Attach file",attach_file)
+    attach_button.pack(side="left")
+    for text,callback in (("Attach image",attach_image),("Attach clip",attach_clip),("Screenshot",screenshot),("Clear image",clear_image)):
+        make_button(vision_toolbar,text,callback).pack(side="left",padx=(6,0))
+    toolbar=surface(model_row)
+    toolbar.pack(side="left")
+    make_button(toolbar,"A-",lambda:change_size(-2)).pack(side="left",padx=3)
+    make_button(toolbar,"A+",lambda:change_size(2)).pack(side="left")
+
+    workspace=ttk.Panedwindow(main,orient="horizontal")
+    workspace.pack(fill="both",expand=True)
+    conversation=surface(workspace,"card")
+    conversation_header=surface(conversation,"card")
+    conversation_header.pack(fill="x",padx=20,pady=(16,5))
+    label(conversation_header,"Conversation",12,"text","card",True).pack(side="left")
+    copy_button=make_button(conversation_header,"Copy last answer",lambda:copy_text(last_answer))
+    copy_button.pack(side="right")
+    global progress_panel
+    progress_panel=ProgressPanel(conversation,task_progress,resume_task)
+    progress_panel.pack(fill='x',padx=20,pady=(0,6))
+    chat_holder,chat_box=scroll_box(conversation,state="disabled",wrap="word",width=42,height=20,
+        spacing1=0,spacing2=3,spacing3=8,relief="flat",bd=0,padx=22,pady=18,highlightthickness=0)
+    chat_holder.pack(fill="both",expand=True)
+    workspace.add(conversation,weight=3)
+    artifact_panel=ArtifactPanel(workspace,stop_event,answer=lambda:last_raw_answer,confirm=confirm)
+    artifact_panel.model_busy=lambda:busy
+    artifact_panel.document_busy=lambda active:stop_button.configure(
+        state='normal' if active or busy else 'disabled',text='Stop')
+    workspace.add(artifact_panel,weight=3)
+    root.after(100,lambda:workspace.sashpos(0,int(workspace.winfo_width()*0.50)))
+    from emergency_hotkey import start_hotkey
+    start_hotkey(lambda:(stop_event.set(),stop_all(),emergency_ui.set()),lambda text:events.put(("memory",text)))
+    root.after(50,watch_emergency)
+    root.bind_all("<F12>",lambda event:stop_agent())
+    root.bind("<Escape>",lambda event:stop_agent())
+    apply_font()
+    apply_theme()
+    chat_box.configure(state="normal")
+    chat_box.insert("end","\nWhat are we working on?\n",("welcome_title","welcome_block"))
+    chat_box.insert("end","Ask a question, bring an idea, or create\nsomething in the Artifacts workspace.\n\nTry: ‘Create a study guide about cells.’\n\n",("welcome_body","welcome_block"))
+    chat_box.configure(state="disabled")
+    welcome_visible=True
+    add_context_menu(chat_box,can_paste=False)
+    add_context_menu(entry,can_paste=True)
+    chat_box.bind("<Button-1>",lambda event:chat_box.focus_set())
+
 
 if __name__ == "__main__":
+    build_window()
     entry.focus_set()
     poll()
     root.mainloop()
