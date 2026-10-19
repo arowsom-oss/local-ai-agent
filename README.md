@@ -6,7 +6,11 @@ Desktop control is limited to an owned practice app and a separately approved,
 owned classic Notepad scratch window. Saved Documents use a separate, approved
 fixed folder with exact save previews and retained versions. It cannot attach to
 your existing windows or accounts, or choose arbitrary files and messages.
-The original Downloads files and C:/dev/agent installation were left unchanged.
+
+The working copy lives at `C:\dev\local-ai-agent` and is a git clone of this repo.
+`identity.py`, `sandbox/`, `audit.log`, `generated/` and `model_cache/` stay local
+and are ignored by git. All offline suites and the seven Windows-only live suites
+passed on 2026-10-19; `run_live_tests.bat` style runs are recorded in VALIDATION.md.
 
 ## Window and appearance
 
@@ -27,11 +31,10 @@ required. Theme/zoom preferences are in-memory rather than saved across launches
 
 ## Try it
 
-In the prepared workspace, use the supplied `outputs/start_local_studio.cmd`.
-The isolated runtime and downloaded model assets live under `work/` and are not
-included in the source ZIP. Close older agent windows first to avoid hotkey conflicts.
+Double-click `start_chat.bat`. It uses `.venv` beside it if one exists, otherwise
+the `python` on your PATH. Close older agent windows first to avoid hotkey conflicts.
 
-For a new installation, extract the complete source package into a new folder:
+For a new installation, clone this repo into a new folder, then:
 
 ```text
 py -3.12 -m venv .venv

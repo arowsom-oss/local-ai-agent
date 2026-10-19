@@ -10,7 +10,9 @@
   300 characters, or fail the outbound URL check. Data can't hide in step 4 of 5.
 - Still asked separately: other addresses on an approved site, fetch_page during a
   plan, off-plan opens even after Yes on plan_changed, searches and desktop actions.
-- All offline suites pass on Linux. Windows-only live tests still need a laptop run.
+- All offline suites pass on Linux. All seven Windows-only live suites passed on the
+  laptop from C:\dev\local-ai-agent: workspace IO, workspace, desktop, Notepad,
+  browser, vision UI and artifact UI.
 
 # Current bound-text and document quality update
 
