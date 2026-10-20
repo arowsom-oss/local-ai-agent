@@ -16,6 +16,14 @@ After a reasoning selection, two follow-up turns retain the larger model,
 avoiding repeated classifier/reasoner swapping. Manual selection remains available.
 Model selection cannot change tools, permissions, approved URLs or app scope.
 
+Classification, replies, compaction and selected-media observations share one
+explicit 8192-token runner context. This avoids reloading the same fast model
+between a former 2048-token classifier and an 8192-token reply. Per-response
+numeric timing logs expose load, prompt processing and generation separately;
+they contain no prompt/reply/reasoning text. See PERFORMANCE.md for the measured
+before/after A/B and its limits. Thinking and the 60-second retention policy
+are unchanged.
+
 The document hint is a performance choice, not semantic intent detection. It may
 match an explanation/negation and miss other wording or languages. Explicit model
 selection still overrides Auto. A missing larger model fails without a download;

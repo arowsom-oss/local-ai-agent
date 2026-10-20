@@ -210,6 +210,15 @@ C:/dev/agent source files were changed.
 
 ## Automated checks
 
+The October 20 context-reuse update passes 291 offline assertions across
+sixteen suites and five native Windows/Tk suites. A regression first reproduced
+four loads for two Auto classify/reply pairs; it now requires one shared runner.
+Real before/after app-loop measurements put the second Auto hi at 19.0002 vs
+0.7877 seconds, with summed load time 17.6694 vs 0.0620 seconds and stable 8192
+context/runner afterward. This is one short sample; cold loads and token counts
+vary. PERFORMANCE.md retains the full timing table and limitations. The formal
+SCORECARD.md run remains separate and unperformed.
+
 - 115 offline plain-assert tests: 38 browser/search/core, 24 browser network,
   10 direct fetch, 23 model/vision and 20 new computer/media cases.
 - New cases cover exact desktop approval during plans, denial/stale previews,

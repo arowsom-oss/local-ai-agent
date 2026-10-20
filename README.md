@@ -40,6 +40,10 @@ required. Theme/zoom preferences are in-memory rather than saved across launches
 
 ## Try it
 
+Auto routing now shares the reply's 8192-token context to avoid repeated Ollama
+reloads. [PERFORMANCE.md](PERFORMANCE.md) records the measured fix and explains
+the numeric [timing] diagnostics shown in the existing tool log.
+
 Double-click `start_chat.bat`. It uses `.venv` beside it if one exists, otherwise
 the `python` on your PATH. Close older agent windows first to avoid hotkey conflicts.
 
