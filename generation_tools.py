@@ -72,10 +72,12 @@ def _generate(connection, initial):
         os.link(staging, path)  # Publish complete bytes without replacing an existing file.
         staging.unlink()
         connection.send({"name": name, "path": str(path), "kind": kind})
-    except Exception:
+    except Exception as exc:
         if staging.exists():
             staging.unlink()
-        connection.send({"error": "local generation failed; no completed output was published"})
+        # Only the error's type name: it says what broke without copying prompt or path text.
+        connection.send({"error": f"local generation failed ({type(exc).__name__}); "
+                                  "no completed output was published"})
 
 
 def run_generation(kind, prompt, stop_event=None):

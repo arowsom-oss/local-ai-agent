@@ -1,4 +1,7 @@
 -r requirements.txt
+# numpy 2.5.x has a random-number DLL that Windows Smart App Control blocks, which breaks
+# torch's startup with a misleading NP_SUPPORTED_MODULES error. 2.2.6 loads fine.
+numpy==2.2.6
 --extra-index-url https://download.pytorch.org/whl/cu128
 torch==2.11.0+cu128
 comtypes==1.4.17

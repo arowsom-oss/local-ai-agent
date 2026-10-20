@@ -83,6 +83,7 @@ def test_ui():
             try:
                 panel=ui.artifact_panel
                 assert any(b.cget('text')=='Documents' and b.winfo_ismapped() for b in buttons(ui.root))
+                ui.show_artifacts();ui.root.update()
                 assert any(b.cget('text')=='Save new' and b.winfo_ismapped() for b in buttons(ui.root))
                 def choose(yes=False):
                     win=next(x for x in ui.root.winfo_children() if getattr(x,'_approval_dialog',False))

@@ -36,8 +36,14 @@ class ArtifactPanel(ttk.Frame):
         self.choice.bind("<<ComboboxSelected>>", self.choose)
         actions=ttk.Frame(self)
         actions.pack(fill="x",pady=(0,14))
-        for text,callback in (("New",self.new),("From answer",self.from_answer),("Import",self.import_file)):
-            ttk.Button(actions,text=text,command=callback,width=0).pack(side="left",padx=(0,5))
+        # Less-used actions live in one menu so the pane stays calm.
+        self.more_menu=tk.Menu(self,tearoff=0)
+        for text,callback in (("New blank draft",self.new),("Draft from last answer",self.from_answer),
+                              ("Import a file",self.import_file),("Reload saved version",self.reload)):
+            self.more_menu.add_command(label=text,command=callback)
+        more=ttk.Button(actions,text="More  ...",width=0)
+        more.configure(command=lambda:self.more_menu.tk_popup(more.winfo_rootx(),more.winfo_rooty()+more.winfo_height()))
+        more.pack(side="left")
         ttk.Button(actions,text="Export",command=self.export,style="Accent.TButton",width=0).pack(side="right")
         ttk.Button(actions,text="Save new",command=lambda:save_selected(self,self.confirm),width=0).pack(side="right",padx=(0,5))
         history=ttk.Frame(self)
@@ -48,7 +54,6 @@ class ArtifactPanel(ttk.Frame):
         self.history.bind("<<ComboboxSelected>>",self.choose_version)
         self.restore_button=ttk.Button(history,text="Restore",command=self.restore,width=8)
         self.restore_button.pack(side="left")
-        ttk.Button(history,text="Reload",command=self.reload,width=8).pack(side="left",padx=5)
         self.save_button=ttk.Button(history,text="Save edit",command=self.save,width=9)
         self.save_button.pack(side="right")
         self.status=tk.StringVar(value="Ask for an artifact, or choose New to start a draft.")
@@ -112,6 +117,8 @@ class ArtifactPanel(ttk.Frame):
         self.editor.configure(bg=palette["field"],fg=palette["text"],insertbackground=palette["accent"],
                               selectbackground=palette["select"],selectforeground=palette["text"])
         self.gutter.configure(bg=palette["field"],fg=palette["subtle"])
+        self.more_menu.configure(bg=palette["card"],fg=palette["text"],activebackground=palette["select"],
+                                 activeforeground=palette["text"],bd=0)
         self.editor.tag_configure("keyword",foreground=palette["accent"])
         self.editor.tag_configure("string",foreground=palette["green"])
         self.editor.tag_configure("comment",foreground=palette["subtle"])
@@ -197,6 +204,8 @@ class ArtifactPanel(ttk.Frame):
         if signature == self.signature:
             return
         self.signature = signature
+        if items and getattr(self, "on_change", None):
+            self.on_change()                       # chat-first window: slide the pane in
         self.choice.configure(values=[f"{a.number}: {a.title} ({a.kind})" for a in items])
         if not items:
             self.reset()

@@ -27,9 +27,11 @@ if __name__ == "__main__":
     ui.root.report_callback_exception = lambda kind,value,trace: errors.append(value)
     try:
         ui.root.update()
-        assert panel.winfo_ismapped() and panel.winfo_width() > 350
+        assert not panel.winfo_ismapped()               # chat first: pane hidden until needed
         create_artifact("Study guide", "document", "# Cells\nA cell is a basic unit of life.")
         pump_until(lambda: panel.selected is not None)
+        ui.root.update()
+        assert panel.winfo_ismapped() and panel.winfo_width() > 350   # it slid in by itself
         ident = panel.selected.number
         assert panel.editor.get("1.0", "end-1c").startswith("# Cells")
         panel.editor.insert("end", "\nHuman note.")
