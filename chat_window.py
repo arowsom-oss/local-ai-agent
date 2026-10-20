@@ -966,14 +966,29 @@ def sync_attachment_chip():
         clear_chip.pack_forget()
 
 
+def make_sharp():
+    """Tell Windows this app draws for the real screen resolution. Without it, Windows draws
+    the window at 100% and stretches the picture to your scaling, which looks blurry."""
+    try:
+        import ctypes
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)   # sharp on the main display
+        except (AttributeError, OSError):
+            ctypes.windll.user32.SetProcessDPIAware()      # older Windows fallback
+    except Exception:
+        pass                                               # not Windows, or already set
+
+
 def build_window():
     global notepad_status
     global root, style, bottom, chat_holder, chat_box, copy_button, attach_button, model_var, model_box, send_button, stop_button, entry, artifact_panel, theme_surfaces, theme_labels, welcome_visible
     global more_menu, attach_menu, theme_entry, workspace, artifacts_button, clear_chip
+    make_sharp()                 # must happen before the first window exists
     root = tk.Tk()
     root.title("Local Studio")
-    root.minsize(1100, 680)
-    root.geometry("1440x900")
+    scale = max(1.0, root.winfo_fpixels("1i") / 96)   # 1.5 on a 150% display
+    root.minsize(int(1100 * scale), int(680 * scale))
+    root.geometry(f"{int(1440 * scale)}x{int(900 * scale)}")
     style = ttk.Style(root)
     style.theme_use("clam")
     theme_surfaces, theme_labels = [], []
@@ -988,7 +1003,7 @@ def build_window():
         theme_labels.append((widget,color,background))
         return widget
 
-    sidebar = surface(root,"sidebar",width=170)
+    sidebar = surface(root,"sidebar",width=int(170*scale))
     sidebar.pack(side="left",fill="y")
     sidebar.pack_propagate(False)
     label(sidebar,"LOCAL",10,"accent","sidebar",True).pack(anchor="w",padx=22,pady=(30,2))
