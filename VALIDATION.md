@@ -1,3 +1,15 @@
+# Efficiency and correctness review (2026-10-20)
+
+All 303 offline plain-assert cases across 17 suites and six native Windows/Tk
+suites pass. Twelve new cases failed on preserved f1215c9 baseline source,
+then passed with the fixes. The native fixture independently reproduced
+three decoder jobs per import, lost unsaved text, duplicate playback timers
+and missing selection cancellation; the updated run uses one decoder per
+import and passes these checks. EFFICIENCY_REVIEW.md records the scope,
+timings and limitations. No new GPU inference benchmark or formal scorecard
+run was performed; SCORECARD.md remains unchanged. Earlier results below
+retain their milestone-specific scope.
+
 # Generated-media Artifacts update (2026-10-19)
 
 Based on `simple-ui` commit c3a82ae, preserving the collaborator's chat-first

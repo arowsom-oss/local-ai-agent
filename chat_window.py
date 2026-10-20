@@ -310,7 +310,7 @@ def add_context_menu(widget, can_paste):
 
 def clean(text):
     """Remove **bold** markers and backticks. A lone * is left alone."""
-    return re.sub(r"\*\*(.+?)\*\*", r"\1", text).replace("`", "")
+    return re.sub(r"\*\*(.+?)\*\*", r"\1", str(text or "")).replace("`", "")
 
 
 def show(who, text):

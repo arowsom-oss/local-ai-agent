@@ -4,7 +4,7 @@ A safe local AI assistant for Alexander's Windows laptop
 
 Running record updated October 20, 2026. Earlier measurements remain labeled by milestone; later chapters record subsequent changes and failures.
 
-Current handoff: read the final two chapters for the October 20 runtime, branch stack, latest tests and open work. Earlier chapters retain historical states and failures. The complete shared Markdown copy is PROJECT_RECORD.md on codex/ollama-context-reuse-2026-10-20 in arowsom-oss/local-ai-agent; it is linked from that branch's README. GitHub access shares this record and source, not the laptop's ignored models or personal data.
+Current handoff: read the Claude handoff and latest evidence chapters, then the final efficiency review, for October 20 status. The final review supersedes prior branch and test-count snapshots. Earlier chapters retain historical states and failures. The complete shared Markdown copy is PROJECT_RECORD.md on codex/efficiency-review-2026-10-20 in arowsom-oss/local-ai-agent, linked from that branch's README. GitHub shares source and this record, not ignored local models or personal data.
 
 ## Purpose and current position
 
@@ -682,3 +682,27 @@ Local output: C:/dev/local-ai-agent/generated/6911e3b1110a4bbfa6f67b768c5a139d.m
 - Remaining product work: broader unseen/multi-turn tests, a person-operated microphone trial, better video quality and additional narrow app adapters. Full desktop control is incomplete. Private remote text/image/video access remains a roadmap in REMOTE_ACCESS_PLAN.md; no login, web server or remote computer-control endpoint is implemented.
 - Storage: old runtimes, model caches, saved files and other collaborators' processes were retained. Previously blocked cleanup was not retried. No disk space was reclaimed by this handoff.
 
+<!-- PAGE -->
+# Efficiency review and reproduced fixes
+
+## Current branch and review scope
+
+This October 20 review builds on runtime/documentation baseline f1215c9e7e01522a08988d4d589f8a6c399fbd41. The new branch is codex/efficiency-review-2026-10-20, stacked on draft PR 7. Its PROJECT_RECORD.md is the current shared record; EFFICIENCY_REVIEW.md contains the detailed findings, before/after table and remaining priorities. Main was not merged. The primary C:/dev/local-ai-agent installation is updated after verifying the published source against the tests. Restart with the existing start_media_studio.cmd launcher to import the changes.
+
+The review traced model routing, conversation compaction, Artifacts import/selection/playback, worker cancellation, generation admission, speech, filesystem workers and browser interception. It is a scoped engineering review, not proof that every bug is found or a completed security audit. No tool authority, dependency, model, prompt-approval rule or GPU generation profile was added or loosened.
+
+## Reproduced bugs and changes
+
+An imported image/video was decoded during validation and twice again during selection. Validated frames are now reused. Obsolete previews receive their own cancellation and discard late pixels. Rapid pause/resume cancels the old frame timer. An import finishing after a new human editor change now preserves that text and leaves the imported Artifact available in the list.
+
+Stop is checked after compaction, before reply inference, after a late reply, and after generation waits for its GPU lease/RAM admission. Empty model replies now return an error, and missing display text cannot crash the formatter. Empty, truncated, action-bearing or oversized summaries are refused before replacing history. Tool-call arguments now count toward history estimates and summary input. Empty/truncated media interpretations are refused without saving a partial observation. Failed output is not automatically retried.
+
+## Measurements and verification
+
+The same synthetic native fixture ran against preserved unmodified baseline and fixed sources. For both JPEG and MP4 imports, decoder jobs fell from three to one; maximum concurrent decoders fell from two to one. JPEG first visibility measured 1.2495 to 0.6092 seconds; MP4 measured 1.3627 to 0.8821 seconds. Rapid pause/resume left two timers before and one afterward. New unsaved text and selection cancellation failed on baseline and passed after the fix.
+
+These are short local timing samples, not guarantees or measured peak-RAM savings. All twelve new offline cases failed on baseline and passed afterward. All 303 offline cases across seventeen suites and six native Windows/Tk suites pass. Raw failures and results remain in work/efficiency_baseline_run.json, work/efficiency_ui_baseline.json, work/efficiency_ui_fixed_final.json and work/efficiency_checks_final.json. No Internet, inference, microphone or personal files were used in these checks. SCORECARD.md is unchanged and remains unrun.
+
+## Remaining priorities
+
+Run the fixed scorecard on an identified main checkout before considering merges. Improve context budgeting for system/tool schemas and generation: characters/4 is still approximate, and current-turn batches cannot always compact. Measure mixed real workflows using the existing timing logs. Cancellable model/browser I/O and asynchronous browser shutdown remain unfinished; Stop cannot forcibly interrupt their active synchronous calls. Profile long editor/chat content before adding bounded caches. Full computer control and private remote access remain separate unfinished work. No new whole-chat or GPU-rendering speed claim is made here.

@@ -14,9 +14,14 @@ passed on 2026-10-19; `run_live_tests.bat` style runs are recorded in VALIDATION
 
 ## Shared project record
 
+[EFFICIENCY_REVIEW.md](EFFICIENCY_REVIEW.md) records the October 20 review,
+reproduced bugs, native measurements and remaining performance work. Imports
+reuse validated previews; obsolete previews and playback timers cancel,
+and newer unsaved text survives validation.
+
 [PROJECT_RECORD.md](PROJECT_RECORD.md) contains the complete running record,
 latest Claude handoff, branch stack, tests, failed experiments and open work.
-Read its final two chapters for the October 20 status; earlier chapters are
+Read its latest handoff/review chapters for current status; earlier chapters are
 historical. This branch includes unmerged features that main does not.
 
 ## Window and appearance
