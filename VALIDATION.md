@@ -1,3 +1,19 @@
+# Offline CI and adversarial fixtures (2026-10-20)
+
+All eighteen offline suites pass in both the existing runtime and a newly
+created lean Python 3.12 Windows environment using requirements-ci.txt.
+The eight HTML attack cases log individual hashes, refusal events and fake
+approval requests. Combined with the earlier 303 cases, that is 311 offline
+cases. These are deterministic dispatch tests, not live-model resistance or
+native popup evidence. The CI runner also verifies its Python socket/DNS
+tripwire and refuses unclassified test files.
+
+The main scorecard was prepared at 58adaf4 but no prompt was submitted:
+Windows computer-use initialization failed twice, then Alexander chose to
+run it later. No pass/fail rows were invented; SCORECARD.md remains unchanged.
+The security workbook and copy-button bug notes are AI-assisted research
+for Alexander to write THREAT_MODEL.md and his own next commit.
+
 # Efficiency and correctness review (2026-10-20)
 
 All 303 offline plain-assert cases across 17 suites and six native Windows/Tk

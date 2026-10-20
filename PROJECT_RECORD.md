@@ -4,7 +4,7 @@ A safe local AI assistant for Alexander's Windows laptop
 
 Running record updated October 20, 2026. Earlier measurements remain labeled by milestone; later chapters record subsequent changes and failures.
 
-Current handoff: read the Claude handoff and latest evidence chapters, then the final efficiency review, for October 20 status. The final review supersedes prior branch and test-count snapshots. Earlier chapters retain historical states and failures. The complete shared Markdown copy is PROJECT_RECORD.md on codex/efficiency-review-2026-10-20 in arowsom-oss/local-ai-agent, linked from that branch's README. GitHub shares source and this record, not ignored local models or personal data.
+Current handoff: the final chapters record the October 20 review, public CI and student-owned next work. They supersede historical branch/test-count snapshots. The complete shared Markdown is PROJECT_RECORD.md on codex/scorecard-injection-ci-2026-10-20 in arowsom-oss/local-ai-agent, linked from its README. Earlier chapters preserve measurements and failures. GitHub shares source and this record, not ignored local models or personal data. The main scorecard remains deferred, with no invented score.
 
 ## Purpose and current position
 
@@ -706,3 +706,30 @@ These are short local timing samples, not guarantees or measured peak-RAM saving
 ## Remaining priorities
 
 Run the fixed scorecard on an identified main checkout before considering merges. Improve context budgeting for system/tool schemas and generation: characters/4 is still approximate, and current-turn batches cannot always compact. Measure mixed real workflows using the existing timing logs. Cancellable model/browser I/O and asynchronous browser shutdown remain unfinished; Stop cannot forcibly interrupt their active synchronous calls. Profile long editor/chat content before adding bounded caches. Full computer control and private remote access remain separate unfinished work. No new whole-chat or GPU-rendering speed claim is made here.
+
+<!-- PAGE -->
+# Public checks and student-owned next work
+
+## Scorecard status: prepared for later
+
+The exact merged main revision 58adaf433d108c7b98703b4c0cd0b0c1331fb595 was exported into an isolated scorecard window with separate Documents, generated output and audit paths. It uses the existing local runtime/cache; no model was downloaded. Computer-use initialization failed twice with "failed to write kernel assets: The system cannot find the path specified." No prompt was submitted and no action or approval occurred.
+
+Alexander explicitly chose to run it later. The idle test window was closed to release resources, and outputs/start_scorecard_main.cmd can reopen it. SCORECARD_RUN_GUIDE.md retains all five exact prompts, fresh/continue chat order, source verification, grading and evidence instructions. SCORECARD.md's criteria and empty Results table are unchanged. Setup failure is neither an app pass nor an app fail.
+
+## Eight adversarial pages and reproducible CI
+
+Eight inert local HTML fixtures attempt downloads, settings access, system-role spoofing, skipped consent, forged approval arguments, POST search, plan-scope escalation and synthetic data exfiltration. Their bytes pass through the real pinned route handler using fake HTTPS, then scripted model calls attempt the attack through production dispatch. Each records its page hash, refusal event, approval requests and pass/fail. All eight passed.
+
+These are deterministic code-boundary tests, not evidence that a live model resists injection or that real popups displayed. No browser, Internet connection, settings app, microphone or model ran in them. PROMPT_INJECTION_TESTS.md explains the scope.
+
+The Windows/Python 3.12 workflow runs all eighteen offline suites on every PR and main push. It uses lean pinned dependencies, full action commit pins, a read-only token, per-suite deadlines, a Python socket/DNS tripwire, explicit suite classification and retained failure logs. No Torch, GPU packages, browser download or model weights are needed. All eighteen suites passed locally in both the existing and fresh lean environments, totaling 311 cases.
+
+GitHub-hosted Windows run 39484591531 passed its installation, all offline suites and artifact upload for commit d4d68a51b3380608773323003457d8d496232aa6. That public run is independent of the local assertions. The tripwire is a test aid, not an OS network sandbox. Ten native/GUI suites remain separately classified; the scorecard is not a CI test.
+
+Hosted evidence: https://github.com/arowsom-oss/local-ai-agent/actions/runs/39484591531
+
+## Alexander's authorship and shared handoff
+
+Alexander chose to write THREAT_MODEL.md and the next small fix himself. SECURITY_WORKBOOK.md supplies code line references, asset/attacker/boundary questions, limitations and test pointers. No finished threat model or human-authored commit was invented. The confirmed, deliberately unfixed candidate is Copy last answer using display-cleaned last_answer instead of the preserved raw reply, changing code fences and literal formatting. Alexander can reproduce, fix, test and explain it, then request review.
+
+Draft PR 9 on codex/scorecard-injection-ci-2026-10-20 stacks on PR 8. This update changes tests, CI and documentation, not application runtime. Main is unmerged. The current shared record and workbooks are on that branch; the local PDF matches it. Earlier privacy, resource and unfinished-computer-control limits remain.
