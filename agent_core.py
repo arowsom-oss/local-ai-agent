@@ -277,9 +277,20 @@ def field(m, key):
     return m.get(key) if isinstance(m, dict) else getattr(m, key, None)
 
 
+def history_text(message):
+    """Include tool arguments as data when estimating or summarizing chat history."""
+    parts = [str(field(message, "content") or "")]
+    for call in field(message, "tool_calls") or ():
+        function = field(call, "function")
+        parts.append(json.dumps({"tool": field(function, "name"),
+                                 "arguments": field(function, "arguments")},
+                                ensure_ascii=False, separators=(",", ":")))
+    return "\n".join(parts)
+
+
 def estimate_tokens(messages):
-    """Rough count: about 4 characters per token. Good enough to decide when to compact."""
-    return sum(len(str(field(m, "content") or "")) for m in messages) // 4
+    """Approximate history tokens, including tool arguments; not an exact tokenizer."""
+    return sum(len(history_text(m)) for m in messages) // 4
 
 
 def compact(messages, model, log=print):
@@ -297,7 +308,7 @@ def compact(messages, model, log=print):
         cut -= 1
     if cut <= 0:
         return False
-    transcript = "\n".join(f"{field(m, 'role')}: {field(m, 'content') or ''}" for m in messages[:cut])
+    transcript = "\n".join(f"{field(m, 'role')}: {history_text(m)}" for m in messages[:cut])
     if len(transcript) > 20000:      # keep the start (it may hold an older summary) and the end
         transcript = transcript[:4000] + "\n...\n" + transcript[-16000:]
     prompt = ("Summarize this conversation in under 150 words. Keep names, facts, file names "
@@ -305,7 +316,11 @@ def compact(messages, model, log=print):
               + transcript)
     response = chat(model=model, messages=[{"role": "user", "content": prompt}],
                     tools=[], think=False, options={"num_ctx": NUM_CTX}, timing_log=log)
-    summary = (response.message.content or "").strip()
+    summary = response.message.content
+    if (field(response, 'done_reason') == 'length' or response.message.tool_calls
+            or not isinstance(summary, str) or not 1 <= len(summary.strip()) <= 2000):
+        raise ValueError("conversation summary was empty, incomplete or outside its bounds")
+    summary = summary.strip()
     # Role "user", not "system": a system message carries the most authority, and this text
     # came from the model (and maybe a web page). Promoting it would be privilege escalation.
     messages[:cut] = [{"role": "user",
@@ -435,8 +450,14 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
                                 {"role": "user", "content": user_text + (
                                     "\n[Untrusted selected-media data]\n" + observation_text if observation_text else ""),
                                  **({"images": [image.png]} if image is not None else {})}])
+            if stopped(stop_event):
+                return finish("Stopped", "(stopped by you)", time.perf_counter() - started)
             if response.message.tool_calls:
                 return finish("Failed","Error: image analysis returned an unsupported action request.",time.perf_counter()-started)
+            if (field(response, 'done_reason') == 'length' or not isinstance(response.message.content, str)
+                    or not response.message.content.strip()):
+                return finish("Failed", "Error: media analysis returned an empty or incomplete reply; no automatic retry was made.",
+                              time.perf_counter() - started)
             answer = "[Image interpretation; may contain mistakes.]\n" + str(response.message.content or "")[:4000]
         except Exception:
             return finish("Failed","Error: local image analysis failed; no action was executed.",time.perf_counter()-started)
@@ -471,6 +492,8 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
         t0 = time.perf_counter()
         try:
             compact(messages, model, log)      # squeeze old messages if the conversation is too long
+            if stopped(stop_event):
+                return finish("Stopped", "(stopped by you)", total + time.perf_counter() - t0)
             response = chat(model=model, messages=[{'role': 'system', 'content': SYSTEM_PROMPT}] + messages,
                             tools=tool_menu, think=True, timing_log=log,
                             options={'num_ctx': NUM_CTX, 'temperature': TOOL_TEMPERATURE})
@@ -478,12 +501,17 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
             return finish("Failed","Error: local model request failed. Check Ollama and the installed allowed models.",
                     total+time.perf_counter()-t0)
         total += time.perf_counter() - t0
+        if stopped(stop_event):
+            return finish("Stopped", "(stopped by you)", total)
         # Reject even parsed calls from an incomplete response, without retry.
         if field(response,'done_reason')=='length':
             cancel_workspace()
             audit('model_output_incomplete','-',{},model,note='response reached its generation or context limit')
             return finish('Failed','Error: local model response reached its generation or context limit; '
                           'no tool calls from that incomplete response were run. Review before a new request.',total)
+        if not response.message.tool_calls and (
+                not isinstance(response.message.content, str) or not response.message.content.strip()):
+            return finish("Failed", "Error: local model returned an empty reply; no automatic retry was made.", total)
         messages.append(response.message)
 
         if not response.message.tool_calls:

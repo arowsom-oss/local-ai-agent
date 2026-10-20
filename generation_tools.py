@@ -94,7 +94,11 @@ def run_generation(kind, prompt, stop_event=None, *, reference=None):
         from model_router import media_lease
         from media_resources import require_ram, receive_with_ram_guard
         with media_lease():
+            if stop_event is not None and stop_event.is_set():
+                return {"error": "stopped by the user"}
             require_ram(8 if kind == "video" else 3)
+            if stop_event is not None and stop_event.is_set():
+                return {"error": "stopped by the user"}
             # Windows CUDA/weight loading needs commit headroom beyond its working set.
             # The sampled system-RAM reserve remains active independently of this ceiling.
             worker = Worker(_generate, initial, memory_mb=(8 if kind == "image" else 16) * 1024)

@@ -11,6 +11,18 @@ from artifacts import store, MAX_TEXT, MAX_MEDIA, export_snapshot
 from artifact_media import prepare_preview
 
 
+class _PreviewStop:
+    """Per-selection cancellation without stopping unrelated app workers."""
+    def __init__(self, shared):
+        self.shared, self.local = shared, threading.Event()
+
+    def is_set(self):
+        return self.local.is_set() or self.shared.is_set()
+
+    def set(self):
+        self.local.set()
+
+
 class ArtifactPanel(ttk.Frame):
     def __init__(self, parent, stop_event, answer=lambda: "", confirm=None):
         super().__init__(parent, padding=20)
@@ -22,6 +34,8 @@ class ArtifactPanel(ttk.Frame):
         self.signature = None
         self.frames, self.photo = [], None
         self.playing = False
+        self.play_job = None
+        self.preview_stop = None
         self.serial = 0
         self.mail = queue.Queue()
         heading=ttk.Frame(self)
@@ -168,11 +182,14 @@ class ArtifactPanel(ttk.Frame):
             "Your unsaved editor changes will be discarded. Continue?", parent=self, default="no") is True
 
     def stop(self):
+        self.cancel_preview()
+        self.pause_playback()
         self.serial += 1  # Discard decoder replies already queued before Stop.
-        self.playing = False
         self.status.set("Preview paused by Stop. Text drafts and saved versions remain in memory.")
 
     def reset(self):
+        self.cancel_preview()
+        self.pause_playback()
         self.serial += 1
         self.selected = self.version = None
         self.dirty, self.playing = False, False
@@ -216,7 +233,8 @@ class ArtifactPanel(ttk.Frame):
         elif self.selected is None:
             self.load(items[-1].number)
         elif new_media and not self.dirty:
-            self.load(new_media[-1].number)
+            if self.selected.number != new_media[-1].number:
+                self.load(new_media[-1].number)
         elif new_media:
             latest = new_media[-1]
             self.status.set(f"New {latest.kind} ready: Artifact {latest.number} in the list above. "
@@ -248,9 +266,10 @@ class ArtifactPanel(ttk.Frame):
         if self.selected and self.discard_ok():
             self.load(self.selected.number)
 
-    def load(self, number, revision=None):
+    def load(self, number, revision=None, *, preview=None):
+        self.cancel_preview()
+        self.pause_playback()
         self.serial += 1
-        self.playing = False
         self.frames, self.photo = [], None
         self.image.configure(image="", text="")
         self.selected = store.get(number)
@@ -285,16 +304,38 @@ class ArtifactPanel(ttk.Frame):
             self.image.grid(row=0, column=0, columnspan=3, sticky="nsew")
             self.image.configure(text="Preparing bounded local preview...")
             self.status.set("Decoding local media; no audio, browser, scripts or external links.")
-            self.decode(a.kind, self.version.data)
+            if preview is None:
+                self.decode(a.kind, self.version.data)
+            else:
+                self.display_preview(preview)
+
+    def cancel_preview(self):
+        if self.preview_stop is not None:
+            self.preview_stop.set()
+            self.preview_stop = None
+
+    def display_preview(self, frames):
+        self.frames = frames
+        self.timeline.configure(to=len(frames) - 1)
+        self.timeline.set(0)
+        self.show_frame(0)
+        if len(frames) > 1:
+            self.play_row.pack(fill="x", pady=5)
 
     def decode(self, kind, data, imported=None):
+        self.cancel_preview()
+        cancelled = self.preview_stop = _PreviewStop(self.stop_event)
         serial = self.serial
         def work():
             try:
-                result = prepare_preview(kind, data, self.stop_event)
-                self.mail.put((serial, result, imported, None))
+                if cancelled.is_set():
+                    return
+                result = prepare_preview(kind, data, cancelled)
+                if not cancelled.is_set():
+                    self.mail.put((serial, result, imported, None))
             except Exception:
-                self.mail.put((serial, None, None, "Preview refused, stopped or unavailable. Check media limits/dependencies."))
+                if not cancelled.is_set():
+                    self.mail.put((serial, None, None, "Preview refused, stopped or unavailable. Check media limits/dependencies."))
         threading.Thread(target=work, daemon=True).start()
 
     def save(self):
@@ -377,8 +418,9 @@ class ArtifactPanel(ttk.Frame):
                 if len(data) > MAX_MEDIA:
                     raise ValueError("media exceeds 20 MB")
                 self.serial += 1
+                self.pause_playback()
                 self.status.set("Validating imported media before adding it...")
-                self.decode(kind, data, (kind, data))
+                self.decode(kind, data, (kind, data, self.editor.get("1.0", "end-1c")))
         except (OSError, ValueError):
             self.status.set("Import refused: invalid UTF-8 text, too large, or artifact limit reached.")
 
@@ -422,11 +464,20 @@ class ArtifactPanel(ttk.Frame):
 
     def toggle_play(self):
         if len(self.frames) > 1:
-            self.playing = not self.playing
             if self.playing:
+                self.pause_playback()
+            else:
+                self.playing = True
                 self.advance(self.serial)
 
+    def pause_playback(self):
+        self.playing = False
+        if self.play_job is not None:
+            self.after_cancel(self.play_job)
+            self.play_job = None
+
     def advance(self, serial):
+        self.play_job = None
         if not self.playing or serial != self.serial or not self.frames or self.stop_event.is_set():
             self.playing = False
             return
@@ -434,7 +485,7 @@ class ArtifactPanel(ttk.Frame):
         next_index = (index + 1) % len(self.frames)
         delay = self.frames[next_index][0] - self.frames[index][0] if next_index else .125
         self.timeline.set(next_index)
-        self.after(max(30, min(1000, int(delay * 1000))), lambda: self.advance(serial))
+        self.play_job = self.after(max(30, min(1000, int(delay * 1000))), lambda: self.advance(serial))
 
     def tick(self):
         self.refresh()
@@ -447,18 +498,18 @@ class ArtifactPanel(ttk.Frame):
                     self.image.configure(text=error)
                     self.status.set(error)
                 elif imported:
-                    kind, data = imported
+                    kind, data, original_text = imported
                     # Normalize imported images; exported image bytes are always PNG.
                     a = store.media("Imported " + kind, kind, frames[0][1].png if kind == "image" else data)
-                    self.refresh()
-                    self.load(a.number)
+                    if self.editor.get("1.0", "end-1c") != original_text:
+                        self.dirty = True
+                        self.refresh()
+                        self.status.set(f"Imported {kind} ready: Artifact {a.number}. Your newer unsaved text is preserved.")
+                    else:
+                        self.load(a.number, preview=frames)
+                        self.refresh()
                 else:
-                    self.frames = frames
-                    self.timeline.configure(to=len(frames) - 1)
-                    self.timeline.set(0)
-                    self.show_frame(0)
-                    if len(frames) > 1:
-                        self.play_row.pack(fill="x", pady=5)
+                    self.display_preview(frames)
         except queue.Empty:
             pass
         except ValueError as exc:
