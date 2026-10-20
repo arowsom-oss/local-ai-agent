@@ -12,6 +12,13 @@ The working copy lives at `C:\dev\local-ai-agent` and is a git clone of this rep
 and are ignored by git. All offline suites and the seven Windows-only live suites
 passed on 2026-10-19; `run_live_tests.bat` style runs are recorded in VALIDATION.md.
 
+## Shared project record
+
+[PROJECT_RECORD.md](PROJECT_RECORD.md) contains the complete running record,
+latest Claude handoff, branch stack, tests, failed experiments and open work.
+Read its final two chapters for the October 20 status; earlier chapters are
+historical. This branch includes unmerged features that main does not.
+
 ## Window and appearance
 
 Voice and reference-photo controls are described in
@@ -39,6 +46,10 @@ The default window is 1440x900 and minimum is 1100x680. No new dependencies are
 required. Theme/zoom preferences are in-memory rather than saved across launches.
 
 ## Try it
+
+Auto routing now shares the reply's 8192-token context to avoid repeated Ollama
+reloads. [PERFORMANCE.md](PERFORMANCE.md) records the measured fix and explains
+the numeric [timing] diagnostics shown in the existing tool log.
 
 Double-click `start_chat.bat`. It uses `.venv` beside it if one exists, otherwise
 the `python` on your PATH. Close older agent windows first to avoid hotkey conflicts.
