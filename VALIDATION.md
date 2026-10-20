@@ -1,3 +1,27 @@
+# Generated-media Artifacts update (2026-10-19)
+
+Based on `simple-ui` commit c3a82ae, preserving the collaborator's chat-first
+layout, display-scaling changes and NumPy pin. The primary folder remains
+`C:\dev\local-ai-agent`; model files and existing generated outputs are retained.
+
+All 255 offline plain-assert checks passed across 14 suites, including eight
+new generated-media cases. Four real Windows/Tk suites passed: Artifacts,
+selected-media UI, task progress and saved Documents. The Artifacts fixture
+uses scripted model/generation responses through actual core dispatch and real
+PNG/MP4 decoding, selection and playback. No GPU inference is implied.
+
+An additional native check reopened the primary installation's existing PNG
+and MP4 through the new recovery action: the image displayed one frame, the
+video decoded 16 frames and played, and both opened visibly in Artifacts.
+No generation, download or source-file mutation was involved in that check.
+The original refresh logic was also reproduced leaving new media unselected
+when a document was already selected; the new regression covers that behavior.
+
+The remote interface remains a documented roadmap in REMOTE_ACCESS_PLAN.md.
+No authentication, web server, remote endpoint or remote-control capability is
+implemented or tested by this change. Earlier validation below describes its
+own milestone and is not replaced by this update.
+
 # One popup per address, 2026-10-19 review
 
 - Before: a brand-new site asked twice, new_site then outbound_request, both showing

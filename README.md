@@ -71,6 +71,18 @@ From answer copies the raw last answer, preserving code fences. Import is a
 person-run picker; imported text drafts can be read by the local AI. Generated
 images/videos automatically become immutable media snapshots in the panel.
 
+New images and videos open in Artifacts and become the visible selection. If
+you have unsaved text, the app preserves it and tells you which new Artifact
+to select after saving. Generated files stay in this installation's `generated/`
+folder as backups; Export makes a copy at a location you choose. After New chat
+or a restart, use **Artifacts > More > Open generated image or video** to reopen
+an original file. Use **Import a file** for media you previously saved in Downloads
+or elsewhere. The app does not scan Downloads automatically.
+
+Remote text chat and image/video generation are planned in
+[REMOTE_ACCESS_PLAN.md](REMOTE_ACCESS_PLAN.md). Remote computer control is outside
+that planned interface; no web server or public access is enabled by this change.
+
 Export asks you to choose a new file and exports the exact selected version:
 documents as .md, code as .txt, images as .png and videos as .mp4. Existing files
 are never overwritten. New chat clears in-memory artifacts, including their
