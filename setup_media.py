@@ -22,5 +22,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("kind", choices=[*SPECS, "all"])
     args = parser.parse_args()
-    for kind in SPECS if args.kind == "all" else [args.kind]:
+    # Preserve the legacy cache/install option, but do not download the old video
+    # backend on a new default installation. Runtime video uses video_ltx only.
+    for kind in ("audio", "image", "video_ltx", "speech") if args.kind == "all" else [args.kind]:
         install(kind)

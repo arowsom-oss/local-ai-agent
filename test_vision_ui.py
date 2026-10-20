@@ -47,7 +47,7 @@ if __name__ == "__main__":
         assert button.winfo_ismapped() and button.winfo_width() > 10
     labels = lambda menu: [menu.entrycget(i, "label") for i in range(menu.index("end") + 1)
                            if menu.type(i) == "command"]
-    assert labels(ui.attach_menu) == ["File", "Image", "Clip", "Screenshot of practice window"]
+    assert labels(ui.attach_menu) == ["File", "Image", "Photo to video", "Clip", "Screenshot of practice window"]
     for text in ("Practice", "Notepad", "Audit log", "Model check", "Free VRAM"):
         assert text in labels(ui.more_menu)
     assert not ui.clear_chip.winfo_ismapped()          # nothing attached yet

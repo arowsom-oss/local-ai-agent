@@ -14,6 +14,15 @@ passed on 2026-10-19; `run_live_tests.bat` style runs are recorded in VALIDATION
 
 ## Window and appearance
 
+Voice and reference-photo controls are described in
+[VOICE_AND_REFERENCE.md](VOICE_AND_REFERENCE.md). **Talk** records one approved
+local voice message; review/edit the transcript and press Send yourself.
+**More > Speak replies for this chat** enables CPU speech while keeping text
+visible. **Attach > Photo to video** previews a selected photo and separately
+approves the motion prompt. Video uses the bounded LTX profile and appears in
+Artifacts. Existing media can still be reopened or imported. These features
+do not enable remote access or expand image-analysis tools.
+
 The native Windows window now uses a shared dark/light theme, Segoe UI type,
 a navigation sidebar and balanced conversation/Artifacts panes. The default is
 dark; Light appearance in the sidebar switches both panes together. Utilities

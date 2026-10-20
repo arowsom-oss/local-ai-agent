@@ -251,6 +251,49 @@ C:/dev/agent source files were changed.
   image b261bac6fd2cf515557d5d0707481eafa0485ec2;
   video 8227dddca75a8561bf858d604cc5dae52b954d01. Manifests record local snapshots.
 
+## Voice and reference-photo update (October 20, 2026)
+
+All 283 offline plain-assert checks pass across fifteen suites, including 28
+new voice/reference cases. Five native Windows/Tk suites pass: Artifacts,
+selected-media UI, progress, saved Documents, and voice/reference controls.
+The new GUI fixture uses fake microphone/inference and actual media codecs;
+it verifies transcript review without auto-Send, opt-in spoken replies, Stop,
+New chat and photo-video Artifact delivery. No personal microphone was recorded.
+An overnight suspended fixture exceeded its wall-clock deadline; rerunning the
+complete native set on the awake desktop passed. The interrupted run is not
+counted as a passing test.
+
+Real CPU Piper synthesized a fixed English sentence in 2.72 seconds (3.04 seconds
+of audio); existing CPU Whisper tiny.en recovered its words and number 42 in
+5.27 seconds. Sampled child working sets peaked at 163,332,096 and 243,515,392
+bytes. These are single-run samples, not memory ceilings. The same pair passed
+with gemma4:12b resident, an 8,192-token context and the normal tool menu; the
+synthetic run executed no tools. A separate owned Windows worker played 0.1
+seconds of synthetic silence from WAV bytes without saving a file.
+
+Development caught two real runtime failures: a 768 MiB synthesis Job ceiling
+was too small, so synthesis now uses 1.5 GiB; Python 3.12 has no SND_SYNC flag,
+so playback now uses default synchronous mode with SND_MEMORY and SND_NODEFAULT.
+The repaired paths passed real worker checks. Physical microphone/device-driver
+compatibility still requires a person-operated trial.
+
+See VOICE_AND_REFERENCE.md for the LTX candidate, fixed model revisions,
+component calculations, resource guards and video qualification status. Keep
+the earlier ModelScope result below as historical evidence, not a measurement
+of the replacement backend. No broad model-quality claim follows from these
+small tests.
+
+The chosen 65-frame LTX profile passed real text/reference-video trials at
+384x256, 24 fps and 30 steps. Both outputs decoded completely. Sampled NVML GPU
+usage peaked at 4.67/7.10 GiB; summed child working sets were 7.42/7.51 GiB.
+System RAM availability stayed above approximately 4 GiB in these trials.
+Earlier same-process loading, encoder-exit timing and CPU/CUDA-generator failures
+are preserved in development reports. Final code requires the encoder process
+to exit, uses bounded CPU-byte handoff and a CUDA generator. An earlier short
+profile was nearly static; the longer temporally decoded clips showed motion,
+soft detail and distortion. The inspected frames do not establish general
+watermark absence, accurate motion or publication-ready quality.
+
 ## Limits and unverified claims
 
 The Notepad workflow update passed all 150 offline assertions across eight test
@@ -272,9 +315,10 @@ redirects remain refused; service-worker blocking/offline routing are applicatio
 settings, not a guarantee about every Chromium background subsystem.
 
 MP4 analysis samples frames, omits its audio and can miss brief events. WAV support
-is limited to English 16-bit PCM, without a microphone. Video generation uses an
-older experimental pipeline and is low-resolution; no broad stability or output
-quality claim is made. Interpretation may hallucinate or quote private information.
+is limited to English 16-bit PCM. The person-operated Talk control adds a bounded
+microphone recording; it never auto-sends. Video generation remains experimental
+and low-resolution; no broad stability or output quality claim is made.
+Interpretation may hallucinate or quote private information.
 New persistent audit entries omit payloads; old logs and visible chat are separate.
 Weights and the development runtime are excluded from the distributable source.
 A blocked cleanup left an unused partial video-model cache on this machine.

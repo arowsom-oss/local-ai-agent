@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 import threading
+from contextlib import contextmanager
 
 FAST_MODEL = "gemma4:e2b"
 REASONING_MODEL = "gemma4:12b"
@@ -78,6 +79,16 @@ def release_models() -> str:
             return "Error: could not unload the managed model; retry or wait for idle expiry."
         _active = None
         return "Managed model unloaded; its files remain on disk."
+
+
+@contextmanager
+def media_lease():
+    """Keep this manager's text inference out while one GPU media job runs."""
+    with _lock:
+        result = release_models()
+        if result.startswith("Error:"):
+            raise ValueError("could not unload the text model before generation")
+        yield
 
 
 def document_route_hint(text):
