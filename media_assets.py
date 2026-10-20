@@ -11,6 +11,11 @@ SPECS = {
     "video": ("ali-vilab/text-to-video-ms-1.7b", ["model_index.json", "scheduler/*.json", "tokenizer/*",
         "text_encoder/config.json", "text_encoder/*fp16.safetensors", "unet/config.json",
         "unet/*fp16.safetensors", "vae/config.json", "vae/*fp16.safetensors"]),
+    "video_ltx": ("Lightricks/LTX-Video-0.9.5", ["model_index.json", "scheduler/*.json", "tokenizer/*",
+        "text_encoder/config.json", "text_encoder/*.safetensors", "text_encoder/*.index.json",
+        "transformer/config.json", "transformer/*.safetensors", "vae/config.json", "vae/*.safetensors"]),
+    "speech": ("rhasspy/piper-voices", ["en/en_US/lessac/medium/en_US-lessac-medium.onnx",
+        "en/en_US/lessac/medium/en_US-lessac-medium.onnx.json", "en/en_US/lessac/medium/MODEL_CARD"]),
 }
 
 

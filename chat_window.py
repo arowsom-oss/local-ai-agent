@@ -34,6 +34,8 @@ last_answer = ""         # the newest agent reply, for the "Copy last answer" bu
 last_raw_answer = ""     # Preserve code fences when the person copies an answer to Artifacts.
 pending_image = None     # immutable preview-approved bytes, for one turn only
 pending_media = None
+speak_replies = False    # Person-only opt-in, revoked by Stop and New chat.
+recording_done = None
 
 # Reading settings. Change these and re-run if they don't feel right for you.
 FONT_NAME = "Segoe UI"
@@ -373,6 +375,7 @@ def stop_agent():
     """Kill owned automation workers and revoke pending images/approvals."""
     global pending_image, pending_media
     stop_event.set()
+    reset_voice()
     task_progress.stop()
     pending_image = pending_media = None
     stop_all()  # Kill owned process trees; does not wait for a blocked UIA call.
@@ -401,8 +404,11 @@ def watch_emergency():
 
 
 def finish_turn():
-    global busy
+    global busy, recording_done
     busy = False
+    recording_done = None
+    if 'mic_button' in globals():
+        mic_button.configure(text="Talk", state="normal")
     send_button.configure(state="normal")
     model_box.configure(state="readonly")
     stop_button.configure(state="disabled", text="Stop")
@@ -430,23 +436,27 @@ def attach_file():
         entry.focus_set()
 
 
-def preview_image(image, on_approve=None):
+def preview_image(image, on_approve=None, purpose="analysis"):
     """The person approves the exact normalized pixels, not a model-supplied path."""
     from io import BytesIO
     from PIL import Image, ImageTk
     answer = False
     win = tk.Toplevel(root)
     win._approval_dialog = True
-    win.title("Preview image for local analysis")
+    win.title("Preview reference photo for local video" if purpose == "video" else "Preview image for local analysis")
     win.transient(root)
     width = min(760, win.winfo_screenwidth() - 80)
     height = min(640, win.winfo_screenheight() - 100)
     win.geometry(f"{width}x{height}")
     row = tk.Frame(win)
     row.pack(side="bottom", fill="x", padx=12, pady=12)  # Keep No visible at display scaling.
-    tk.Label(win, text="This image will be sent only to the local model when you press Send.\n"
+    explanation = ("These exact edited pixels will condition one local video after a separate prompt approval.\n"
+                   "This is generation only; the photo cannot request tools or computer actions.\n"
+                   "Check for private information before proceeding." if purpose == "video" else
+                   "This image will be sent only to the local model when you press Send.\n"
                        "Check for passwords, private chats and other sensitive information.\n"
-                       "Analysis only: this image cannot trigger computer actions.",
+                       "Analysis only: this image cannot trigger computer actions.")
+    tk.Label(win, text=explanation,
              wraplength=width - 40, padx=12, pady=12).pack()
     original = image
     display_width, display_height = max(100, width - 40), max(100, height - 240)
@@ -551,6 +561,176 @@ def attach_image():
         stage_image(load_image(path))
     except Exception:
         show("Error", "Could not prepare that image within the image limits.")
+
+
+def animate_photo():
+    """A person selects reference pixels; no model path or expanded image-analysis tools."""
+    if busy:
+        return
+    stop_event.clear()
+    path = filedialog.askopenfilename(title="Choose a reference photo for a short local video",
+        filetypes=[("Reference photo", "*.png *.jpg *.jpeg *.webp")])
+    if not path or stop_event.is_set():
+        return
+    try:
+        image = load_image(path)
+        prepared = []
+        if preview_image(image, on_approve=prepared.append, purpose="video") is not True or len(prepared) != 1 or stop_event.is_set():
+            return
+        from tkinter import simpledialog
+        prompt = simpledialog.askstring("Describe the motion", "Describe the desired motion (up to 500 characters):",
+            parent=root, initialvalue="The subject moves gently while the camera stays steady.")
+        if prompt is None or stop_event.is_set():
+            return
+        from generation_tools import prompt_problem, run_generation
+        problem = prompt_problem(prompt)
+        if problem:
+            show("Error", problem)
+            return
+        if confirm("generation", {"kind":"video from the preview-approved photo", "prompt":prompt,
+                "limits":"LTX 2B: 384x256, 65 frames, 30 steps; 128 prompt tokens; fit photo with padding; no audio",
+                "output":"Artifacts preview plus a unique generated-folder backup"}) is not True or stop_event.is_set():
+            return
+        reference = prepared[0]
+    except Exception:
+        show("Error", "Could not prepare the reference photo within the image limits.")
+        return
+
+    def generate():
+        try:
+            response = run_generation("video", prompt, stop_event, reference=reference)
+            if "error" in response:
+                events.put(("error", "Reference video: " + str(response["error"])))
+                return
+            if stop_event.is_set():
+                events.put(("error", "Stopped. A completed generated file may remain; no preview was added."))
+                return
+            from artifacts import record_generated
+            artifact = record_generated(response["path"], "video")
+            events.put(("media_job_ready", f"Reference video ready in Artifact {artifact.number}."))
+        except Exception:
+            events.put(("error", "Reference video failed or was stopped. Check local LTX weights, free RAM/VRAM and dependencies. A completed file may remain; no automatic retry."))
+    start_background(generate, reset_stop=False)
+
+
+def read_aloud(automatic=False):
+    if busy:
+        return
+    from speech_tools import speak, text_problem
+    text = last_raw_answer.strip()
+    problem = text_problem(text)
+    if problem:
+        show("Speech", "Read aloud needs a reply of at most 2000 characters. " + problem)
+        return
+    if automatic and (not speak_replies or stop_event.is_set()):
+        return
+    if not automatic:
+        stop_event.clear()
+    if not automatic and high_risk_confirm("Read this exact reply aloud", [
+            "PLAYS SPEECH THROUGH THIS LAPTOP'S SPEAKERS", "", text, "",
+            "Local English voice, CPU only, at most 120 seconds. No file is saved. Allow?"]) is not True or stop_event.is_set():
+        return
+    start_background(lambda: events.put(("media_job_ready", speak(text, stop_event))), reset_stop=False)
+
+
+def reset_voice():
+    global speak_replies, recording_done
+    speak_replies = False
+    if 'voice_auto' in globals():
+        voice_auto.set(False)
+    if recording_done is not None:
+        recording_done.set()
+    recording_done = None
+
+
+def toggle_spoken_replies():
+    global speak_replies
+    requested = voice_auto.get() is True
+    if requested and high_risk_confirm("Enable spoken replies for this chat", [
+            "READS FUTURE TEXT REPLIES THROUGH THIS LAPTOP'S SPEAKERS", "",
+            "Replies still appear in text. The fixed English voice runs locally on CPU.",
+            "Up to 2000 characters / 120 seconds per reply; longer replies remain text only.",
+            "Other people nearby can hear them. Stop or New chat disables this setting.",
+            "No background listening; recording always requires pressing Talk. Allow?"]) is not True:
+        requested = False
+    if stop_event.is_set():
+        requested = False
+    speak_replies = requested
+    voice_auto.set(requested)
+
+
+def voice_message():
+    global recording_done
+    if recording_done is not None:
+        recording_done.set()
+        mic_button.configure(text="Transcribing...", state="disabled")
+        return
+    if busy:
+        return
+    if entry.get().strip():
+        show("Speech", "Your unsent message is preserved. Send or clear it before recording.")
+        return
+    stop_event.clear()
+    if high_risk_confirm("Record one voice message", [
+            "RECORDS YOUR DEFAULT MICROPHONE LOCALLY", "",
+            "At most 60 seconds. Press Finish recording to transcribe sooner; Stop discards it.",
+            "Whisper transcribes on CPU. Audio stays in memory, with no recording file saved.",
+            "Review the transcript before placing it in the message box. Nothing sends automatically.",
+            "Start recording?"]) is not True or stop_event.is_set():
+        return
+    import multiprocessing
+    done = multiprocessing.get_context("spawn").Event()
+    recording_done = done
+    mic_button.configure(text="Finish recording", state="normal")
+    def record():
+        try:
+            from speech_tools import capture_and_transcribe
+            events.put(("dictation_ready", capture_and_transcribe(done, stop_event,
+                on_recorded=lambda:events.put(("voice_transcribing", None)))))
+        except Exception:
+            events.put(("error", "Voice message stopped or unavailable. Check microphone permission, device and local audio weights."))
+    start_background(record, reset_stop=False)
+
+
+def transcribe_recording():
+    if busy:
+        return
+    if entry.get().strip():
+        show("Speech", "Your unsent message is preserved. Send or clear it before dictation.")
+        return
+    stop_event.clear()
+    path = filedialog.askopenfilename(title="Transcribe a local English WAV recording (no microphone capture)",
+        filetypes=[("Up to 60 seconds of PCM WAV", "*.wav")])
+    if not path or stop_event.is_set():
+        return
+    def transcribe():
+        try:
+            from speech_tools import transcribe_wav
+            events.put(("dictation_ready", transcribe_wav(path, stop_event)))
+        except Exception:
+            events.put(("error", "Could not transcribe that English PCM WAV within the local audio limits."))
+    start_background(transcribe, reset_stop=False)
+
+
+def stage_dictation(text):
+    if stop_event.is_set():
+        return
+    if not isinstance(text, str) or not 1 <= len(text) <= 6000 or any(not c.isprintable() and c not in "\n\t" for c in text):
+        show("Speech", "Invalid transcript refused.")
+        return
+    if entry.get().strip():
+        show("Speech", "A transcript is ready, but your unsent message is preserved. Transcribe again after sending or clearing it.")
+        return
+    if high_risk_confirm("Review transcription before using it", [
+            "UNTRUSTED AUDIO TRANSCRIPT - CHECK EVERY WORD", "", text, "",
+            "Place this in the message box? It will not be sent automatically. Review and press Send yourself."]) is not True or stop_event.is_set():
+        return
+    # A modal callback must not replace text entered while approval was open.
+    if entry.get().strip():
+        return
+    entry.insert(0, text)
+    entry.focus_set()
+    show("Speech", "Transcript placed in the message box for your review. Nothing was sent.")
 
 
 def screenshot():
@@ -710,6 +890,7 @@ def new_chat():
     forget_sites()              # websites allowed in the old chat are forgotten too
     last_answer = ""
     last_raw_answer = ""
+    reset_voice()
     pending_image = None
     pending_media = None
     chat_box.configure(state="normal")
@@ -836,6 +1017,8 @@ def poll():
                 last_answer = clean(item[1])
                 show("Agent", f"{last_answer}\n[{item[2]:.2f}s]")
                 finish_turn()
+                if speak_replies and not stop_event.is_set():
+                    read_aloud(automatic=True)
             elif kind == "error":
                 remove_pending()
                 show("Error", item[1])
@@ -858,6 +1041,17 @@ def poll():
                 set_notepad_phase("paused" if item[1].startswith("Error:") else "ready")
                 show("Notepad",item[1])
                 finish_turn()
+            elif kind == "media_job_ready":
+                remove_pending()
+                finish_turn()
+                show("Media", "Stopped." if stop_event.is_set() else item[1])
+            elif kind == "dictation_ready":
+                remove_pending()
+                finish_turn()
+                stage_dictation(item[1])
+            elif kind == "voice_transcribing":
+                mic_button.configure(text="Transcribing...", state="disabled")
+                show("Speech", "Microphone recording ended. Transcribing locally...")
     except queue.Empty:
         pass
     sync_attachment_chip()
@@ -983,6 +1177,7 @@ def build_window():
     global notepad_status
     global root, style, bottom, chat_holder, chat_box, copy_button, attach_button, model_var, model_box, send_button, stop_button, entry, artifact_panel, theme_surfaces, theme_labels, welcome_visible
     global more_menu, attach_menu, theme_entry, workspace, artifacts_button, clear_chip
+    global voice_auto, mic_button
     make_sharp()                 # must happen before the first window exists
     root = tk.Tk()
     root.title("Local Studio")
@@ -1027,6 +1222,10 @@ def build_window():
     more_menu.add_separator()
     more_menu.add_command(label="Model check",command=model_check)
     more_menu.add_command(label="Free VRAM",command=free_vram)
+    more_menu.add_command(label="Read reply aloud",command=read_aloud)
+    more_menu.add_command(label="Transcribe WAV into message",command=transcribe_recording)
+    voice_auto = tk.BooleanVar(value=False)
+    more_menu.add_checkbutton(label="Speak replies for this chat",variable=voice_auto,command=toggle_spoken_replies)
     more_menu.add_separator()
     more_menu.add_command(label="Bigger text",command=lambda:change_size(2))
     more_menu.add_command(label="Smaller text",command=lambda:change_size(-2))
@@ -1059,10 +1258,13 @@ def build_window():
     attach_menu=tk.Menu(root,tearoff=0)
     attach_menu.add_command(label="File",command=attach_file)
     attach_menu.add_command(label="Image",command=attach_image)
+    attach_menu.add_command(label="Photo to video",command=animate_photo)
     attach_menu.add_command(label="Clip",command=attach_clip)
     attach_menu.add_command(label="Screenshot of practice window",command=screenshot)
     attach_button=make_button(compose,"+  Attach",lambda:popup_menu(attach_menu,attach_button))
     attach_button.pack(side="left",padx=(0,8),ipady=4)
+    mic_button=make_button(compose,"Talk",voice_message)
+    mic_button.pack(side="left",padx=(0,8),ipady=4)
     clear_chip=make_button(compose,"Image attached  ✕",clear_image)
     entry=tk.Entry(compose,width=60,relief="flat",bd=0,highlightthickness=1)
     entry.pack(side="left",fill="x",expand=True,ipady=13)

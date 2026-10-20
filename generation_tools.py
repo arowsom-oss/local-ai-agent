@@ -26,7 +26,7 @@ def _generate(connection, initial):
     if not torch.cuda.is_available():
         connection.send({"error": "CUDA is required; no CPU fallback was started"})
         return
-    model = local_asset(kind)
+    model = local_asset("image" if kind == "image" else "video_ltx")
     OUTPUT_DIR.mkdir(exist_ok=True)
     name = uuid.uuid4().hex + (".png" if kind == "image" else ".mp4")
     path = OUTPUT_DIR / name
@@ -42,20 +42,14 @@ def _generate(connection, initial):
                              guidance_scale=0.0).images[0]
             image.save(encoded, format="PNG")
         else:
-            from diffusers import DiffusionPipeline, DPMSolverMultistepScheduler
-            pipeline = DiffusionPipeline.from_pretrained(model, torch_dtype=torch.float16, variant="fp16",
-                                                         local_files_only=True, use_safetensors=True)
-            pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config)
-            pipeline.enable_model_cpu_offload()
-            pipeline.vae.enable_slicing()
-            frames = pipeline(prompt=prompt, height=256, width=256, num_frames=16,
-                              num_inference_steps=12, guidance_scale=7.5).frames[0]
+            from video_backend import render_video, WIDTH, HEIGHT, FPS
+            frames, stats = render_video(model, prompt, initial.get("reference"))
             import av
             from PIL import Image
             # Own output is created exclusively; no model-chosen path or encoder options.
             with av.open(encoded, "w", format="mp4") as container:
-                stream = container.add_stream("libx264", rate=8)
-                stream.width, stream.height, stream.pix_fmt = 256, 256, "yuv420p"
+                stream = container.add_stream("libx264", rate=FPS)
+                stream.width, stream.height, stream.pix_fmt = WIDTH, HEIGHT, "yuv420p"
                 for frame in frames:
                     frame = Image.fromarray((frame * 255).astype("uint8")) if not isinstance(frame, Image.Image) else frame
                     for packet in stream.encode(av.VideoFrame.from_image(frame)):
@@ -71,7 +65,8 @@ def _generate(connection, initial):
             os.fsync(output.fileno())
         os.link(staging, path)  # Publish complete bytes without replacing an existing file.
         staging.unlink()
-        connection.send({"name": name, "path": str(path), "kind": kind})
+        connection.send({"name": name, "path": str(path), "kind": kind,
+                         **({"memory": stats} if kind == "video" else {})})
     except Exception as exc:
         if staging.exists():
             staging.unlink()
@@ -80,23 +75,37 @@ def _generate(connection, initial):
                                   "no completed output was published"})
 
 
-def run_generation(kind, prompt, stop_event=None):
+def run_generation(kind, prompt, stop_event=None, *, reference=None):
     problem = prompt_problem(prompt)
     if problem:
         return {"error": problem}
     if kind not in {"image", "video"}:
         return {"error": "unsupported generation kind"}
+    if stop_event is not None and stop_event.is_set():
+        return {"error": "stopped by the user"}
     try:
-        local_asset(kind)  # Refuse missing weights before releasing any model.
-        from model_router import release_models
-        if release_models().startswith("Error:"):
-            return {"error": "could not unload the text model before generation"}
-        worker = Worker(_generate, {"kind": kind, "prompt": prompt},
-                        memory_mb=(8 if kind == "image" else 12) * 1024)
-        try:
-            return worker.receive(180 if kind == "image" else 600, stop_event)
-        finally:
-            worker.stop()
+        initial = {"kind": kind, "prompt": prompt}
+        if reference is not None:
+            from vision_input import validate_image
+            if kind != "video":
+                return {"error": "a reference photo is supported only for video"}
+            initial["reference"] = validate_image(reference).png
+        local_asset("image" if kind == "image" else "video_ltx")
+        from model_router import media_lease
+        from media_resources import require_ram, receive_with_ram_guard
+        with media_lease():
+            require_ram(8 if kind == "video" else 3)
+            # Windows CUDA/weight loading needs commit headroom beyond its working set.
+            # The sampled system-RAM reserve remains active independently of this ceiling.
+            worker = Worker(_generate, initial, memory_mb=(8 if kind == "image" else 16) * 1024)
+            try:
+                return receive_with_ram_guard(worker, 180 if kind == "image" else 600, stop_event)
+            finally:
+                worker.stop()
+    except ValueError as exc:
+        # Resource errors contain only fixed messages/numbers, never the prompt or selected path.
+        return {"error": str(exc) if str(exc).startswith(("at least ", "could not unload")) else
+                "required local weights or approved reference photo are unavailable"}
     except Exception:
         return {"error": "generation unavailable; check optional dependencies and installed local weights"}
 
@@ -111,7 +120,7 @@ def generate_image(prompt: str) -> str:
 
 
 def generate_video(prompt: str) -> str:
-    """Create one short, low-resolution local video after exact-prompt approval.
+    """Create one short local LTX video after exact-prompt approval; no paths accepted.
 
     Args:
         prompt: 1 to 500 printable characters describing the requested short clip.

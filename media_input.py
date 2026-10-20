@@ -108,6 +108,13 @@ def prepare_media(path, stop_event=None):
         raise ValueError("choose a WAV or MP4 file")
     with path.open("rb") as file:
         data = file.read(MAX_CLIP_BYTES + 1)
+    return prepare_media_bytes(data, kind, stop_event)
+
+
+def prepare_media_bytes(data, kind, stop_event=None):
+    """Decode person-approved local bytes; microphone audio never needs a temporary file."""
+    if kind not in {"wav", "mp4"} or not isinstance(data, bytes):
+        raise ValueError("only bounded local WAV or MP4 bytes are supported")
     if not 1 <= len(data) <= MAX_CLIP_BYTES:
         raise ValueError("clip file exceeds the 64 MB limit")
     worker = Worker(_decode, {"data": data, "kind": kind}, memory_mb=4096)

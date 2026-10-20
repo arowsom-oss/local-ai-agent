@@ -668,7 +668,7 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
                 elif problem:
                     result = "Error: " + problem
                 elif not approved(ask_approval, "generation", {"kind": kind, "prompt": args["prompt"],
-                        "limits": "512x512 image, 2 steps" if kind == "image" else "256x256, 16 frames, 12 steps",
+                        "limits": "512x512 image, 2 steps" if kind == "image" else "LTX 2B: 384x256, 65 frames, 30 steps; prompt encoder capped at 128 tokens",
                         "output": "Artifacts preview plus project/generated backup; new unique file; existing files never overwritten"}):
                     result = "Error: user denied this generation request"
                 elif stopped(stop_event):
