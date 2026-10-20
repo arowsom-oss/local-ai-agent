@@ -1,0 +1,39 @@
+name: Windows offline tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  offline:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-ci.txt
+      - name: Install test dependencies (no models or GPU packages)
+        run: python -m pip install --disable-pip-version-check -r requirements-ci.txt
+      - name: Run offline suites with real Python networking blocked
+        run: python -B scripts/run_offline_tests.py
+      - name: Retain summary, per-suite logs and injection results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-offline-results
+          path: test-results/
+          if-no-files-found: warn
+          retention-days: 14

@@ -14,6 +14,13 @@ passed on 2026-10-19; `run_live_tests.bat` style runs are recorded in VALIDATION
 
 ## Shared project record
 
+[CI.md](CI.md) explains Windows offline checks for every PR.
+[PROMPT_INJECTION_TESTS.md](PROMPT_INJECTION_TESTS.md) documents eight local
+adversarial fixtures. [SECURITY_WORKBOOK.md](SECURITY_WORKBOOK.md) contains
+code-evidence notes for Alexander's own threat model and small fix.
+[SCORECARD_RUN_GUIDE.md](SCORECARD_RUN_GUIDE.md) prepares the unchanged main
+scorecard for a later person-operated run; no score has been awarded.
+
 [EFFICIENCY_REVIEW.md](EFFICIENCY_REVIEW.md) records the October 20 review,
 reproduced bugs, native measurements and remaining performance work. Imports
 reuse validated previews; obsolete previews and playback timers cancel,
