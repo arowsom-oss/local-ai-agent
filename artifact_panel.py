@@ -39,6 +39,7 @@ class ArtifactPanel(ttk.Frame):
         # Less-used actions live in one menu so the pane stays calm.
         self.more_menu=tk.Menu(self,tearoff=0)
         for text,callback in (("New blank draft",self.new),("Draft from last answer",self.from_answer),
+                              ("Open generated image or video",self.open_generated),
                               ("Import a file",self.import_file),("Reload saved version",self.reload)):
             self.more_menu.add_command(label=text,command=callback)
         more=ttk.Button(actions,text="More  ...",width=0)
@@ -203,6 +204,8 @@ class ArtifactPanel(ttk.Frame):
         signature = tuple((a.number, a.current.number) for a in items)
         if signature == self.signature:
             return
+        previous_ids = {number for number, _ in self.signature or ()}
+        new_media = [a for a in items if a.number not in previous_ids and a.kind in ("image", "video")]
         self.signature = signature
         if items and getattr(self, "on_change", None):
             self.on_change()                       # chat-first window: slide the pane in
@@ -212,6 +215,12 @@ class ArtifactPanel(ttk.Frame):
             self.signature = ()
         elif self.selected is None:
             self.load(items[-1].number)
+        elif new_media and not self.dirty:
+            self.load(new_media[-1].number)
+        elif new_media:
+            latest = new_media[-1]
+            self.status.set(f"New {latest.kind} ready: Artifact {latest.number} in the list above. "
+                            "Your unsaved text is preserved; save it before switching.")
         elif not any(a.number == self.selected.number for a in items):
             self.reset()
             self.load(items[-1].number)
@@ -372,6 +381,29 @@ class ArtifactPanel(ttk.Frame):
                 self.decode(kind, data, (kind, data))
         except (OSError, ValueError):
             self.status.set("Import refused: invalid UTF-8 text, too large, or artifact limit reached.")
+
+    def open_generated(self):
+        """Person-only recovery from this installation's generated folder; no model paths."""
+        from artifacts import record_generated
+        from generation_tools import OUTPUT_DIR
+        if self.stop_event.is_set():
+            self.status.set("Open generated cancelled by Stop; start a new turn or New chat first.")
+            return
+        if not self.discard_ok():
+            return
+        path = filedialog.askopenfilename(parent=self, title="Open a previous generated image or video",
+            initialdir=str(OUTPUT_DIR), filetypes=[("Generated media", "*.png *.mp4")])
+        if not path or self.stop_event.is_set():
+            return
+        try:
+            kind = "image" if Path(path).suffix == ".png" else "video"
+            artifact = record_generated(path, kind)
+            self.refresh()
+            if self.selected is None or self.selected.number != artifact.number:
+                self.load(artifact.number)
+        except (OSError, ValueError, TypeError):
+            self.status.set("Open refused: choose an original PNG/MP4 from this app's generated folder, "
+                            "within the Artifact limits. Use Import a file for other folders.")
 
     def show_frame(self, index):
         if not self.frames:

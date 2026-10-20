@@ -103,3 +103,34 @@ colors. The heuristic colors do not establish syntax correctness or a language
 parser. Horizontal scrolling appears when a source line exceeds the view width.
 A shorter pane omits its decorative subtitle; editor controls and safety behavior
 remain. Appearance changes do not grant execution or external network access.
+
+## Generated media delivery and recovery
+
+The core reports generation success only after registering the returned file as
+an immutable media Artifact. The generated file must still pass the fixed-folder,
+UUID filename, kind and size checks; the model cannot choose its path. An invalid
+worker result or registration failure returns Error with recovery instructions.
+Further generation requests in that turn refuse before another popup or worker;
+the person must send a new request. A completed file may remain after Stop or a
+registration failure; neither case claims that an Artifact was delivered.
+
+When a new media Artifact arrives, the pane opens and selects it even if another
+Artifact was selected. An unsaved text buffer stays selected and intact instead,
+with a notice naming the new Artifact in the list. Repeated refreshes do not
+restart a preview. Existing isolated decoding, Stop and playback limits apply.
+
+Artifacts > More > Open generated image or video opens a person-controlled picker
+in this installation's generated folder. It reuses the same strict path and
+memory checks and snapshots the file without inference, downloading or deleting
+it. This makes earlier generated files available after New chat or a restart;
+it does not restore the old chat or automatically populate every previous file.
+Media in Downloads or other folders can use the existing Import a file picker.
+Export remains the explicit way to save a selected copy elsewhere.
+
+Eight additional offline tests cover both real core generation dispatch paths,
+immutable bytes, exact approvals, full stores and retry blocking, malformed or
+outside-folder results, Stop, automatic selection, preserved unsaved text and
+reopening/cancellation. The native Tk fixture now uses scripted model/worker
+results through actual core registration and verifies PNG/MP4 auto-selection,
+decoding, playback and reopening a retained video after New chat. The GPU models
+are not invoked by these regression tests.
