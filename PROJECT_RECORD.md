@@ -4,7 +4,7 @@ A safe local AI assistant for Alexander's Windows laptop
 
 Running record updated October 20, 2026. Earlier measurements remain labeled by milestone; later chapters record subsequent changes and failures.
 
-Current handoff: the final chapters record the October 20 review, public CI and student-owned next work. They supersede historical branch/test-count snapshots. The complete shared Markdown is PROJECT_RECORD.md on codex/scorecard-injection-ci-2026-10-20 in arowsom-oss/local-ai-agent, linked from its README. Earlier chapters preserve measurements and failures. GitHub shares source and this record, not ignored local models or personal data. The main scorecard remains deferred, with no invented score.
+Current handoff: the final chapters record topic-based web research, the October 20 review, public CI and student-owned next work. They supersede historical branch/test-count snapshots. The complete shared Markdown is PROJECT_RECORD.md on codex/topic-web-search-2026-10-20 in arowsom-oss/local-ai-agent, linked from its README. Earlier chapters preserve measurements and failures. GitHub shares source and this record, not ignored local models or personal data. The main scorecard remains deferred, with no invented score.
 
 ## Purpose and current position
 
@@ -733,3 +733,28 @@ Hosted evidence: https://github.com/arowsom-oss/local-ai-agent/actions/runs/3948
 Alexander chose to write THREAT_MODEL.md and the next small fix himself. SECURITY_WORKBOOK.md supplies code line references, asset/attacker/boundary questions, limitations and test pointers. No finished threat model or human-authored commit was invented. The confirmed, deliberately unfixed candidate is Copy last answer using display-cleaned last_answer instead of the preserved raw reply, changing code fences and literal formatting. Alexander can reproduce, fix, test and explain it, then request review.
 
 Draft PR 9 on codex/scorecard-injection-ci-2026-10-20 stacks on PR 8. This update changes tests, CI and documentation, not application runtime. Main is unmerged. The current shared record and workbooks are on that branch; the local PDF matches it. Earlier privacy, resource and unfinished-computer-control limits remain.
+
+<!-- PAGE -->
+# Research from a topic without a pasted link
+
+## Missing capability and implementation
+
+The earlier browser_search could only use a numbered GET form on a page already opened. There was no topic-to-source discovery tool. browser_web_search(query) now builds a fixed DuckDuckGo Lite GET URL, navigates through the existing guarded browser and returns untrusted snippets and numbered links immediately. The model can choose a recorded result, open it and read its contents. The opened-source observation includes its full URL for citation. browser_read still accepts no arguments. Prompts and specific refusal guidance explain the sequence and stale-number rules; those instructions grant no authority.
+
+## Code boundaries and approval
+
+Queries allow 1-100 printable characters, must not be blank and refuse @, seven consecutive digits and ! shortcuts before any popup. Strict dispatch rejects model-supplied URLs, providers or approval flags. A new provider needs site approval; every query always needs its separate exact text/provider/full-URL approval, even inside a plan. No remains the default. Pattern checks cannot recognize every secret: the person must review outbound text.
+
+Only the known result wrapper on the exact Lite page is decoded once from a recorded link. No redirect is fetched and no target is trusted by decoding it. Destination syntax, approvals and public DNS/IP pinning still apply. JavaScript, service workers, POST, downloads and redirects remain blocked. Browser threading, response/page budgets and redacted persistent auditing remain. Stop after synchronous search navigation prevents the following automatic read. No new package, model or broad computer capability was added.
+
+## Evidence and failures retained
+
+All 325 offline cases in eighteen suites pass in the lean Windows/Python 3.12 environment; fourteen cases are new. The real headed Chromium fixture passes with fake HTTPS for search, decoded recorded links and pinned source opening. The eight injection fixtures still pass.
+
+A live Lite request returned ten relevant links; the HTML endpoint returned a challenge and is not an automatic fallback. Early e2b research trials used a wrong read argument, answered from snippets, or reused stale numbers and reached the round limit. Their reports were retained. Guidance and source-address observations improved the flow. A later two-fact reply included a detail not independently verified in its excerpt; it is not a fully verified research result. Subsequent one-fact e2b and Auto probes searched, opened/read NASA and cited a page-supported fact without an initial URL. Auto selected e2b and recovered from a refused search-box click.
+
+These public synthetic probes used constrained test approval callbacks, not real human popup decisions; no hidden reasoning or private query was retained. WEB_RESEARCH.md describes evidence, manual checks and limits. Search availability, provider markup, poor source selection, hallucinations and the 4000-character read limit remain. Chromium routing is not an OS sandbox.
+
+## Shared handoff
+
+This branch stacks on codex/scorecard-injection-ci-2026-10-20 and remains unmerged. The normal app needs a restart to load updated Python. The main scorecard remains prepared for later with no new score or invented result. Alexander still owns writing THREAT_MODEL.md and the deliberately unfixed copy-button bug; historical workbook line references are identified as historical. Existing models, ignored identity, caches and saved work are preserved.

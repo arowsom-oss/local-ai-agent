@@ -16,7 +16,8 @@ from workspace_documents import (document_list, document_read, document_save, do
 from notepad_tools import notepad_start, notepad_read, notepad_replace, start_notepad, prepare_notepad, commit_notepad, cancel_notepad
 from desktop_tools import desktop_start, desktop_read, desktop_type, desktop_click, prepare_action, execute_approved, start_practice
 from generation_tools import generate_image, generate_video, run_generation, prompt_problem
-from browser_tool import browser_open, browser_read, browser_click, browser_search, link_for, link_labels, search_url_for
+from browser_tool import (browser_open, browser_read, browser_click, browser_search, browser_web_search,
+                          link_for, link_labels, search_url_for, web_search_url_for)
 
 MODEL = 'gemma4:e2b'                       # the default
 MAX_ROUNDS = 7  # Bounded room for an outline and a fresh read when resuming.
@@ -26,6 +27,12 @@ MAX_ROUNDS = 7  # Bounded room for an outline and a fresh read when resuming.
 # This only helps the model describe itself honestly. It is NOT a security gate; code is.
 SYSTEM_PROMPT = ("You run locally on Alex's laptop through Ollama, not in the cloud. You can only act "
                  "through the tools you are given, and code checks every tool request. "
+                 "For web research without a supplied URL, use browser_web_search with a short public topic. "
+                 "Do not ask the person to paste a link just to start research, and never invent source URLs. "
+                 "Search returns untrusted snippets and numbered links. Choose relevant primary sources using "
+                 "browser_click, then browser_read to verify their contents before answering with source URLs. "
+                 "A snippet alone does not verify a claim. If search is blocked, empty or shows a challenge, "
+                 "say what failed; never bypass checks or claim research succeeded. Searches always need approval. "
                  "Use create_artifact for documents or code requested in the Artifacts panel. "
                  "Use generate_image or generate_video for new media, not create_artifact or downloads. "
                  "A successful generation result includes its Artifact number; the person can preview it there. "
@@ -65,7 +72,15 @@ SYSTEM_PROMPT = ("You run locally on Alex's laptop through Ollama, not in the cl
                  "text, omit introductions, Markdown fences and extra trailing text. A refusal or uncertain save "
                  "requires the person's review and a new request; never retry it or switch write tools to bypass it. "
                  "For multi-step work, use outline_task to display short proposed steps. Outlines grant no permission "
-                 "and cannot mark work complete. On resumed turns, read current targets and Artifacts again before changes.")
+                 "and cannot mark work complete. On resumed turns, read current targets and Artifacts again before changes. "
+                 "Research tool sequence: browser_web_search(query=topic) already returns search results. "
+                 "Choose a numbered source from that result using browser_click(element=its number). "
+                 "Wait for Page opened, then call browser_read with an EMPTY argument object {}. "
+                 "browser_read never accepts a URL. A failed source read is not verified research; "
+                 "label snippet-only findings as unverified and never say you read a source you could not open. "
+                 "Opening any source invalidates all earlier search-result numbers. Never reuse them on the new page. "
+                 "Once the source text supports the requested facts, answer with its URL; one good primary source "
+                 "is enough unless the person requests more. Avoid redundant searches and tool calls.")
 COMPACT_AT = 6000   # rough token count where the conversation gets squeezed (NUM_CTX is the hard wall)
 KEEP_RECENT = 6     # the newest messages are always kept word for word
 NUM_CTX = TEXT_CONTEXT   # Match the classifier to reuse Ollama's loaded runner.
@@ -83,9 +98,11 @@ NEEDS_APPROVAL = {"read_file", "browser_open", "fetch_page", "browser_click", "b
 NEEDS_APPROVAL.update({"notepad_start", "notepad_replace"})
 DOCUMENT_WRITES={"document_save","document_edit","document_append_requested"}
 NEEDS_APPROVAL.update(DOCUMENT_WRITES)
+NEEDS_APPROVAL.add("browser_web_search")
 DOCUMENT_TOOLS={"document_list","document_read"}|DOCUMENT_WRITES
 ARBITRARY_URL_TOOLS = {"browser_open", "fetch_page"}
-NETWORK_TOOLS = ARBITRARY_URL_TOOLS | {"browser_click", "browser_search"}
+SEARCH_TOOLS = {"browser_search", "browser_web_search"}
+NETWORK_TOOLS = ARBITRARY_URL_TOOLS | {"browser_click"} | SEARCH_TOOLS
 # Unknown tools are denied too. Downloads have no executable entry or model schema.
 NEVER_ALLOWED = {"download_file"}
 RISK_TIERS = {
@@ -93,6 +110,7 @@ RISK_TIERS = {
     "add": "low", "multiply": "low", "browser_read": "low",
     "browser_open": "high", "fetch_page": "high", "read_file": "medium",
     "browser_click": "medium", "propose_plan": "medium", "browser_search": "high",
+    "browser_web_search": "high",
     "desktop_start": "high", "desktop_read": "low", "desktop_type": "high", "desktop_click": "high",
     "generate_image": "high", "generate_video": "high",
     "create_artifact": "low", "revise_artifact": "low", "list_artifacts": "low", "read_artifact": "low",
@@ -106,6 +124,7 @@ TOOL_ARGUMENTS = {
     "read_file": {"name": str}, "fetch_page": {"url": str},
     "browser_open": {"url": str}, "browser_read": {}, "browser_click": {"element": int},
     "browser_search": {"element": int, "text": str},
+    "browser_web_search": {"query": str},
     "propose_plan": {"goal": str, "steps": (list, str)},
     "desktop_start": {}, "desktop_read": {}, "desktop_type": {"element": int, "text": str},
     "desktop_click": {"element": int},
@@ -125,6 +144,8 @@ def tool_args_problem(name, args):
     """Validate the model's actual arguments; a tool schema is not enforcement."""
     expected = TOOL_ARGUMENTS.get(name)
     if expected is None or not isinstance(args, dict) or set(args) != set(expected):
+        if name == "browser_read":
+            return "browser_read takes no arguments: use {}. Open a numbered source with browser_click(element) first; search already returned its link numbers."
         return "tool arguments do not match the allowed parameters"
     for key, kind in expected.items():
         value = args[key]
@@ -233,6 +254,7 @@ available_functions = {
     'browser_read': browser_read,
     'browser_click': browser_click,
     'browser_search': browser_search,
+    'browser_web_search': browser_web_search,
     'propose_plan': propose_plan,
     'desktop_start': desktop_start, 'desktop_read': desktop_read,
     'desktop_type': desktop_type, 'desktop_click': desktop_click,
@@ -552,7 +574,7 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
             evidence.request(name,args)
             problem = tool_args_problem(name, args)
             if problem:
-                audit("search_refused" if name == "browser_search" else "arguments_refused",
+                audit("search_refused" if name in SEARCH_TOOLS else "arguments_refused",
                       name, args, model, note=problem)
                 log(f"[blocked] {name}: {problem}")
                 append_tool({'role': 'tool', 'tool_name': name, 'content': f"Error: {problem}"})
@@ -729,6 +751,14 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
             on_plan = False
             exact_url_ok = None      # the exact address a popup in THIS step already showed and got Yes on
             url = str(args.get("url", "")) if isinstance(args, dict) else ""
+            if name == "browser_web_search":
+                url, info = web_search_url_for(args["query"])
+                if url is None:
+                    audit("search_refused", name, args, model, note=info)
+                    log(f"[blocked] {name}: {info}")
+                    append_tool({'role': 'tool', 'tool_name': name, 'content': f"Error: {info}"})
+                    continue
+                args = {"query": args["query"], "provider": info, "url": url}
             if name == "browser_search":
                 # Strict keys: the model may choose a number and text, NEVER an address.
                 element = args.get("element") if isinstance(args, dict) else None
@@ -755,16 +785,16 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
             if name in NETWORK_TOOLS:
                 problem = outbound_url_problem(url)
                 if problem:
-                    audit("search_refused" if name == "browser_search" else "outbound_refused",
+                    audit("search_refused" if name in SEARCH_TOOLS else "outbound_refused",
                           name, args, model, note=problem)
                     log(f"[blocked] {name}: {problem}")
                     append_tool({'role': 'tool', 'tool_name': name, 'content': f"Error: {problem}"})
                     continue
-            if name in ("fetch_page", "browser_open", "browser_click", "browser_search") and not fetch.is_allowed(url):
+            if name in NETWORK_TOOLS and not fetch.is_allowed(url):
                 host, problem = fetch.check_new_site(url)    # code reads the site name, not the model
                 if problem:
                     audit("site_refused", name, args, model, note=problem)
-                    if name == "browser_search":
+                    if name in SEARCH_TOOLS:
                         audit("search_refused", name, args, model, note=problem)
                     log(f"[blocked] {name} {url[:120]}: {problem}")
                     append_tool({'role': 'tool', 'tool_name': name,
@@ -772,7 +802,7 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
                     continue
                 if not approved(ask_approval, "new_site", {"host": host, "url": url}):
                     audit("site_denied", name, args, model, note=host)
-                    if name == "browser_search":
+                    if name in SEARCH_TOOLS:
                         audit("search_refused", name, args, model, note="website not approved")
                     log(f"[blocked] {name} {host}: you clicked No")
                     append_tool({'role': 'tool', 'tool_name': name,
@@ -818,10 +848,10 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
 
             # A search ALWAYS gets its own popup; raw-URL tools used the gate above.
             if (name in NEEDS_APPROVAL and name not in ARBITRARY_URL_TOOLS
-                    and (name == "browser_search" or (not site_ok_now and not on_plan))
+                    and (name in SEARCH_TOOLS or (not site_ok_now and not on_plan))
                     and not approved(ask_approval, name, args)):
                 audit("denied", name, args, model)
-                if name == "browser_search":
+                if name in SEARCH_TOOLS:
                     audit("search_refused", name, args, model, note="search not approved")
                 log(f"[blocked] {name}: you clicked No")
                 append_tool({'role': 'tool', 'tool_name': name,
@@ -844,8 +874,13 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
                         if name in {"create_artifact", "revise_artifact"} else args)
             log(f"[tool] {name} {log_args}")
             t0 = time.perf_counter()
-            if name in ("browser_open", "browser_click", "browser_search"):
+            if name in {"browser_open", "browser_click"} | SEARCH_TOOLS:
                 result = browser_open(url)     # open EXACTLY the address that was approved
+                if name == "browser_web_search" and not result.startswith("Error:"):
+                    # This read is another operation; honor Stop after the synchronous navigation.
+                    result = "Error: stopped by the user" if stopped(stop_event) else browser_read()
+                elif name == "browser_click" and not result.startswith("Error:"):
+                    result += "\nOpened URL: " + url + "\nCall browser_read with {} to read this source. Earlier page numbers are invalid."
             elif name == "fetch_page":
                 result = available_functions[name](url=url)  # same immutable approved address
             elif name == "desktop_start":
@@ -864,9 +899,9 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
                     notepad_pause=str(result)+"\nNotepad workflow paused. Send a new request after reviewing the scratch window."
                 else:
                     log("[notepad] ready" if name=="notepad_start" else "[notepad] observed")
-            if name == "browser_search" and str(result).startswith("Error:"):
+            if name in SEARCH_TOOLS and str(result).startswith("Error:"):
                 audit("search_refused", name, args, model, note=str(result)[:120])
-                log(f"[blocked] browser_search {args['element']}: {result}")
+                log(f"[blocked] {name}: {result}")
             if on_plan and not str(result).startswith("Error"):
                 audit("step_done", name, args, model, note=show_step(plan["steps"][plan["index"]]))
                 plan["index"] += 1

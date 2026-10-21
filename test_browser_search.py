@@ -207,7 +207,7 @@ def tool_call(name, args):
     return types.SimpleNamespace(function=types.SimpleNamespace(name=name, arguments=args))
 
 
-def run_calls(calls, session=None, decisions=None, after_popup=None, open_result="Page opened.", initial_hosts=(), expected_answer="Done"):
+def run_calls(calls, session=None, decisions=None, after_popup=None, open_result="Page opened.", initial_hosts=(), expected_answer="Done", after_open=None):
     """Run the real model/tool loop with a scripted model and approval recorder."""
     session = session or session_with()
     popups, audit_events, logs, opened, messages, tool_schemas = [], [], [], [], [], []
@@ -235,6 +235,7 @@ def run_calls(calls, session=None, decisions=None, after_popup=None, open_result
     def open_url(url):
         assert is_allowed(url), "Unapproved site reached browser_open"
         opened.append(url)
+        if after_open is not None:after_open()
         return open_result
 
     def audit(event, name, args, model, note=""):
@@ -660,6 +661,160 @@ def test_popup_exact_text_label_full_url_and_default_no():
     assert "\ncats & dogs\n" in message
     assert full_url in message
     assert options["default"] == "no"
+
+
+def test_topic_search_builds_fixed_encoded_url_without_open_page():
+    with patch.object(browser, "_worker", None), patch.object(browser, "_send", side_effect=no_external_call):
+        url, provider = browser.web_search_url_for("Mars & café + facts?")
+    assert provider == "DuckDuckGo Lite"
+    assert url == "https://lite.duckduckgo.com/lite/?q=Mars+%26+caf%C3%A9+%2B+facts%3F&kp=1"
+
+
+def test_topic_search_invalid_queries_refused_before_popup():
+    for query in ("", " ", "x"*101, "me@example.com", "1234567", "a\nb", "!g cats", None, 123):
+        if not isinstance(query, str):
+            assert browser.web_search_url_for(query)[0] is None
+            continue
+        result = run_calls([tool_call("browser_web_search", {"query": query})])
+        assert not result.popups and not result.opened
+        assert any(event[0] == "search_refused" for event in result.audit)
+
+
+def test_topic_search_cannot_accept_model_address_or_approval():
+    for extra in ({"url": "https://evil.example/"}, {"approved": True}, {"provider": "evil"}):
+        result = run_calls([tool_call("browser_web_search", {"query": "Mars", **extra})])
+        assert not result.popups and not result.opened
+        assert any(event[0] == "search_refused" for event in result.audit)
+    assert inspect.signature(core.available_functions['browser_web_search']).parameters.keys() == {'query'}
+
+
+def topic_calls(decisions=None, initial_hosts=(), after_popup=None, plan=False, open_result="Page opened.", expected_answer="Done", after_open=None):
+    calls = [tool_call("browser_web_search", {"query": "Mars facts"})]
+    if plan:
+        calls.insert(0, tool_call("propose_plan", {"goal": "Read", "steps": ["open https://approved.example/"]}))
+    with patch.object(core, "browser_read", return_value=browser.TEXT_PREFIX + "\n[1] NASA source") as reader:
+        result = run_calls(calls, decisions=decisions, initial_hosts=initial_hosts,
+                           after_popup=after_popup, open_result=open_result, expected_answer=expected_answer, after_open=after_open)
+        result.reads = reader.call_count
+    return result
+
+
+def test_topic_search_new_site_and_exact_own_popup():
+    result = topic_calls()
+    url = "https://lite.duckduckgo.com/lite/?q=Mars+facts&kp=1"
+    assert [name for name, _ in result.popups] == ['new_site', 'browser_web_search']
+    assert result.popups[1][1] == {'query':'Mars facts', 'provider':'DuckDuckGo Lite', 'url':url}
+    assert result.opened == [url] and result.reads == 1
+    assert any(m.get('content','').startswith(browser.TEXT_PREFIX) for m in result.messages if isinstance(m,dict))
+
+
+def test_topic_search_never_covered_by_site_or_plan():
+    for plan in (False, True):
+        result = topic_calls(initial_hosts={'lite.duckduckgo.com'}, plan=plan,
+                             decisions={'browser_web_search':False})
+        assert [n for n,_ in result.popups] == (['plan'] if plan else []) + ['browser_web_search']
+        assert not result.opened and result.reads == 0
+    assert core.parse_plan({'goal':'Search','steps':['search Mars']})[0] is None
+
+
+def test_topic_search_new_site_denial_and_stop_send_nothing():
+    result = topic_calls(decisions={'new_site':False})
+    assert [n for n,_ in result.popups] == ['new_site'] and not result.opened and not result.reads
+    import threading
+    stop = threading.Event()
+    def stopped_popup(name, args):
+        if name=='browser_web_search':stop.set()
+    with patch.object(core, 'stopped', side_effect=lambda ignored:stop.is_set()):
+        result = topic_calls(after_popup=stopped_popup, expected_answer="(stopped by you)")
+    assert not result.opened and not result.reads
+
+
+def test_topic_search_popup_cannot_change_url_and_open_error_skips_read():
+    def mutate(name,args):
+        args['url']='https://evil.example/changed'
+        args['query']='changed'
+    result=topic_calls(after_popup=mutate)
+    assert result.opened == ['https://lite.duckduckgo.com/lite/?q=Mars+facts&kp=1']
+    result=topic_calls(open_result='Error: network failed')
+    assert result.reads == 0 and any(e[0]=='search_refused' for e in result.audit)
+
+
+def test_topic_search_wrapper_decoding_only_on_fixed_provider_page():
+    from urllib.parse import urlencode
+    target='https://science.nasa.gov/mars/facts/?x=a%26b'
+    wrapper='https://duckduckgo.com/l/?'+urlencode({'uddg':target,'rut':'opaque'})
+    page='https://lite.duckduckgo.com/lite/?q=Mars'
+    assert browser._recorded_link_url(wrapper,page)==target
+    assert browser._recorded_link_url(wrapper,'https://approved.example/')==wrapper
+    assert browser._recorded_link_url(wrapper,page.replace('/lite/','/elsewhere'))==wrapper
+    for bad in ('http://evil.example/', 'https://192.168.1.1/', 'file:///secret',
+                'https://user:pass@evil.example/', 'https://evil.example/a b', 'https://evil.example/\n'):
+        assert browser._recorded_link_url('https://duckduckgo.com/l/?'+urlencode({'uddg':bad}),page)==''
+    assert browser._recorded_link_url(wrapper+'&uddg=https://evil.example/',page)==''
+    assert browser._recorded_link_url('https://duckduckgo.com/l/?rut=missing',page)==''
+    spoof=wrapper.replace('duckduckgo.com/l/', 'duckduckgo.com.evil.example/l/')
+    assert browser._recorded_link_url(spoof,page)==spoof
+
+
+def test_topic_result_number_keeps_decoded_destination_and_is_stale_after_read():
+    session=session_with(box(tag='a',href='https://duckduckgo.com/l/?uddg=https%3A%2F%2Fnew.example%2Ffacts'))
+    session.page.url='https://lite.duckduckgo.com/lite/?q=Mars'
+    session.list_elements();number=next(iter(session.elements))
+    assert session.lookup(number)=='OK https://new.example/facts\nSearch the library'
+    session.list_elements()
+    assert session.lookup(number).startswith('Error:')
+    with patch.object(core,'link_for',return_value=('https://new.example/facts','NASA facts')):
+        result=run_calls([tool_call('browser_click',{'element':number})],decisions={'new_site':False})
+    assert [n for n,_ in result.popups]==['new_site'] and not result.opened
+
+
+def test_topic_search_public_wrapper_and_resume_evidence():
+    with patch.object(browser,'browser_open',return_value='Page opened.') as opener, \
+         patch.object(browser,'browser_read',return_value=browser.TEXT_PREFIX+'\nNASA') as reader:
+        assert browser.browser_web_search('Mars').startswith(browser.TEXT_PREFIX)
+        opener.assert_called_once_with('https://lite.duckduckgo.com/lite/?q=Mars&kp=1')
+        assert reader.call_count==1
+    evidence=core.TurnEvidence(resume=True)
+    evidence.result('browser_web_search',browser.TEXT_PREFIX+'\nNASA')
+    assert not evidence.problem('browser_click',{'element':1})
+    evidence.result('browser_open','Page opened.')
+    assert evidence.problem('browser_click',{'element':1})
+
+
+def test_topic_popup_shows_query_provider_url_and_defaults_no():
+    tree=ast.parse((HERE/'chat_window.py').read_text(encoding='utf-8'))
+    nodes=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='confirm'
+           or isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='WHAT_IT_DOES' for t in n.targets)]
+    shown=[]
+    namespace={'high_risk_confirm':lambda title,lines:shown.append((title,lines)) or False}
+    exec(compile(ast.Module(body=nodes,type_ignores=[]),'chat_window.py','exec'),namespace)
+    url='https://lite.duckduckgo.com/lite/?q=Mars&kp=1'
+    assert namespace['confirm']('browser_web_search',{'query':'Mars','provider':'DuckDuckGo Lite','url':url}) is False
+    assert 'Mars' in shown[0][1] and url in shown[0][1]
+    assert 'private information' in '\n'.join(shown[0][1])
+
+
+def test_topic_read_wrong_url_argument_gives_specific_guidance():
+    result=run_calls([tool_call('browser_read',{'url':'https://approved.example/'})])
+    assert not result.popups and not result.opened
+    errors=[m['content'] for m in result.messages if isinstance(m,dict) and m.get('role')=='tool']
+    assert 'browser_read takes no arguments' in errors[0] and 'browser_click' in errors[0]
+
+
+def test_topic_click_returns_exact_opened_source_address():
+    url='https://approved.example/'+'a'*120+'?topic=Mars'
+    with patch.object(core,'link_for',return_value=(url,'NASA facts')):
+        result=run_calls([tool_call('browser_click',{'element':7})])
+    observations=[m['content'] for m in result.messages if isinstance(m,dict) and m.get('role')=='tool']
+    assert result.opened==[url] and 'Opened URL: '+url in observations[0]
+    assert 'Earlier page numbers are invalid' in observations[0]
+
+
+def test_topic_stop_during_navigation_skips_following_read():
+    stop=threading.Event()
+    with patch.object(core,'stopped',side_effect=lambda ignored:stop.is_set()):
+        result=topic_calls(after_open=stop.set,expected_answer='(stopped by you)')
+    assert len(result.opened)==1 and result.reads==0
 
 
 if __name__ == "__main__":

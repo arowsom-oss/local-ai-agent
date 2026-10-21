@@ -4,8 +4,11 @@ AI-assisted research notes, October 20, 2026. You chose to write THREAT_MODEL.md
 and the next fix yourself. Neither is written or attributed to you here.
 This is a source map and writing exercise, not a completed security audit.
 
-Source baseline: 36e15150abbf97b175136e88effde9335386f249. This update changes
-tests/docs/CI only, so the runtime line references below remain valid.
+Source baseline: 36e15150abbf97b175136e88effde9335386f249. The initial workbook
+update changed tests/docs/CI only. Subsequent topic-based search changes move
+runtime line numbers: the references below identify that historical baseline.
+Use function names and rg to locate current checks. WEB_RESEARCH.md describes
+the new fixed-provider search boundary and its separate exact approval.
 
 ## Write your own threat model
 

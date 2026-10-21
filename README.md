@@ -14,6 +14,10 @@ passed on 2026-10-19; `run_live_tests.bat` style runs are recorded in VALIDATION
 
 ## Shared project record
 
+[WEB_RESEARCH.md](WEB_RESEARCH.md) explains topic-based web search: a person can
+request research without pasting a URL. Each search keeps its own exact approval,
+and recorded source links use the existing guarded browser.
+
 [CI.md](CI.md) explains Windows offline checks for every PR.
 [PROMPT_INJECTION_TESTS.md](PROMPT_INJECTION_TESTS.md) documents eight local
 adversarial fixtures. [SECURITY_WORKBOOK.md](SECURITY_WORKBOOK.md) contains

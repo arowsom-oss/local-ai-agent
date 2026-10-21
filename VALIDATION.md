@@ -1,3 +1,17 @@
+# Topic-based research (2026-10-20)
+
+All 325 offline cases in eighteen suites pass after adding fourteen search
+cases. The real headed Chromium fixture also passes using fake HTTPS, including
+the fixed search endpoint, decoded recorded source and pinned-IP source click.
+Live Ollama e2b found a NASA link from a topic, opened/read it and returned a
+supported one-fact answer without any initial URL. Earlier wrong-argument,
+stale-number/round-limit and snippet-only trials remain documented rather than
+discarded. Live probes used constrained approval fixtures, not real human UI
+approvals. WEB_RESEARCH.md explains the checks and remaining quality limits.
+Auto also returned a supported NASA answer after recovering from a refused
+search-box click; it selected e2b. This does not run or change the deferred
+main scorecard.
+
 # Offline CI and adversarial fixtures (2026-10-20)
 
 All eighteen offline suites pass in both the existing runtime and a newly

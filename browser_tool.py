@@ -1,7 +1,7 @@
 """Static, read-only Chromium tools for Python 3.12.
 
 Requires httpx, Playwright >= 1.48, its Chromium installation, and your fetch.py.
-Register ONLY browser_open, browser_read, browser_click and browser_search with Ollama. Call close_browser from
+Register ONLY the public browser tools with Ollama, never the URL lookup helpers. Call close_browser from
 the New chat button BEFORE clearing/replacing fetch.session_hosts.
 
 SECURITY DEVIATION: 3xx responses are blocked. Playwright documents that a
@@ -20,12 +20,56 @@ import queue
 import threading
 import time
 from dataclasses import dataclass, field
-from urllib.parse import urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 import httpx
 import fetch
 
-__all__ = ["browser_open", "browser_read", "browser_click", "browser_search", "link_for", "link_labels", "search_url_for", "close_browser"]
+__all__ = ["browser_open", "browser_read", "browser_click", "browser_search", "browser_web_search",
+           "link_for", "link_labels", "search_url_for", "web_search_url_for", "close_browser"]
+
+SEARCH_ENDPOINT = "https://lite.duckduckgo.com/lite/"
+
+
+def web_search_url_for(query):
+    """Build a fixed-provider URL before approval; no browser or network needed."""
+    problem = _search_text_problem(query)
+    if problem:
+        return None, problem
+    if not query.strip():
+        return None, "search text must contain a non-space character."
+    # !bangs can redirect away from the search provider instead of returning results.
+    if "!" in query:
+        return None, "web search shortcuts containing ! are not allowed."
+    parts = urlsplit(SEARCH_ENDPOINT)
+    return urlunsplit(parts._replace(query=urlencode({"q": query, "kp": "1"}))), "DuckDuckGo Lite"
+
+
+def _recorded_link_url(href, page_url):
+    """Decode only the known search-result wrapper, without requesting a redirect.
+
+    The decoded destination is still untrusted: normal URL, site, approval and
+    pinned-IP checks apply when it is opened. Never decode recursively.
+    """
+    try:
+        page, link = urlsplit(page_url), urlsplit(href)
+        if (page.scheme == "https" and page.netloc == "lite.duckduckgo.com"
+                and page.path == "/lite/" and link.scheme == "https"
+                and link.netloc in {"duckduckgo.com", "lite.duckduckgo.com"}
+                and link.path == "/l/"):
+            values = parse_qs(link.query, keep_blank_values=True, max_num_fields=10).get("uddg", [])
+            if len(values) != 1:
+                return ""
+            href = values[0]
+            target = urlsplit(href)
+            host, problem = fetch.check_new_site(href)
+            if (problem or not host or target.username is not None or target.password is not None
+                    or len(href) > 4096 or "\\" in href
+                    or any(not c.isprintable() or c.isspace() for c in href)):
+                return ""
+        return href
+    except Exception:
+        return ""
 
 MAX_RESPONSE_BYTES = 5_000_000  # Decimal 5 MB, measured before buffering the body.
 MAX_PAGE_REQUESTS = 100  # Includes the document, frames, blocked routes and websockets.
@@ -335,7 +379,7 @@ class _Session:
                 locked += 1                                # never numbered, never typed into
                 continue
             if item.get("tag") == "a":
-                href = str(item.get("href", ""))
+                href = _recorded_link_url(str(item.get("href", "")), page_url)
                 if not href.startswith(("https://", "http://")):
                     continue                               # skip mailto:, javascript:, etc.
                 here = str(getattr(self.page, "url", "")).split("#")[0]
@@ -549,7 +593,7 @@ def browser_open(url: str) -> str:
 
 
 def browser_read() -> str:
-    """Read up to 4000 characters of visible text from the current page.
+    """Read the CURRENT page after browser_click or browser_open. Accepts NO arguments or URL.
 
     Args:
         None.
@@ -614,6 +658,27 @@ def browser_search(element: int, text: str) -> str:
     if url is None:
         return f"Error: {info}"
     return browser_open(url)
+
+
+def browser_web_search(query: str) -> str:
+    """Find numbered source links for a topic, without needing a URL or open page.
+
+    Returns search snippets immediately. Next use browser_click(element=the source's
+    recorded number), THEN browser_read() with no arguments to read that source.
+    Never pass a URL to browser_read. Snippets alone are not verified research.
+
+    Args:
+        query: Short public topic, 1 to 100 printable characters; no @, ! or seven consecutive digits.
+
+    Returns:
+        Untrusted search text and numbered source links, or an Error string.
+        The agent loop must approve the exact query and URL before this runs.
+    """
+    url, info = web_search_url_for(query)
+    if url is None:
+        return "Error: " + info
+    result = browser_open(url)
+    return result if result.startswith("Error:") else browser_read()
 
 
 def browser_click(element: int) -> str:

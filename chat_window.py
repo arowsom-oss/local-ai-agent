@@ -75,6 +75,7 @@ WHAT_IT_DOES = {
     "browser_open": "OPENS A WEB PAGE in the read-only browser",
     "browser_click": "CLICKS A LINK in the read-only browser",
     "browser_search": "SUBMITS A SEARCH on a website",
+    "browser_web_search": "SEARCHES THE WEB for a public topic",
     "outbound_request": "SENDS THIS EXACT ADDRESS TO A WEBSITE",
     "desktop_start": "OPENS AN OWNED PRACTICE WINDOW (RAM-only draft; no real applications)",
     "notepad_start": "OPENS A NEW CLASSIC NOTEPAD SCRATCH WINDOW",
@@ -219,6 +220,13 @@ def confirm(name, args):
                  "Exact search text:", args.get("text", ""), "",
                  f"Full URL: {args.get('url')}", "", "Allow this search?"]
         return high_risk_confirm("Approve search", lines)
+    if name == "browser_web_search":
+        lines = [WHAT_IT_DOES[name], "", f"Search provider: {args.get('provider')}", "",
+                 "Exact search text:", args.get("query", ""), "",
+                 "Full URL:", args.get("url", ""), "",
+                 "This sends the search text to the provider. Do not include private information.",
+                 "Allow this one search?"]
+        return high_risk_confirm("Approve web search", lines)
     if name == "outbound_request":
         lines = [WHAT_IT_DOES[name], "", f"Tool: {args.get('tool')}", "",
                  "Full URL (exact address):", args.get("url", ""), "",
