@@ -2,9 +2,9 @@
 
 A safe local AI assistant for Alexander's Windows laptop
 
-Running record updated October 20, 2026. Earlier measurements remain labeled by milestone; later chapters record subsequent changes and failures.
+Running record updated October 21, 2026. Earlier measurements remain labeled by milestone; later chapters record subsequent changes and failures.
 
-Current handoff: the final chapters record topic-based web research, the October 20 review, public CI and student-owned next work. They supersede historical branch/test-count snapshots. The complete shared Markdown is PROJECT_RECORD.md on codex/topic-web-search-2026-10-20 in arowsom-oss/local-ai-agent, linked from its README. Earlier chapters preserve measurements and failures. GitHub shares source and this record, not ignored local models or personal data. The main scorecard remains deferred, with no invented score.
+Current handoff: the final chapters cover the October 21 roadmap and measured greeting shortcut, topic research, CI and student-owned work. The shared PROJECT_RECORD.md is on codex/efficiency-roadmap-2026-10-21 in arowsom-oss/local-ai-agent. Earlier measurements remain historical. GitHub shares source and this record, never ignored models or personal data. The main scorecard is deferred with no invented score.
 
 ## Purpose and current position
 
@@ -758,3 +758,39 @@ These public synthetic probes used constrained test approval callbacks, not real
 ## Shared handoff
 
 This branch stacks on codex/scorecard-injection-ci-2026-10-20 and remains unmerged. The normal app needs a restart to load updated Python. The main scorecard remains prepared for later with no new score or invented result. Alexander still owns writing THREAT_MODEL.md and the deliberately unfixed copy-button bug; historical workbook line references are identified as historical. Existing models, ignored identity, caches and saved work are preserved.
+
+<!-- PAGE -->
+# Next ten improvements and the first measured change
+
+## October 21 priorities
+
+The app routes work between separate installed local models. It has not fused their weights or implemented expert-weight streaming. Earlier gains removed context-driven reloads and repeated media decoding. IMPROVEMENT_ROADMAP.md separates completed work from the following open priorities.
+
+1. Faster simple replies: exact bare greetings can skip the classifier. Implemented and measured in this update.
+2. Context budgeting: account for system text, tool schemas, history, current results and reply space; compare estimates with actual prompt counts.
+3. More responsive Stop: cancel active model/browser work without abandoning owner threads or allowing concurrent inference.
+4. Source verification: separate snippets from opened/read sources, expose evidence gaps and evaluate factual support.
+5. Failure recovery: useful guidance and bounded pauses for wrong arguments or stale targets, preserving exact approvals.
+6. Memory diagnostics: show measured RAM/VRAM, active model and unload status; distinguish samples from ceilings and estimates.
+7. Fewer repeated reads: profile first; bounded reuse needs target identity, revision/hash and invalidation on changes.
+8. Media status: show actual queue/running/encoding/delivery stages without invented progress or parallel heavy jobs.
+9. Mixed benchmarks: fixed synthetic chat/research/document/media tasks with latency, failures and resource samples.
+10. Human scorecard: run unchanged main criteria when Alexander is ready; retain every result before considering merges.
+
+<!-- PAGE -->
+
+# Faster greetings: implementation and evidence
+
+## Completed: narrow greeting shortcut
+
+A whole ASCII greeting of at most 40 printable characters can skip classification: hi, hello, hey, good morning, good afternoon or good evening, with ordinary surrounding spaces and one optional final punctuation mark. Task suffixes, hidden/control characters, Unicode lookalikes and follow-ups do not match by prefix. Image/document hints and a retained reasoning model still take precedence, avoiding unnecessary model switches.
+
+The real reply inference remains, with the full system/tool menu, think=True, shared 8192 context, installed-model checks and all approval/dispatch gates. Missing models return an error; no canned reply or download was added. No UI, media worker, tool authority or model weights changed.
+
+## Evidence and limits
+
+Before and after, the actual run_turn path used one warm-up and six alternating Auto/manual pairs with fresh message lists and a fixed public hi prompt. All tool actions were refused by a test-only argument gate; none were proposed. Logs retained numeric timings, route labels and reply lengths, excluding answer and hidden-reasoning payloads. Auto median fell from 0.7873 to 0.5053 seconds, a 35.8% reduction in this narrow sample. Manual medians stayed similar at 0.5219 and 0.5112 seconds. All six Auto trials went from two inference calls to one.
+
+This is a short sequential greeting benchmark, not a general speed, quality, cold-load or memory claim. The extra call was reproduced before editing runtime. Five new cases then passed, along with all 330 offline cases in eighteen suites and the injection fixtures. A non-greeting prompt preserves the old classifier/context-reuse regression. Published numeric traces and a reusable benchmark script accompany the roadmap. No native UI change was made or claimed tested anew.
+
+The branch stacks on topic-web-search and remains unmerged. Restart the normal app to load changed Python. The main scorecard stays deferred and unchanged. Alexander still owns his threat-model writing and the deliberately unfixed copy-button task. Context budgeting is the next implementation candidate; the other listed items remain planned.

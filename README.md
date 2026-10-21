@@ -14,6 +14,10 @@ passed on 2026-10-19; `run_live_tests.bat` style runs are recorded in VALIDATION
 
 ## Shared project record
 
+[IMPROVEMENT_ROADMAP.md](IMPROVEMENT_ROADMAP.md) lists the next ten priorities
+and measures the first completed change: exact bare greetings skip Auto's
+classifier while keeping normal reply inference and all permission checks.
+
 [WEB_RESEARCH.md](WEB_RESEARCH.md) explains topic-based web search: a person can
 request research without pasting a URL. Each search keeps its own exact approval,
 and recorded source links use the existing guarded browser.

@@ -124,8 +124,16 @@ def document_route_hint(text):
     return bool(words&_DOCUMENT_WORDS and words&_DOCUMENT_ACTIONS)
 
 
+def greeting_route_hint(text):
+    """Match a whole bare English greeting only; never classify a task by its prefix."""
+    if not isinstance(text,str) or not 1<=len(text)<=40 or not text.isascii() or not text.isprintable():
+        return False
+    return re.fullmatch(r' *(?:hi|hello|hey|good morning|good afternoon|good evening)[.!?]? *',
+                        text.lower()) is not None
+
+
 def choose_model(text: str, *, has_image=False, log=lambda line: None) -> str:
-    """Use fixed image/document hints, retained reasoning, then a validated classifier."""
+    """Use fixed hints/retained reasoning, exact greetings, then a validated classifier."""
     global _reasoning_hold
     if has_image:
         log(f"[route] image -> {VISION_MODEL} (fixed vision route)")
@@ -139,6 +147,11 @@ def choose_model(text: str, *, has_image=False, log=lambda line: None) -> str:
             _reasoning_hold -= 1
             log(f"[route] reuse {REASONING_MODEL}; {_reasoning_hold} follow-up holds remain")
             return REASONING_MODEL
+        if greeting_route_hint(text):
+            # Keep retained reasoning ahead of this shortcut to avoid a costly model switch.
+            _reasoning_hold=0
+            log(f"[route] exact greeting -> {FAST_MODEL} (classifier skipped)")
+            return FAST_MODEL
     task = "general"
     try:
         response = chat(model=FAST_MODEL, tools=[], think=False, format=_SCHEMA, timing_log=log,

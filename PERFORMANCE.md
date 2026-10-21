@@ -1,3 +1,14 @@
+# Auto routing: exact greetings (October 21, 2026)
+
+Bare greetings now skip the classifier after fixed image/document routes and
+retained reasoning. They still get normal model inference, unchanged tools,
+think=True and num_ctx=8192. Task-bearing text never matches by prefix.
+Six warm Auto/manual pairs before and after measured median Auto full turns
+at 0.7873 to 0.5053 seconds (35.8% lower); manual e2b medians were 0.5219 and
+0.5112 seconds. Each updated Auto greeting made one inference instead of two.
+This is a short greeting benchmark, not a general speed/quality/memory claim.
+IMPROVEMENT_ROADMAP.md records the protocol, failure and next ten priorities.
+
 # Auto routing: context reuse and measured latency
 
 ## Fix and measurement protocol (October 20, 2026)

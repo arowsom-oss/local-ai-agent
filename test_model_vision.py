@@ -64,7 +64,7 @@ def image_bytes(size=(320, 180), format="PNG"):
 
 def test_router_general_reasoning_and_fixed_vision_roles():
     with client_case() as client:
-        assert router.choose_model("Hello") == router.FAST_MODEL
+        assert router.choose_model("Explain photosynthesis") == router.FAST_MODEL
         client.response = reply('{"task":"reasoning"}')
         assert router.choose_model("Debug this") == router.REASONING_MODEL
         count = len(client.events)

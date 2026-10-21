@@ -1,3 +1,15 @@
+# Exact greeting routing (2026-10-21)
+
+All 330 offline cases in eighteen suites pass. Five new cases cover exact
+greetings skipping classification while retaining actual reply inference,
+non-greeting/prefix/control refusal, image/retained-reasoning precedence,
+metadata-only routing logs, normal approval checks and missing-model errors.
+The extra classifier call was reproduced before the runtime edit. Six paired
+warm Auto/manual trials before and after measured Auto median 0.7873 to
+0.5053 seconds; the manual control remained similar. No tool action occurred.
+IMPROVEMENT_ROADMAP.md distinguishes that measured first change from the nine
+open priorities. The human main scorecard remains deferred and unchanged.
+
 # Topic-based research (2026-10-20)
 
 All 325 offline cases in eighteen suites pass after adding fourteen search
