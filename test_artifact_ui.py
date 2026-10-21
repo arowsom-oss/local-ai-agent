@@ -8,6 +8,8 @@ from PIL import Image
 import av
 import chat_window as ui
 from artifacts import store, create_artifact
+import generation_tools
+import test_browser_search as h
 
 
 def pump_until(test, timeout=20):
@@ -65,11 +67,19 @@ if __name__ == "__main__":
                 panel.export()
             assert export.read_text() == source
             data = BytesIO(); Image.new("RGB", (256,256), "navy").save(data,format="PNG")
-            image = store.media("Synthetic image", "image", data.getvalue())
-            panel.load(image.number)
-            pump_until(lambda: len(panel.frames)==1)
+            generated_image = Path(folder) / ("a" * 32 + ".png")
+            generated_image.write_bytes(data.getvalue())
+            ui.hide_artifacts()
+            with patch.object(generation_tools, "OUTPUT_DIR", Path(folder)), \
+                    patch.object(h.core, "run_generation", return_value={"path":str(generated_image)}):
+                outcome = h.run_calls([h.tool_call("generate_image", {"prompt":"Synthetic navy square"})])
+            image = store.items()[-1]
+            pump_until(lambda: panel.selected.number==image.number and len(panel.frames)==1)
+            assert panel.winfo_ismapped()  # New image opens the hidden pane and selects itself over code.
+            assert any("Artifact " in m.get("content", "") for m in outcome.messages
+                       if isinstance(m, dict) and m.get("role")=="tool")
             assert panel.photo is not None
-            clip = Path(folder)/"fixture.mp4"
+            clip = Path(folder)/("b" * 32 + ".mp4")
             with av.open(str(clip),"w") as container:
                 stream=container.add_stream("libx264",rate=8)
                 stream.width=stream.height=256;stream.pix_fmt="yuv420p"
@@ -77,15 +87,24 @@ if __name__ == "__main__":
                     frame=av.VideoFrame.from_image(Image.new("RGB",(256,256),(index*12,0,100)))
                     for packet in stream.encode(frame):container.mux(packet)
                 for packet in stream.encode():container.mux(packet)
-            video = store.media("Synthetic video", "video", clip.read_bytes())
-            panel.load(video.number)
-            pump_until(lambda: len(panel.frames)==16)
+            with patch.object(generation_tools, "OUTPUT_DIR", Path(folder)), \
+                    patch.object(h.core, "run_generation", return_value={"path":str(clip)}):
+                h.run_calls([h.tool_call("generate_video", {"prompt":"Synthetic changing square"})])
+            video = store.items()[-1]
+            pump_until(lambda: panel.selected.number==video.number and len(panel.frames)==16)
             panel.toggle_play()
             pump_until(lambda: panel.timeline.get()>0)
             ui.stop_agent()
             assert not panel.playing
             assert ui.stop_event.is_set()
             ui.stop_event.clear()
+            # Recovery of a prior file after New chat uses no model or regeneration.
+            with patch("chat_window.messagebox.askyesno", return_value=True), patch("chat_window.free_vram"):
+                ui.new_chat()
+            with patch.object(generation_tools, "OUTPUT_DIR", Path(folder)), \
+                    patch("artifact_panel.filedialog.askopenfilename",return_value=str(clip)):
+                panel.open_generated()
+            pump_until(lambda: panel.selected is not None and panel.selected.kind=="video" and len(panel.frames)==16)
             # Actual import normalizes JPEG bytes; subsequent PNG export uses PNG bytes.
             jpeg=Path(folder)/"sample.jpg";Image.new("RGB",(40,30),"green").save(jpeg)
             with patch("artifact_panel.filedialog.askopenfilename",return_value=str(jpeg)):

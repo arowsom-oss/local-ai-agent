@@ -5,14 +5,57 @@ This is a working first version of the ten improvements in TOP10_STATUS.md.
 Desktop control is limited to an owned practice app and a separately approved,
 owned classic Notepad scratch window. Saved Documents use a separate, approved
 fixed folder with exact save previews and retained versions. It cannot attach to
-your existing windows or accounts, or choose arbitrary files and messages.
+your personal windows for actions or choose arbitrary local files. Website
+actions now additionally use a separate, approved Edge work profile; selected
+personal Edge tabs are read/address-handoff only. See EDGE_BROWSER.md for limits.
 
 The working copy lives at `C:\dev\local-ai-agent` and is a git clone of this repo.
 `identity.py`, `sandbox/`, `audit.log`, `generated/` and `model_cache/` stay local
 and are ignored by git. All offline suites and the seven Windows-only live suites
 passed on 2026-10-19; `run_live_tests.bat` style runs are recorded in VALIDATION.md.
 
+## Shared project record
+
+[EDGE_BROWSER.md](EDGE_BROWSER.md) explains the separate AI Edge work profile,
+approved numbered controls, and optional read/address handoff from a personal
+Edge tab. Start with **Edge tab** in the app; personal-tab handoff additionally
+needs the local unpacked extension installed once by the person.
+
+[IMPROVEMENT_ROADMAP.md](IMPROVEMENT_ROADMAP.md) lists the next ten priorities
+and measures the first completed change: exact bare greetings skip Auto's
+classifier while keeping normal reply inference and all permission checks.
+
+[WEB_RESEARCH.md](WEB_RESEARCH.md) explains topic-based web search: a person can
+request research without pasting a URL. Each search keeps its own exact approval,
+and recorded source links use the existing guarded browser.
+
+[CI.md](CI.md) explains Windows offline checks for every PR.
+[PROMPT_INJECTION_TESTS.md](PROMPT_INJECTION_TESTS.md) documents eight local
+adversarial fixtures. [SECURITY_WORKBOOK.md](SECURITY_WORKBOOK.md) contains
+code-evidence notes for Alexander's own threat model and small fix.
+[SCORECARD_RUN_GUIDE.md](SCORECARD_RUN_GUIDE.md) prepares the unchanged main
+scorecard for a later person-operated run; no score has been awarded.
+
+[EFFICIENCY_REVIEW.md](EFFICIENCY_REVIEW.md) records the October 20 review,
+reproduced bugs, native measurements and remaining performance work. Imports
+reuse validated previews; obsolete previews and playback timers cancel,
+and newer unsaved text survives validation.
+
+[PROJECT_RECORD.md](PROJECT_RECORD.md) contains the complete running record,
+latest Claude handoff, branch stack, tests, failed experiments and open work.
+Read its latest handoff/review chapters for current status; earlier chapters are
+historical. This branch includes unmerged features that main does not.
+
 ## Window and appearance
+
+Voice and reference-photo controls are described in
+[VOICE_AND_REFERENCE.md](VOICE_AND_REFERENCE.md). **Talk** records one approved
+local voice message; review/edit the transcript and press Send yourself.
+**More > Speak replies for this chat** enables CPU speech while keeping text
+visible. **Attach > Photo to video** previews a selected photo and separately
+approves the motion prompt. Video uses the bounded LTX profile and appears in
+Artifacts. Existing media can still be reopened or imported. These features
+do not enable remote access or expand image-analysis tools.
 
 The native Windows window now uses a shared dark/light theme, Segoe UI type,
 a navigation sidebar and balanced conversation/Artifacts panes. The default is
@@ -30,6 +73,10 @@ The default window is 1440x900 and minimum is 1100x680. No new dependencies are
 required. Theme/zoom preferences are in-memory rather than saved across launches.
 
 ## Try it
+
+Auto routing now shares the reply's 8192-token context to avoid repeated Ollama
+reloads. [PERFORMANCE.md](PERFORMANCE.md) records the measured fix and explains
+the numeric [timing] diagnostics shown in the existing tool log.
 
 Double-click `start_chat.bat`. It uses `.venv` beside it if one exists, otherwise
 the `python` on your PATH. Close older agent windows first to avoid hotkey conflicts.
@@ -70,6 +117,18 @@ versions. Unsaved human edits stay in the editor if a newer model revision arriv
 From answer copies the raw last answer, preserving code fences. Import is a
 person-run picker; imported text drafts can be read by the local AI. Generated
 images/videos automatically become immutable media snapshots in the panel.
+
+New images and videos open in Artifacts and become the visible selection. If
+you have unsaved text, the app preserves it and tells you which new Artifact
+to select after saving. Generated files stay in this installation's `generated/`
+folder as backups; Export makes a copy at a location you choose. After New chat
+or a restart, use **Artifacts > More > Open generated image or video** to reopen
+an original file. Use **Import a file** for media you previously saved in Downloads
+or elsewhere. The app does not scan Downloads automatically.
+
+Remote text chat and image/video generation are planned in
+[REMOTE_ACCESS_PLAN.md](REMOTE_ACCESS_PLAN.md). Remote computer control is outside
+that planned interface; no web server or public access is enabled by this change.
 
 Export asks you to choose a new file and exports the exact selected version:
 documents as .md, code as .txt, images as .png and videos as .mp4. Existing files

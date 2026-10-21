@@ -8,6 +8,7 @@ LABELS={
     'add':'Calculate sum','multiply':'Calculate product','read_file':'Read sandbox file',
     'fetch_page':'Fetch page','browser_open':'Open browser page','browser_read':'Read browser page',
     'browser_click':'Open recorded link','browser_search':'Submit search','propose_plan':'Browser plan',
+    'browser_web_search':'Find research sources',
     'desktop_start':'Open practice app','desktop_read':'Read practice app','desktop_type':'Change practice draft',
     'desktop_click':'Use practice control','notepad_start':'Open scratch Notepad','notepad_read':'Read scratch Notepad',
     'notepad_replace':'Edit scratch Notepad','generate_image':'Generate image','generate_video':'Generate video',
@@ -17,6 +18,13 @@ LABELS={
     'document_append_requested':'Append requested text','outline_task':'Proposed task steps'}
 DOCUMENT_WRITES={'document_save','document_edit','document_append_requested'}
 READS={'read_file','fetch_page','browser_read','desktop_read','notepad_read','read_artifact','list_artifacts','document_list','document_read'}
+READS.add('browser_web_search')
+READS.update({'edge_read','edge_copy_to_browser'})
+READS.add('edge_shared_read')
+LABELS.update({'edge_read':'Read shared Edge tab','edge_copy_to_browser':'Copy Edge URL to isolated browser',
+               'edge_click':'Use shared Edge control','edge_type':'Change shared Edge field'})
+LABELS.update({'edge_open':'Open work Edge page','edge_open_shared':'Copy URL to work Edge',
+               'edge_scroll':'Scroll work Edge','edge_shared_read':'Read shared personal tab'})
 VERIFIED={'notepad_replace':'Notepad edit verified by exact read-back.',
           'desktop_type':'Practice action verified.','desktop_click':'Practice action verified.',
           'document_save':'Saved and verified Document ', 'document_edit':'Saved and verified Document ',
@@ -27,6 +35,8 @@ APPROVALS={'workspace_access':'Workspace read permission','document_save_exact':
     'desktop_start':'Practice launch','new_site':'Website permission','outbound_request':'Exact outbound address',
     'browser_search':'Search submission','browser_click':'Recorded link','read_file':'Sandbox file read',
     'generation':'Local generation','plan':'Browser plan approval','plan_changed':'Browser plan change'}
+APPROVALS['browser_web_search']='Exact web search'
+APPROVALS['edge_operation']='Exact shared Edge operation'
 
 
 def valid_steps(steps):
@@ -144,6 +154,7 @@ class TurnEvidence:
             return 'bound append requires document_read of the latest target in this turn'
         if not self.resume:return ''
         reads={'browser_click':'browser_read','browser_search':'browser_read','notepad_replace':'notepad_read',
+               'edge_click':'edge_read','edge_type':'edge_read',
                'desktop_type':'desktop_read','desktop_click':'desktop_read'}
         needed=reads.get(name)
         if needed and needed not in self.fresh:return 'resume requires a fresh '+needed+' before this action'
@@ -165,8 +176,11 @@ class TurnEvidence:
         self.emit('result',name,status)
         if name in {'notepad_replace','notepad_start'}:self.fresh.discard('notepad_read')
         if name in {'desktop_type','desktop_click','desktop_start'}:self.fresh.discard('desktop_read')
-        if name in {'browser_open','browser_click','browser_search'}:self.fresh.discard('browser_read')
+        if name in {'browser_open','browser_click','browser_search','browser_web_search'}:self.fresh.discard('browser_read')
+        if name in {'edge_click','edge_type','edge_scroll','edge_open','edge_open_shared'}:self.fresh.discard('edge_read')
         if text.startswith('Error:'):return
+        if name=='browser_web_search':self.fresh.add('browser_read')
+        if name=='edge_copy_to_browser':self.fresh.add('browser_read')
         self.refused.discard(name)
         args=self.active.get(name,{})
         self.fresh.add(name)

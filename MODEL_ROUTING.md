@@ -16,6 +16,14 @@ After a reasoning selection, two follow-up turns retain the larger model,
 avoiding repeated classifier/reasoner swapping. Manual selection remains available.
 Model selection cannot change tools, permissions, approved URLs or app scope.
 
+Classification, replies, compaction and selected-media observations share one
+explicit 8192-token runner context. This avoids reloading the same fast model
+between a former 2048-token classifier and an 8192-token reply. Per-response
+numeric timing logs expose load, prompt processing and generation separately;
+they contain no prompt/reply/reasoning text. See PERFORMANCE.md for the measured
+before/after A/B and its limits. Thinking and the 60-second retention policy
+are unchanged.
+
 The document hint is a performance choice, not semantic intent detection. It may
 match an explanation/negation and miss other wording or languages. Explicit model
 selection still overrides Auto. A missing larger model fails without a download;
@@ -53,7 +61,7 @@ Single development runs on an RTX 5070 Ti Laptop GPU (12 GB) and approximately
 | Actual Ollama scratch Notepad workflow | Started/read owned classic Notepad; exact approved SYNTHETIC NOTEPAD CHECK verified | 15.57 s |
 | Actual Ollama practice workflow | Started/read practice app; proposed approved SYNTHETIC TEST draft; state verified | 32.73 s |
 | Local image generation | Valid 512x512 PNG | 32.89 s |
-| Local video generation | Valid 256x256, 16-frame, 8-fps MP4 | 37.93 s |
+| Earlier ModelScope video | Valid 256x256, 16-frame, 8-fps MP4; watermark-like output | 37.93 s |
 | WAV smoke check | Transcribed synthetic English speech, including the number 42 | 4.64 s source clip |
 
 Model check evaluated four fixed synthetic prompts on each model: three arithmetic
@@ -83,3 +91,29 @@ machine after cleanup was blocked. Weights and environments are excluded from
 the source package. Runtime workers use local-only loading; this is an inference
 configuration rather than an OS firewall. Model accuracy, interpretation privacy
 and performance under competing GPU workloads remain limitations.
+
+## Voice and replacement video profile (October 20, 2026)
+
+Person-operated Talk uses existing Whisper tiny.en on CPU; Piper's fixed English
+voice also uses CPU. These operations do not load a second CUDA model or enter
+the model's tool menu. A short real synthesis/transcription check passed while
+gemma4:12b remained resident with the normal 8,192-token context and tool menu.
+This single check does not establish every conversation's peak memory use.
+
+The replacement experimental video backend is fixed LTX 0.9.5 2B, including
+reference-photo input. Its NF4 T5 prompt encoder's owned process exits before loading the
+BF16 renderer with CPU offload and VAE tiling. A manager lease holds the same
+lock used by chat inference while releasing this app's Ollama model and running
+generation. It does not unload another application's model. RAM/VRAM admission,
+an owned worker commit ceiling and a sampled system-RAM reserve can refuse or
+stop a job. Current retention, reasoning and streaming settings are unchanged.
+See VOICE_AND_REFERENCE.md for calculations and qualification limits. The
+256x256 ModelScope video measurement above remains historical; its retained
+cache is not a runtime fallback.
+
+The selected 65-frame, 384x256, 24-fps profile uses temporal VAE tiles of 16
+sample frames with stride 8. Synthetic text/reference trials took 95.16/94.30
+seconds, with sampled total NVML GPU usage of 4.67/7.10 GiB. Both decoded all
+65 frames. They showed motion but soft details and object distortion; they are
+not evidence of broad output quality. Current profile limits and later app-
+bootstrap checks are recorded in VOICE_AND_REFERENCE.md.

@@ -1,3 +1,100 @@
+# Edge work profile and personal-tab handoff (2026-10-21)
+
+All 353 offline cases across nineteen suites pass, including twenty-three new
+Edge cases. A native Microsoft Edge fixture with production pinned HTTPX and
+fake HTTPS passes profile/cookie isolation, fixed isolated-world DOM, numbered
+controls, typing/buttons, stale approvals, blocked attachments/downloads, file
+chooser interception, scrolling, cross-thread callers and tab selection.
+The native Chromium connector fixture passes authenticated loopback pairing,
+personal reads/address handoff and disconnect; a fixture-only host grant
+substitutes for human activeTab consent. A native Tk fixture verifies full exact
+URL/text previews and Return defaults to No. This is the eleventh separately
+classified native suite, not part of offline CI.
+
+No personal account, live website or Ollama ran in these fixtures. EDGE_BROWSER.md
+documents one-time manual extension installation, retained experimental failures,
+the bounded same-origin POST window, compatibility limits and unverified remote
+effects. Alexander chose a separate work profile; personal tabs are read/handoff
+only. The main human scorecard remains deferred and unchanged.
+
+# Exact greeting routing (2026-10-21)
+
+All 330 offline cases in eighteen suites pass. Five new cases cover exact
+greetings skipping classification while retaining actual reply inference,
+non-greeting/prefix/control refusal, image/retained-reasoning precedence,
+metadata-only routing logs, normal approval checks and missing-model errors.
+The extra classifier call was reproduced before the runtime edit. Six paired
+warm Auto/manual trials before and after measured Auto median 0.7873 to
+0.5053 seconds; the manual control remained similar. No tool action occurred.
+IMPROVEMENT_ROADMAP.md distinguishes that measured first change from the nine
+open priorities. The human main scorecard remains deferred and unchanged.
+
+# Topic-based research (2026-10-20)
+
+All 325 offline cases in eighteen suites pass after adding fourteen search
+cases. The real headed Chromium fixture also passes using fake HTTPS, including
+the fixed search endpoint, decoded recorded source and pinned-IP source click.
+Live Ollama e2b found a NASA link from a topic, opened/read it and returned a
+supported one-fact answer without any initial URL. Earlier wrong-argument,
+stale-number/round-limit and snippet-only trials remain documented rather than
+discarded. Live probes used constrained approval fixtures, not real human UI
+approvals. WEB_RESEARCH.md explains the checks and remaining quality limits.
+Auto also returned a supported NASA answer after recovering from a refused
+search-box click; it selected e2b. This does not run or change the deferred
+main scorecard.
+
+# Offline CI and adversarial fixtures (2026-10-20)
+
+All eighteen offline suites pass in both the existing runtime and a newly
+created lean Python 3.12 Windows environment using requirements-ci.txt.
+The eight HTML attack cases log individual hashes, refusal events and fake
+approval requests. Combined with the earlier 303 cases, that is 311 offline
+cases. These are deterministic dispatch tests, not live-model resistance or
+native popup evidence. The CI runner also verifies its Python socket/DNS
+tripwire and refuses unclassified test files.
+
+The main scorecard was prepared at 58adaf4 but no prompt was submitted:
+Windows computer-use initialization failed twice, then Alexander chose to
+run it later. No pass/fail rows were invented; SCORECARD.md remains unchanged.
+The security workbook and copy-button bug notes are AI-assisted research
+for Alexander to write THREAT_MODEL.md and his own next commit.
+
+# Efficiency and correctness review (2026-10-20)
+
+All 303 offline plain-assert cases across 17 suites and six native Windows/Tk
+suites pass. Twelve new cases failed on preserved f1215c9 baseline source,
+then passed with the fixes. The native fixture independently reproduced
+three decoder jobs per import, lost unsaved text, duplicate playback timers
+and missing selection cancellation; the updated run uses one decoder per
+import and passes these checks. EFFICIENCY_REVIEW.md records the scope,
+timings and limitations. No new GPU inference benchmark or formal scorecard
+run was performed; SCORECARD.md remains unchanged. Earlier results below
+retain their milestone-specific scope.
+
+# Generated-media Artifacts update (2026-10-19)
+
+Based on `simple-ui` commit c3a82ae, preserving the collaborator's chat-first
+layout, display-scaling changes and NumPy pin. The primary folder remains
+`C:\dev\local-ai-agent`; model files and existing generated outputs are retained.
+
+All 255 offline plain-assert checks passed across 14 suites, including eight
+new generated-media cases. Four real Windows/Tk suites passed: Artifacts,
+selected-media UI, task progress and saved Documents. The Artifacts fixture
+uses scripted model/generation responses through actual core dispatch and real
+PNG/MP4 decoding, selection and playback. No GPU inference is implied.
+
+An additional native check reopened the primary installation's existing PNG
+and MP4 through the new recovery action: the image displayed one frame, the
+video decoded 16 frames and played, and both opened visibly in Artifacts.
+No generation, download or source-file mutation was involved in that check.
+The original refresh logic was also reproduced leaving new media unselected
+when a document was already selected; the new regression covers that behavior.
+
+The remote interface remains a documented roadmap in REMOTE_ACCESS_PLAN.md.
+No authentication, web server, remote endpoint or remote-control capability is
+implemented or tested by this change. Earlier validation below describes its
+own milestone and is not replaced by this update.
+
 # One popup per address, 2026-10-19 review
 
 - Before: a brand-new site asked twice, new_site then outbound_request, both showing
@@ -186,6 +283,15 @@ C:/dev/agent source files were changed.
 
 ## Automated checks
 
+The October 20 context-reuse update passes 291 offline assertions across
+sixteen suites and five native Windows/Tk suites. A regression first reproduced
+four loads for two Auto classify/reply pairs; it now requires one shared runner.
+Real before/after app-loop measurements put the second Auto hi at 19.0002 vs
+0.7877 seconds, with summed load time 17.6694 vs 0.0620 seconds and stable 8192
+context/runner afterward. This is one short sample; cold loads and token counts
+vary. PERFORMANCE.md retains the full timing table and limitations. The formal
+SCORECARD.md run remains separate and unperformed.
+
 - 115 offline plain-assert tests: 38 browser/search/core, 24 browser network,
   10 direct fetch, 23 model/vision and 20 new computer/media cases.
 - New cases cover exact desktop approval during plans, denial/stale previews,
@@ -227,6 +333,49 @@ C:/dev/agent source files were changed.
   image b261bac6fd2cf515557d5d0707481eafa0485ec2;
   video 8227dddca75a8561bf858d604cc5dae52b954d01. Manifests record local snapshots.
 
+## Voice and reference-photo update (October 20, 2026)
+
+All 283 offline plain-assert checks pass across fifteen suites, including 28
+new voice/reference cases. Five native Windows/Tk suites pass: Artifacts,
+selected-media UI, progress, saved Documents, and voice/reference controls.
+The new GUI fixture uses fake microphone/inference and actual media codecs;
+it verifies transcript review without auto-Send, opt-in spoken replies, Stop,
+New chat and photo-video Artifact delivery. No personal microphone was recorded.
+An overnight suspended fixture exceeded its wall-clock deadline; rerunning the
+complete native set on the awake desktop passed. The interrupted run is not
+counted as a passing test.
+
+Real CPU Piper synthesized a fixed English sentence in 2.72 seconds (3.04 seconds
+of audio); existing CPU Whisper tiny.en recovered its words and number 42 in
+5.27 seconds. Sampled child working sets peaked at 163,332,096 and 243,515,392
+bytes. These are single-run samples, not memory ceilings. The same pair passed
+with gemma4:12b resident, an 8,192-token context and the normal tool menu; the
+synthetic run executed no tools. A separate owned Windows worker played 0.1
+seconds of synthetic silence from WAV bytes without saving a file.
+
+Development caught two real runtime failures: a 768 MiB synthesis Job ceiling
+was too small, so synthesis now uses 1.5 GiB; Python 3.12 has no SND_SYNC flag,
+so playback now uses default synchronous mode with SND_MEMORY and SND_NODEFAULT.
+The repaired paths passed real worker checks. Physical microphone/device-driver
+compatibility still requires a person-operated trial.
+
+See VOICE_AND_REFERENCE.md for the LTX candidate, fixed model revisions,
+component calculations, resource guards and video qualification status. Keep
+the earlier ModelScope result below as historical evidence, not a measurement
+of the replacement backend. No broad model-quality claim follows from these
+small tests.
+
+The chosen 65-frame LTX profile passed real text/reference-video trials at
+384x256, 24 fps and 30 steps. Both outputs decoded completely. Sampled NVML GPU
+usage peaked at 4.67/7.10 GiB; summed child working sets were 7.42/7.51 GiB.
+System RAM availability stayed above approximately 4 GiB in these trials.
+Earlier same-process loading, encoder-exit timing and CPU/CUDA-generator failures
+are preserved in development reports. Final code requires the encoder process
+to exit, uses bounded CPU-byte handoff and a CUDA generator. An earlier short
+profile was nearly static; the longer temporally decoded clips showed motion,
+soft detail and distortion. The inspected frames do not establish general
+watermark absence, accurate motion or publication-ready quality.
+
 ## Limits and unverified claims
 
 The Notepad workflow update passed all 150 offline assertions across eight test
@@ -248,9 +397,10 @@ redirects remain refused; service-worker blocking/offline routing are applicatio
 settings, not a guarantee about every Chromium background subsystem.
 
 MP4 analysis samples frames, omits its audio and can miss brief events. WAV support
-is limited to English 16-bit PCM, without a microphone. Video generation uses an
-older experimental pipeline and is low-resolution; no broad stability or output
-quality claim is made. Interpretation may hallucinate or quote private information.
+is limited to English 16-bit PCM. The person-operated Talk control adds a bounded
+microphone recording; it never auto-sends. Video generation remains experimental
+and low-resolution; no broad stability or output quality claim is made.
+Interpretation may hallucinate or quote private information.
 New persistent audit entries omit payloads; old logs and visible chat are separate.
 Weights and the development runtime are excluded from the distributable source.
 A blocked cleanup left an unused partial video-model cache on this machine.

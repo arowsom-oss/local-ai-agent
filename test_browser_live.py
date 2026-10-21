@@ -18,14 +18,14 @@ import httpx
 HERE = Path(__file__).resolve().parent
 fake_fetch = types.ModuleType("fetch")
 fake_fetch.USER_AGENT = "offline-browser-integration-test"
-fake_fetch.ALLOWED_HOSTS = {"fixture.example", "other.example"}
+fake_fetch.ALLOWED_HOSTS = {"fixture.example", "other.example", "lite.duckduckgo.com"}
 fake_fetch.session_hosts = set()
 
 
 def check_site(url):
     from urllib.parse import urlsplit
     parts = urlsplit(url)
-    if parts.scheme != "https" or parts.hostname not in {"fixture.example", "other.example"}:
+    if parts.scheme != "https" or parts.hostname not in fake_fetch.ALLOWED_HOSTS:
         return None, "Test URL refused"
     return parts.hostname, None
 
@@ -76,10 +76,17 @@ seen = []
 def network(request):
     # HTTPX connects to a pinned address while preserving the site's identity.
     assert request.url.host == "93.184.216.34"
-    assert request.headers["Host"] == "fixture.example"
-    assert request.extensions["sni_hostname"] == "fixture.example"
+    host=request.headers["Host"]
+    assert host in {"fixture.example", "lite.duckduckgo.com"}
+    assert request.extensions["sni_hostname"] == host
     assert request.method == "GET"
     seen.append(str(request.url))
+    if host=="lite.duckduckgo.com":
+        assert request.url.params['q']=='NASA Mars facts'
+        body=b'''<html><body><h1>Mars search results</h1>
+        <a href="//duckduckgo.com/l/?uddg=https%3A%2F%2Ffixture.example%2Fnasa">NASA Mars facts</a>
+        <script>document.body.innerHTML='JAVASCRIPT RAN';</script></body></html>'''
+        return httpx.Response(200,headers={"Content-Type":"text/html"},stream=BodyStream(body))
     if request.url.path == "/redirect":
         return httpx.Response(302, headers={"Location": "https://other.example/"}, stream=BodyStream(b""))
     if request.url.path.endswith(".css"):
@@ -175,5 +182,14 @@ if __name__ == "__main__":
             print("PASS real Chromium: offline routing, DOM/form extraction, JS off, password/hidden exclusion,")
             print("     URL encoding, POST/name refusal, stale numbers, redirects, caller threads,")
             print("     same-host CSS/frames, third-party denial, request budget and explicit-open reset.")
+            text=browser.browser_web_search('NASA Mars facts')
+            assert text.startswith(browser.TEXT_PREFIX) and 'Mars search results' in text
+            assert 'JAVASCRIPT RAN' not in text
+            number=read_number(text,'NASA Mars facts')
+            assert browser.link_for(number)==('https://fixture.example/nasa','NASA Mars facts')
+            assert browser.browser_click(number)=='Page opened.'
+            assert seen[-1].endswith('/nasa')
+            assert 'duckduckgo.com/l/' not in '\n'.join(seen)
+            print('PASS real Chromium: topic search, returned numbers, decoded direct source and pinned click.')
         finally:
             assert browser.close_browser() == "Browser closed."

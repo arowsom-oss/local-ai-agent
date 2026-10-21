@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 import threading
+from contextlib import contextmanager
 
 FAST_MODEL = "gemma4:e2b"
 REASONING_MODEL = "gemma4:12b"
@@ -12,6 +13,7 @@ ALLOWED_MODELS = (FAST_MODEL, REASONING_MODEL)
 MODEL_CHOICES = ("auto",) + ALLOWED_MODELS
 LOCAL_ENDPOINT = "http://127.0.0.1:11434"
 IDLE_KEEP_ALIVE = "60s"
+TEXT_CONTEXT = 8192  # Explicit runner size shared by classification and app replies.
 _lock = threading.RLock()
 _client = None
 _active = None
@@ -41,7 +43,30 @@ def _installed(client, model):
     return any(_field(item, "model") == model for item in models)
 
 
-def chat(*, model, **kwargs):
+def _log_timing(response, model, request, callback):
+    """Emit numeric metadata only; logging cannot fail or retry a successful call."""
+    if callback is None:
+        return
+    try:
+        row = {"model": model, "num_ctx": (request.get("options") or {}).get("num_ctx"),
+               "think": request.get("think"),
+               "phase": "classifier" if request.get("format") is not None else "model"}
+        for key in ("load_duration", "prompt_eval_duration", "eval_duration", "total_duration"):
+            value = _field(response, key)
+            if type(value) is int and value >= 0:
+                row[key + "_s"] = round(value / 1_000_000_000, 6)
+        for key in ("prompt_eval_count", "eval_count"):
+            value = _field(response, key)
+            if type(value) is int and value >= 0:
+                row[key] = value
+        thinking = _field(_field(response, "message"), "thinking")
+        row["thinking_characters"] = len(thinking) if isinstance(thinking, str) else 0
+        callback("[timing] " + json.dumps(row, sort_keys=True, separators=(",", ":")))
+    except Exception:
+        pass  # Observability must not change model results or cause an automatic retry.
+
+
+def chat(*, model, timing_log=None, **kwargs):
     """Run one serialized request to a fixed local model, unloading our previous one."""
     global _active
     if model not in ALLOWED_MODELS:
@@ -62,7 +87,9 @@ def chat(*, model, **kwargs):
                 raise RuntimeError("The selected installed model does not advertise vision support.")
         _active = model  # Track even a failed/partially loaded request for cleanup.
         kwargs["keep_alive"] = IDLE_KEEP_ALIVE
-        return client.chat(model=model, **kwargs)
+        response = client.chat(model=model, **kwargs)
+        _log_timing(response, model, kwargs, timing_log)
+        return response
 
 
 def release_models() -> str:
@@ -80,6 +107,16 @@ def release_models() -> str:
         return "Managed model unloaded; its files remain on disk."
 
 
+@contextmanager
+def media_lease():
+    """Keep this manager's text inference out while one GPU media job runs."""
+    with _lock:
+        result = release_models()
+        if result.startswith("Error:"):
+            raise ValueError("could not unload the text model before generation")
+        yield
+
+
 def document_route_hint(text):
     """Bounded English wording hint for model choice only; never grants tool authority."""
     if not isinstance(text,str):return False
@@ -87,8 +124,16 @@ def document_route_hint(text):
     return bool(words&_DOCUMENT_WORDS and words&_DOCUMENT_ACTIONS)
 
 
+def greeting_route_hint(text):
+    """Match a whole bare English greeting only; never classify a task by its prefix."""
+    if not isinstance(text,str) or not 1<=len(text)<=40 or not text.isascii() or not text.isprintable():
+        return False
+    return re.fullmatch(r' *(?:hi|hello|hey|good morning|good afternoon|good evening)[.!?]? *',
+                        text.lower()) is not None
+
+
 def choose_model(text: str, *, has_image=False, log=lambda line: None) -> str:
-    """Use fixed image/document hints, retained reasoning, then a validated classifier."""
+    """Use fixed hints/retained reasoning, exact greetings, then a validated classifier."""
     global _reasoning_hold
     if has_image:
         log(f"[route] image -> {VISION_MODEL} (fixed vision route)")
@@ -102,10 +147,15 @@ def choose_model(text: str, *, has_image=False, log=lambda line: None) -> str:
             _reasoning_hold -= 1
             log(f"[route] reuse {REASONING_MODEL}; {_reasoning_hold} follow-up holds remain")
             return REASONING_MODEL
+        if greeting_route_hint(text):
+            # Keep retained reasoning ahead of this shortcut to avoid a costly model switch.
+            _reasoning_hold=0
+            log(f"[route] exact greeting -> {FAST_MODEL} (classifier skipped)")
+            return FAST_MODEL
     task = "general"
     try:
-        response = chat(model=FAST_MODEL, tools=[], think=False, format=_SCHEMA,
-                        options={"temperature": 0, "num_ctx": 2048, "num_predict": 40},
+        response = chat(model=FAST_MODEL, tools=[], think=False, format=_SCHEMA, timing_log=log,
+                        options={"temperature": 0, "num_ctx": TEXT_CONTEXT, "num_predict": 40},
                         messages=[{"role": "system", "content":
                             "Classify the user's task only. Choose reasoning for saved-document creation or editing, "
                             "precise text changes that must preserve existing content, complex coding, "
