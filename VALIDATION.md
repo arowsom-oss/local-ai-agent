@@ -1,3 +1,22 @@
+# Edge work profile and personal-tab handoff (2026-10-21)
+
+All 353 offline cases across nineteen suites pass, including twenty-three new
+Edge cases. A native Microsoft Edge fixture with production pinned HTTPX and
+fake HTTPS passes profile/cookie isolation, fixed isolated-world DOM, numbered
+controls, typing/buttons, stale approvals, blocked attachments/downloads, file
+chooser interception, scrolling, cross-thread callers and tab selection.
+The native Chromium connector fixture passes authenticated loopback pairing,
+personal reads/address handoff and disconnect; a fixture-only host grant
+substitutes for human activeTab consent. A native Tk fixture verifies full exact
+URL/text previews and Return defaults to No. This is the eleventh separately
+classified native suite, not part of offline CI.
+
+No personal account, live website or Ollama ran in these fixtures. EDGE_BROWSER.md
+documents one-time manual extension installation, retained experimental failures,
+the bounded same-origin POST window, compatibility limits and unverified remote
+effects. Alexander chose a separate work profile; personal tabs are read/handoff
+only. The main human scorecard remains deferred and unchanged.
+
 # Exact greeting routing (2026-10-21)
 
 All 330 offline cases in eighteen suites pass. Five new cases cover exact

@@ -9,6 +9,8 @@ update changed tests/docs/CI only. Subsequent topic-based search changes move
 runtime line numbers: the references below identify that historical baseline.
 Use function names and rg to locate current checks. WEB_RESEARCH.md describes
 the new fixed-provider search boundary and its separate exact approval.
+EDGE_BROWSER.md records the later separate-work-profile boundary, personal-tab
+read/handoff scope, origin/time-bound POST permission and remaining limits.
 
 ## Write your own threat model
 

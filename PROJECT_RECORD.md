@@ -4,7 +4,7 @@ A safe local AI assistant for Alexander's Windows laptop
 
 Running record updated October 21, 2026. Earlier measurements remain labeled by milestone; later chapters record subsequent changes and failures.
 
-Current handoff: the final chapters cover the October 21 roadmap and measured greeting shortcut, topic research, CI and student-owned work. The shared PROJECT_RECORD.md is on codex/efficiency-roadmap-2026-10-21 in arowsom-oss/local-ai-agent. Earlier measurements remain historical. GitHub shares source and this record, never ignored models or personal data. The main scorecard is deferred with no invented score.
+Current handoff: the final chapters cover the separate Edge work profile and personal-tab handoff, the improvement roadmap, research and CI. The shared PROJECT_RECORD.md is on codex/edge-tab-connector-2026-10-21 in arowsom-oss/local-ai-agent. Earlier measurements stay historical. Ignored profiles, models and personal data are not published. The main scorecard remains deferred without an invented score.
 
 ## Purpose and current position
 
@@ -794,3 +794,47 @@ Before and after, the actual run_turn path used one warm-up and six alternating 
 This is a short sequential greeting benchmark, not a general speed, quality, cold-load or memory claim. The extra call was reproduced before editing runtime. Five new cases then passed, along with all 330 offline cases in eighteen suites and the injection fixtures. A non-greeting prompt preserves the old classifier/context-reuse regression. Published numeric traces and a reusable benchmark script accompany the roadmap. No native UI change was made or claimed tested anew.
 
 The branch stacks on topic-web-search and remains unmerged. Restart the normal app to load changed Python. The main scorecard stays deferred and unchanged. Alexander still owns his threat-model writing and the deliberately unfixed copy-button task. Context budgeting is the next implementation candidate; the other listed items remain planned.
+
+<!-- PAGE -->
+# Separate Edge work profile and personal-tab handoff
+
+## Alexander's chosen scope
+
+Alexander asked for both existing-tab reading and website interactions, then chose a separate Edge work profile for the AI. Clicks and typing are confined to the app-owned work browser. Personal Edge tabs can be explicitly shared for reading or copying an address; they cannot receive model clicks or typing. Personal cookies, passwords and profiles are not imported. The existing stateless read-only browser remains separate.
+
+The app's Edge tab panel starts the dedicated work browser, lists only its tabs for person selection, and offers the optional personal-tab connector. The owned browser uses edge_work_profile/ inside the app folder, which git ignores. Its cookies and site data persist across restarts. Stop, New chat and Disconnect revoke access and close only the owned browser; they do not delete that profile or kill personal Edge.
+
+## Approved operations and state checks
+
+Work tools open exact HTTPS addresses, read page text and regular text-field values, use fresh numbered links/buttons, replace one regular text field and scroll a bounded viewport step. Each operation has its own No-default preview, even inside a plan. Password, file, email and known credential/payment-code fields are excluded. Text is bounded and rejects @ and seven consecutive digits; these patterns do not identify every secret. No model API accepts a PID, profile, selector, coordinates, script, file path or approval ticket.
+
+A fixed DOM helper runs in a private isolated world. Website scripts cannot edit its control map or steal pending tickets. URL/text/control snapshots and one-use, expiring tokens are checked before actions. Numbers continue across documents and distinct sessions receive separate ranges. Covered, hidden, disabled and offscreen controls are not numbered. Reads after a change provide new targets; denied or failed work pauses rather than replaying queued actions.
+
+## Network, profile and file boundaries
+
+The work browser enables page JavaScript while Python still fetches its HTTP traffic: public-IP checks, pinned-IP HTTPX connection, original Host and TLS SNI, no proxies or automatic redirects. Work cookies stay in the work context. GET is allowed; an approved click/type commit grants a five-second same-origin POST window. This is origin/time scoped, not consent bound to each individual POST body. Website effects and server-side completion remain unverified.
+
+Other methods, cross-origin POST, multipart/binary upload bodies, redirects, compressed responses, attachments, WebSockets and service workers are blocked. Request bodies cap at 256 KB, responses at 5 MB/10 seconds, and a page/action budget at 250 requests/20 MB. Downloads are not accepted and file choosers select nothing. HTTP pinning is not an OS network sandbox for Chromium background traffic or every non-HTTP browser feature. Long synchronous calls may finish after Stop, and already-dispatched effects cannot be undone.
+
+<!-- PAGE -->
+# Edge setup, evidence and remaining limits
+
+## Using the feature
+
+Restart the normal app, choose Edge tab, then Start work Edge and review its popup. Open a site in that separate window and use Choose a work tab, or ask the AI to open an exact HTTPS address. Ask it to read the work tab, then propose one numbered action. Review each exact preview and read again to check visible results. The separate profile needs no extension and uses the existing installed Edge/Playwright runtime. It is not a VM or an anonymous identity.
+
+For a page already open in personal Edge, one-time manual setup is needed: open edge://extensions, enable Developer mode, choose Load unpacked and select C:/dev/local-ai-agent/edge_extension. In Local Studio choose Share a personal Edge tab (read/handoff), then select the source tab in Edge and click the extension icon. Enter the fresh pairing code and Share selected tab; keep that connector window open. Each read or address handoff still needs app approval. A copied address does not carry its login into the isolated browser or work profile.
+
+The extension uses activeTab/scripting and loopback access, without all-websites, cookie, history, download or debugger permissions. Its local relay accepts a bounded authenticated protocol on 127.0.0.1, with a random RAM-only bearer secret, exact extension Origin/Host checks, one tab, command IDs, expiry and heartbeat. The model never sees the code. This is not remote access from school. EDGE_BROWSER.md has the complete setup and API references.
+
+## Verification and failures retained
+
+All 353 offline cases in nineteen suites pass, including twenty-three new Edge cases for dispatch, approvals, identity/transport, source-only limits, private data patterns, public-IP/Host/SNI fetching, cookies, POST gates and response limits. The eight injection fixtures still pass. The new native suite is classified separately from CI; eleven native suites now exist.
+
+A real headed Microsoft Edge fixture uses only an owned temporary profile and synthetic HTTPS through production HTTPX routing. It verifies two response cookies, private DOM state, text read-back, typing/buttons, snapshot invalidation during approval, stale numbers after navigation, blocked attachments/downloads, file chooser interception, scrolling, different caller threads, tab selection and cleanup. A real Chromium extension fixture verifies authenticated relay pairing, personal-tab reads/address handoff, changed-page refusal and disconnect. A fixture-only host grant substitutes for the human activeTab gesture, so actual extension installation and toolbar permission remain manual checks. A native Tk fixture verifies full exact URL/text previews and Return defaults to No.
+
+Early tests retained failures about user activation, fixture script routing, offscreen-text assumptions, download event timing and a failed-navigation race. The final code preserves a failed tab for review and avoids racing its error navigation with the next approved open. No personal tab/account, Internet site, Ollama inference or human scorecard prompt ran in these fixtures.
+
+## Limits and shared handoff
+
+Redirect/SSO flows, WebSockets, cross-origin forms, large media, iframes, shadow DOM, rich-text/canvas controls and changing SPAs may not work. A button label cannot prove its remote effect. Manual installation, sharing and a real chosen website still need Alexander's review. The branch stacks on efficiency-roadmap and stays unmerged. The main scorecard remains deferred; Alexander retains authorship of the threat model and deliberately unfixed copy-button task. No model weights or personal browser data were published.

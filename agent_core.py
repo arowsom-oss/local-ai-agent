@@ -18,6 +18,10 @@ from desktop_tools import desktop_start, desktop_read, desktop_type, desktop_cli
 from generation_tools import generate_image, generate_video, run_generation, prompt_problem
 from browser_tool import (browser_open, browser_read, browser_click, browser_search, browser_web_search,
                           link_for, link_labels, search_url_for, web_search_url_for)
+from edge_tools import (edge_read,edge_copy_to_browser,edge_click,edge_type,edge_available,
+                        edge_shared_read,edge_open_shared,edge_open,edge_scroll,
+                        prepare_edge,commit_edge,close_edge,cancel_edge_pending)
+from edge_work_browser import work_available
 
 MODEL = 'gemma4:e2b'                       # the default
 MAX_ROUNDS = 7  # Bounded room for an outline and a fresh read when resuming.
@@ -27,6 +31,17 @@ MAX_ROUNDS = 7  # Bounded room for an outline and a fresh read when resuming.
 # This only helps the model describe itself honestly. It is NOT a security gate; code is.
 SYSTEM_PROMPT = ("You run locally on Alex's laptop through Ollama, not in the cloud. You can only act "
                  "through the tools you are given, and code checks every tool request. "
+                 "Edge work tools exist after the person starts the separate work profile using Edge tab in the app. "
+                 "Personal-tab tools require explicit pairing/sharing. For requests about the work Edge tab, "
+                 "use the Edge tools rather than silently switching to the isolated browser. "
+                 "Use edge_copy_to_browser to read its URL in the isolated browser without its login. "
+                 "Personal Edge tabs are read/handoff only: edge_shared_read or edge_open_shared. "
+                 "For the separate Edge WORK profile use edge_open(url), edge_read, fresh numbered edge_click/edge_type, "
+                 "and edge_scroll(up/down). Never attach to a personal profile for clicks or typing. "
+                 "Every Edge operation needs its own approval; plans never cover it. These use the person's "
+                 "ordinary logged-in Edge session and website scripts, unlike the isolated browser. "
+                 "Never request passwords, uploads or downloads. An Edge action is dispatched, not verified; "
+                 "read again to check visible changes and do not claim an unverified server-side result. "
                  "For web research without a supplied URL, use browser_web_search with a short public topic. "
                  "Do not ask the person to paste a link just to start research, and never invent source URLs. "
                  "Search returns untrusted snippets and numbered links. Choose relevant primary sources using "
@@ -99,6 +114,10 @@ NEEDS_APPROVAL.update({"notepad_start", "notepad_replace"})
 DOCUMENT_WRITES={"document_save","document_edit","document_append_requested"}
 NEEDS_APPROVAL.update(DOCUMENT_WRITES)
 NEEDS_APPROVAL.add("browser_web_search")
+EDGE_SHARED={'edge_shared_read','edge_copy_to_browser','edge_open_shared'}
+EDGE_WORK={'edge_read','edge_click','edge_type','edge_open','edge_scroll'}
+EDGE_TOOLS=EDGE_SHARED|EDGE_WORK
+NEEDS_APPROVAL.update(EDGE_TOOLS)
 DOCUMENT_TOOLS={"document_list","document_read"}|DOCUMENT_WRITES
 ARBITRARY_URL_TOOLS = {"browser_open", "fetch_page"}
 SEARCH_TOOLS = {"browser_search", "browser_web_search"}
@@ -118,6 +137,7 @@ RISK_TIERS = {
     "document_list":"medium", "document_read":"medium", "document_save":"high", "document_edit":"high",
     "document_append_requested":"high",
 }
+RISK_TIERS.update({name:'high' for name in EDGE_TOOLS})
 TOOL_ARGUMENTS = {
     "outline_task":{"steps":list},
     "add": {"a": int, "b": int}, "multiply": {"a": int, "b": int},
@@ -138,6 +158,9 @@ TOOL_ARGUMENTS = {
     "document_edit":{"document":int,"find":str,"replacement":str},
     "document_append_requested":{"document":int},
 }
+TOOL_ARGUMENTS.update({'edge_read':{},'edge_copy_to_browser':{},'edge_click':{'element':int},
+                       'edge_type':{'element':int,'text':str},'edge_shared_read':{},'edge_open_shared':{},
+                       'edge_open':{'url':str},'edge_scroll':{'direction':str}})
 
 
 def tool_args_problem(name, args):
@@ -265,13 +288,17 @@ available_functions = {
     'document_list':document_list, 'document_read':document_read, 'document_save':document_save,
     'document_edit':document_edit,'document_append_requested':document_append_requested,
 }
+available_functions.update({'edge_read':edge_read,'edge_copy_to_browser':edge_copy_to_browser,
+                            'edge_click':edge_click,'edge_type':edge_type,'edge_shared_read':edge_shared_read,
+                            'edge_open_shared':edge_open_shared,'edge_open':edge_open,'edge_scroll':edge_scroll})
 
 
 def offered_tools(request):
     """Keep a request-bound text capability absent when no eligible data exists."""
     eligible=requested_append_text(request) is not None
     return [function for name,function in available_functions.items()
-            if (name!='document_append_requested' or eligible) and
+            if (name not in EDGE_SHARED or edge_available()) and (name not in EDGE_WORK or work_available()) and
+               (name!='document_append_requested' or eligible) and
                (not eligible or name not in {'document_edit','document_save'})]
 
 
@@ -606,6 +633,46 @@ def _run_turn_impl(messages, user_text, ask_approval, log=print, model=MODEL, st
                 result=outline_task(args['steps'])
                 if not result.startswith('Error:'):evidence.emit('plan',steps=args['steps'])
                 append_tool({'role':'tool','tool_name':name,'content':result})
+                continue
+
+            if name in EDGE_TOOLS:
+                action={'edge_read':'read','edge_copy_to_browser':'copy','edge_click':'click','edge_type':'type',
+                        'edge_shared_read':'shared_read','edge_open_shared':'open_shared',
+                        'edge_open':'open','edge_scroll':'scroll'}[name]
+                edge_started=time.perf_counter()
+                proposal=prepare_edge(action,args.get('element'),args.get('text',args.get('url',args.get('direction',''))),stop_event)
+                total+=time.perf_counter()-edge_started
+                if 'error' in proposal:
+                    result='Error: '+proposal['error']
+                elif not approved(ask_approval,'edge_operation',proposal['preview']):
+                    result='Error: this exact Edge operation was denied'
+                elif stopped(stop_event):
+                    result='Error: stopped by the user'
+                else:
+                    edge_started=time.perf_counter()
+                    result=commit_edge(proposal['token'],stop_event)
+                    if name=='edge_copy_to_browser' and result.startswith('URL '):
+                        url=result[4:]
+                        problem=outbound_url_problem(url)
+                        if problem:result='Error: '+problem
+                        else:
+                            # The approved copy preview showed this exact URL. It grants
+                            # no ordinary-Edge actions and carries no cookies into Chromium.
+                            host,_=fetch.check_new_site(url)
+                            fetch.session_hosts.add(host)
+                            result=browser_open(url)
+                            if not result.startswith('Error:') and not stopped(stop_event):result=browser_read()
+                    total+=time.perf_counter()-edge_started
+                audit('edge_refused' if result.startswith('Error:') else 'edge_result',name,args,model,note=result)
+                append_tool({'role':'tool','tool_name':name,'content':result})
+                if result.startswith('Error:'):
+                    cancel_edge_pending()
+                    log(f'[blocked] {name}: {result}')
+                    # A failed/denied action cannot silently retry from a queued batch.
+                    for deferred in response.message.tool_calls[tc_index+1:]:
+                        append_tool({'role':'tool','tool_name':deferred.function.name,
+                                     'content':'Error: Edge workflow paused; queued action not run.'})
+                    return finish('Paused',result+' Edge workflow paused. Review and send a new request.',total)
                 continue
 
             if name in DOCUMENT_TOOLS:

@@ -14,6 +14,8 @@ from desktop_tools import desktop_start, close_desktop, capture_practice, start_
 from process_guard import stop_all
 from media_input import prepare_media
 from browser_tool import close_browser
+from edge_tools import start_edge,close_edge
+from edge_work_browser import start_work,work_current,PROFILE as EDGE_WORK_PROFILE
 from agent_core import run_turn, MODEL_CHOICES, SAFE, AUDIT_LOG, forget_sites
 from artifacts import store as artifact_store
 from artifact_panel import ArtifactPanel
@@ -147,6 +149,28 @@ def high_risk_confirm(title, lines):
 
 
 def confirm(name, args):
+    if name=='edge_operation':
+        lines=['SHARED EDGE TAB - ONE OPERATION ONLY','',
+               'Mode: '+str(args.get('mode')),
+               'Work profile: scripts/cookies with guarded HTTP fetching. Personal Edge: read/handoff only.','',
+               'Operation: '+str(args.get('action')),'Page: '+str(args.get('title')),
+               'Full URL:',str(args.get('url')),'']
+        if args.get('action')=='copy':
+            lines+=['Open this exact address in the isolated browser and allow its host for this chat.',
+                    'Cookies, passwords and login state are not copied.']
+        elif args.get('action') in {'read','shared_read'}:lines+=['The agent will receive page text and numbered controls.']
+        elif args.get('action')=='open_shared':
+            lines+=['Open this exact address in the separate Edge work profile. Personal cookies and login state are not copied.']
+        elif args.get('action')=='open':lines+=['Open this exact address in the separate Edge work profile.']
+        elif args.get('action')=='scroll':lines+=['Scroll one bounded viewport step: '+str(args.get('direction'))]
+        else:
+            lines+=['Control: '+str(args.get('control')),'Kind: '+str(args.get('kind'))]
+            if 'destination' in args:lines+=['Exact destination:',args['destination']]
+            if 'text' in args:lines+=['Current field value:',str(args.get('before','')),'Exact replacement text:',args['text']]
+            lines+=['Website scripts may send text immediately. A button may submit a form or change account data.',
+                    'Downloads and file chooser inputs are blocked in the work browser. Server-side effects are not independently verified.']
+        lines+=['','Allow this exact operation? No cancels and pauses the workflow.']
+        return high_risk_confirm('Approve shared Edge operation',lines)
     """Pop up the approval question. Returns True only if the person clicks Yes."""
     if name == "workspace_access":
         return high_risk_confirm("Allow document workspace", [
@@ -383,6 +407,7 @@ def stop_agent():
     """Kill owned automation workers and revoke pending images/approvals."""
     global pending_image, pending_media
     stop_event.set()
+    close_edge()
     reset_voice()
     task_progress.stop()
     pending_image = pending_media = None
@@ -881,6 +906,7 @@ def new_chat():
                           "Artifact drafts, version history and scratch Notepad will be discarded. Exported files and saved Documents remain. Workspace read permission is forgotten; last-save recovery remains available.",
                           default="no") is not True:
         return
+    close_edge()
     closed = close_browser()    # close the browser BEFORE wiping anything: no half-reset chats
     if closed.startswith("Error"):
         show("New chat", f"not started: {closed}")
@@ -910,6 +936,68 @@ def new_chat():
 
 
 LOG_LINES = 50   # how many of the newest log lines the viewer shows
+
+
+def share_personal_edge_tab():
+    if busy:return
+    if not high_risk_confirm('Connect an Edge tab',[
+            'SHARE A TAB FROM YOUR EXISTING EDGE BROWSER','',
+            'Install the local extension from edge_extension once using Edge > Extensions > Developer mode > Load unpacked.',
+            'Select your website tab, click the Local Studio extension icon, then enter the fresh code shown next.',
+            'Only that selected tab is shared, for reading or copying its address. Clicks/typing stay in the separate work profile.',
+            'Each read or handoff needs its own approval. The isolated browser remains a separate mode.',
+            'Stop, New chat and Disconnect revoke the connection. No begins selected.','',
+            'Start a fresh local pairing session?']):return
+    try:code=start_edge()
+    except Exception:
+        show('Edge','Error: could not start the local connector.');return
+    win=tk.Toplevel(root);win.title('Pair the selected Edge tab');win.transient(root)
+    tk.Label(win,text='Enter this fresh code in the Local Studio Edge extension.\nKeep the Edge connector window open.',padx=18,pady=16).pack()
+    field=tk.Entry(win,width=64);field.insert(0,code);field.pack(padx=18,pady=8)
+    tk.Label(win,text='Keep this code private. It stays in RAM and is never sent to the model.').pack(padx=18,pady=8)
+    tk.Button(win,text='Close this code window',command=win.destroy).pack(pady=8)
+    show('Edge','Pairing ready. Select your personal Edge tab and Share selected tab in the extension.\nAsk me to read the shared tab, copy it to the isolated browser, or open its address in the work profile.')
+
+
+def connect_edge_tab():
+    if busy:return
+    win=tk.Toplevel(root);win.title('Edge work browser');win.transient(root)
+    tk.Label(win,text='Separate Edge work profile',font=(UI_FONT,16,'bold'),padx=18,pady=16).pack()
+    tk.Label(win,text='Clicks and typing stay in this app-owned profile.\nPersonal Edge sharing is read/handoff only.',padx=18,pady=8).pack()
+    def launch():
+        if high_risk_confirm('Start Edge work profile',[
+            'START A SEPARATE EDGE WORK PROFILE','',str(EDGE_WORK_PROFILE),'',
+            'This is separate from your personal Edge profile. Its cookies and site data persist on disk.',
+            'Websites can run JavaScript. HTTP is fetched by code with IP pinning, size limits and redirects blocked; this is not a VM.',
+            'Downloads, file chooser selection, service workers and unsolicited permission grants are blocked.',
+            'Each agent read, click, typing or navigation needs its own approval. Stop closes only the owned work browser.',
+            'Start it?']):show('Edge',start_work())
+    def choose():
+        def load():
+            try:data=work_current().rpc('list')
+            except Exception:data={'error':'Start the work browser first and wait for its window.'}
+            events.put(('edge_work_tabs',data))
+        threading.Thread(target=load,daemon=True).start()
+    for text,callback in [('Start work Edge',launch),('Choose a work tab',choose),
+                          ('Share a personal Edge tab (read/handoff)',share_personal_edge_tab),
+                          ('Disconnect / close work Edge',close_edge)]:
+        tk.Button(win,text=text,command=callback,padx=12,pady=8).pack(fill='x',padx=18,pady=6)
+
+
+def choose_edge_work_tab(data):
+    if data.get('error'):
+        show('Edge',data['error']);return
+    win=tk.Toplevel(root);win.title('Select Edge work tab');win.transient(root)
+    tk.Label(win,text='Only tabs in the app-owned work profile are listed.',padx=16,pady=12).pack()
+    def select(number):
+        def apply():
+            try:work_current().rpc('select',{'number':number});status='Work tab selected. Ask me to read Edge.'
+            except Exception:status='Error: tab changed; choose it again.'
+            events.put(('memory',status))
+        threading.Thread(target=apply,daemon=True).start();win.destroy()
+    for tab in data.get('tabs',[]):
+        tk.Button(win,text=(tab['title']+'\n'+tab['url']),wraplength=600,justify='left',
+                  command=lambda number=tab['number']:select(number)).pack(fill='x',padx=16,pady=5)
 
 
 def format_entry(line):
@@ -1033,6 +1121,8 @@ def poll():
                 finish_turn()
             elif kind == "memory":
                 show("Memory", item[1])
+            elif kind == 'edge_work_tabs':
+                choose_edge_work_tab(item[1])
             elif kind == "emergency_stop":
                 stop_agent()
             elif kind == "prepared_media":
@@ -1216,6 +1306,7 @@ def build_window():
     make_button(sidebar,"Documents",lambda:(show_artifacts(),show_documents(artifact_panel,confirm))).pack(fill="x",padx=16,pady=4)
     artifacts_button=make_button(sidebar,"Artifacts",toggle_artifacts)
     artifacts_button.pack(fill="x",padx=16,pady=4)
+    make_button(sidebar,'Edge tab',connect_edge_tab).pack(fill='x',padx=16,pady=4)
     notepad_status=tk.StringVar(value=NOTEPAD_PHASES["closed"])
     notepad_label=label(sidebar,"",9,background="sidebar",textvariable=notepad_status,wraplength=140)
     def notepad_label_sync(*_):     # only show Notepad's state while it is actually open
@@ -1227,6 +1318,7 @@ def build_window():
     more_menu.add_command(label="Practice",command=open_practice)
     more_menu.add_command(label="Notepad",command=open_notepad)
     more_menu.add_command(label="Audit log",command=show_log)
+    more_menu.add_command(label='Disconnect Edge tab',command=close_edge)
     more_menu.add_separator()
     more_menu.add_command(label="Model check",command=model_check)
     more_menu.add_command(label="Free VRAM",command=free_vram)
@@ -1303,7 +1395,7 @@ def build_window():
         state='normal' if active or busy else 'disabled',text='Stop')
     artifact_panel.on_change=show_artifacts
     from emergency_hotkey import start_hotkey
-    start_hotkey(lambda:(stop_event.set(),stop_all(),emergency_ui.set()),lambda text:events.put(("memory",text)))
+    start_hotkey(lambda:(stop_event.set(),close_edge(),stop_all(),emergency_ui.set()),lambda text:events.put(("memory",text)))
     root.after(50,watch_emergency)
     root.bind_all("<F12>",lambda event:stop_agent())
     root.bind("<Escape>",lambda event:stop_agent())

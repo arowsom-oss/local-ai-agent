@@ -5,7 +5,9 @@ This is a working first version of the ten improvements in TOP10_STATUS.md.
 Desktop control is limited to an owned practice app and a separately approved,
 owned classic Notepad scratch window. Saved Documents use a separate, approved
 fixed folder with exact save previews and retained versions. It cannot attach to
-your existing windows or accounts, or choose arbitrary files and messages.
+your personal windows for actions or choose arbitrary local files. Website
+actions now additionally use a separate, approved Edge work profile; selected
+personal Edge tabs are read/address-handoff only. See EDGE_BROWSER.md for limits.
 
 The working copy lives at `C:\dev\local-ai-agent` and is a git clone of this repo.
 `identity.py`, `sandbox/`, `audit.log`, `generated/` and `model_cache/` stay local
@@ -13,6 +15,11 @@ and are ignored by git. All offline suites and the seven Windows-only live suite
 passed on 2026-10-19; `run_live_tests.bat` style runs are recorded in VALIDATION.md.
 
 ## Shared project record
+
+[EDGE_BROWSER.md](EDGE_BROWSER.md) explains the separate AI Edge work profile,
+approved numbered controls, and optional read/address handoff from a personal
+Edge tab. Start with **Edge tab** in the app; personal-tab handoff additionally
+needs the local unpacked extension installed once by the person.
 
 [IMPROVEMENT_ROADMAP.md](IMPROVEMENT_ROADMAP.md) lists the next ten priorities
 and measures the first completed change: exact bare greetings skip Auto's

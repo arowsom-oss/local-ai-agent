@@ -15,11 +15,13 @@ OFFLINE=(
     'test_task_progress.py','test_workspace_io.py','test_reliability.py',
     'test_document_edit.py','test_generated_artifacts.py','test_speech_reference.py',
     'test_model_timing.py','test_efficiency.py','test_prompt_injection.py',
+    'test_edge_tools.py',
 )
 NATIVE={
     'test_artifact_ui.py','test_browser_live.py','test_desktop_live.py',
     'test_efficiency_ui.py','test_notepad_live.py','test_progress_ui.py',
     'test_speech_ui.py','test_vision_ui.py','test_workspace_io_live.py','test_workspace_live.py',
+    'test_edge_live.py',
 }
 
 def main():

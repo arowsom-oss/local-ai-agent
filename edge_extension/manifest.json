@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Local Studio - Selected Edge Tab",
+  "version": "0.1.0",
+  "description": "Share one chosen HTTPS tab with your local agent. Every read/change needs app approval.",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["http://127.0.0.1/*"],
+  "action": {"default_title": "Share this tab with Local Studio"},
+  "background": {"service_worker": "background.js"},
+  "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'none'; connect-src http://127.0.0.1:*"}
+}
