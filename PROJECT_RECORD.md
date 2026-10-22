@@ -4,7 +4,7 @@ A safe local AI assistant for Alexander's Windows laptop
 
 Running record updated October 21, 2026. Earlier measurements remain labeled by milestone; later chapters record subsequent changes and failures.
 
-Current handoff: the final chapter covers voice, model-selection and Edge reliability fixes on codex/edge-ui-fixes-2026-10-21 in arowsom-oss/local-ai-agent, based on main 526497f. The shared PROJECT_RECORD.md is the handoff for Claude. Earlier measurements stay historical. Profiles, models and personal data stay local. The human main scorecard remains deferred.
+Current handoff: the final chapters cover consistent close/cancel controls, a calmer interface and the new Local Studio icon on codex/popup-close-controls-2026-10-21 in arowsom-oss/local-ai-agent. The shared PROJECT_RECORD.md is the handoff for Claude. Earlier measurements stay historical. Profiles, models and personal data stay local. The human main scorecard remains deferred.
 
 ## Purpose and current position
 
@@ -857,3 +857,43 @@ Previously each routed request could block the Playwright owner in DNS and HTTP,
 All 354 offline cases across 19 suites pass. Native speech/reference tests verify popup-free dictation, unsent-draft/Stop protection and selecting an actual dropdown option during a reply without changing that turn's model. Native Edge/connector/Tk fixtures pass, including a deliberately stalled secondary DNS request: it is aborted while page reading succeeds and the browser stays open.
 
 Two retained offline runs failed because old tests required the removed popups; those expectations were updated. One public example.com open/read returned visible documentation text promptly, but its harness failed an outdated heading expectation; that failure is retained. This was not a live model or person-approval test. The exact cause of Alexander's original timeout remains unconfirmed. Slow pages may load incompletely. Python cannot forcibly cancel Windows DNS: a retired helper must exit before a new work browser can start. Personal Edge remains read/handoff only. No scorecard result or model-quality score is invented.
+
+<!-- PAGE -->
+# Popups that close safely
+
+## Alexander's report and scope
+
+After another lingering popup, Alexander asked for every popup in the app to have an obvious way to close it. The inventory covers exact approvals, image/reference previews, ordinary decisions, Edge setup/tab selection/pairing code, Activity/audit, task details, Saved Documents, the optional extension connector, native file/text choosers and dropdown lists. This branch starts from the prior tested UI repair commit 02d48b9. Its core tool permissions, network adapter, model router, scorecard and student-owned copy-button fix are unchanged.
+
+Every custom utility panel now has a reserved footer with Close or Cancel, Escape and a title-bar X. Footer space is allocated before expanding content. Long Edge tab lists scroll and empty lists retain Cancel. Windows monitor work areas bound placement; negative coordinates use absolute Tk geometry syntax. Modal cleanup releases grabs after exceptions and restores an enclosing modal. Closing Documents before its listing returns no longer touches a destroyed view. Repeated panels are reused or replaced.
+
+A real Windows Yes/No fixture remained open after WM_CLOSE. Rather than depending on that OS dialog's X behavior, ordinary decisions now use a small app-owned, scrollable No-default shell. This covers New chat, capture/model checks and discarding an unsaved Artifact edit. No, Escape, Return and X all cancel. Tests verify that chat history and unsaved edits survive, and cancelled capture/check paths do not run. Exact action approvals retain their independent explicit Yes requirement. Image-preview cancellation rejects the image.
+
+The optional extension has an always-accessible Close connector button and Escape handler. They stop polling, revoke sharing and close its owned popup, with a bounded wait if the relay is unavailable. Ordinary browser title-bar closure expires through the existing heartbeat. Closing only the pairing-code display hides the code; it does not revoke an already shared personal tab. Stop and Disconnect remain the controls for that.
+
+## Tests and retained failures
+
+All 363 cases in 20 offline suites pass. Nine affected native suites pass after the final visual changes: Artifacts, Edge/connector, efficiency UI, popups, progress, speech, vision and both Documents suites. Checks include all nine custom popup types, actual Open/Save cancellation, text-prompt cancellation, long/empty content, a short monitor, nested grabs and late results. Model, Artifact and version dropdowns dismiss with Escape without triggering Stop.
+
+The earlier broad native run passed 11/12 suites. Its global stop shortcut registration was unavailable while another process held it; that failure remains recorded. The remaining owned practice UIA and hard-stop cases passed separately. Windows native-menu automation using Tk synthetic events was unreliable, and an icon-getter assertion was platform-specific; those harness attempts remain in local evidence. No other running app was killed to free a shortcut. This is not an exhaustive Windows audit or a guarantee for every monitor/provider.
+
+<!-- PAGE -->
+# A calmer interface and original app identity
+
+## Design direction
+
+Alexander also asked for less clutter, more uniform presentation and Apple design inspiration. Apple's Human Interface Guidelines on layout, modality and alerts informed the use of hierarchy, restrained color, whitespace and discoverable dismissal. This remains a native Windows/Tk interface using Segoe UI. It does not copy Apple logos, fonts, platform claims or expensive glass effects.
+
+Light and dark themes now use neutral surfaces with one blue accent. Panels share typography, spacing and a consistent close footer. Only one utility panel stays open at a time; opening another replaces the earlier view. Exact approval dialogs remain separate because their purpose is an explicit decision. Browser approval copy keeps the destination, precise text changes and relevant website effects, while implementation details live in documentation.
+
+Routine tool messages and timing metadata now stay in More > Activity rather than interrupting the conversation. Its This chat tab retains the latest 100 bounded entries in RAM; Saved audit remains separately available. New chat clears the transient activity. Refusals and errors still appear in the conversation. Tool results sent to the model, audit redaction and action approval policy are unchanged. Read-only activity text never becomes executable content.
+
+## Icon and launch behavior
+
+An original logo was created with the built-in image generation tool: three rounded blue ribbons around a central negative space on a charcoal app tile. Only format/size conversion followed generation. The project bundles a transparent 256-pixel PNG and an ICO with nine sizes from 16 to 256 pixels. The exact prompt and provenance are in assets/README.md; the original generated source is retained locally. The app sets its Windows process identity and real window icon, including popup inheritance.
+
+The Local Studio shortcut uses the app's existing pythonw runtime and bundled ICO. It launches the primary source folder without a console. Python source-file associations and registry settings are unchanged; double-clicking a .py file can still show Python's icon. The shortcut installer refuses to overwrite an unrelated existing shortcut. No model weights or Python dependencies were added.
+
+## Evidence and handoff
+
+Native checks verify the actual Windows icon handle and explicit application identity, Activity routing and replacement of an earlier utility panel. Light/dark main-window, browser-panel and Activity previews were rendered and visually inspected using synthetic chat and Artifact content. They are not model outputs or a claim of macOS-native widgets. UI_DESIGN.md contains the popup inventory, close semantics, Apple references and the retained test limitations. A fresh app restart is required to load these changes. The human main scorecard is still deferred; no score or model-quality result is invented.

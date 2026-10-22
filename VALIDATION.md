@@ -1,3 +1,19 @@
+# Dismissible popups, calm UI and app icon
+
+363 offline cases/20 suites and all nine affected native suites pass. These
+cover nine custom popup types, exact approvals, unsent draft/chat retention,
+native Open/Save/text cancellation, long/empty lists, short monitor geometry,
+nested grabs, late Documents results, Activity routing and actual Windows icon
+and process identity. Light/dark synthetic UI renders were visually inspected.
+The Edge extension fixture verifies Close/Escape revocation in its owned popup.
+
+The earlier broad native run is retained at 11/12: another process held the
+global stop shortcut, so registration was unavailable. The remaining practice
+UIA/hard-stop tests passed separately. Native-menu synthetic event and icon-name
+getter assumptions caused retained harness attempts; neither is silently counted
+as a successful OS menu test. No human main scorecard or live model ran here.
+See UI_DESIGN.md and assets/README.md for scope, references, prompt and limits.
+
 # Edge/voice/model UI repairs (2026-10-21)
 
 354 offline cases across 19 suites pass. Native test_speech_ui.py verifies direct

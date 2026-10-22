@@ -16,6 +16,11 @@ passed on 2026-10-19; `run_live_tests.bat` style runs are recorded in VALIDATION
 
 ## Current UI behavior
 
+UI_DESIGN.md describes the calmer light/dark interface, safe Close/Cancel/X
+handling and original app icon. Routine tool/timing detail is in **More > Activity**.
+One utility panel opens at a time. Use the Local Studio launcher shortcut for
+the branded icon; Python file associations stay unchanged.
+
 Talk records directly and places an editable, unsent transcript in the message
 box. The Next message model dropdown stays available during a reply; changes
 apply to the next turn. Edge setup closes after Start/Choose/Disconnect.

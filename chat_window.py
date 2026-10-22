@@ -4,7 +4,8 @@ from collections import deque
 import re
 import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox, scrolledtext, ttk
+from tkinter import filedialog, scrolledtext, ttk
+from popup_windows import decisions as messagebox
 from urllib.parse import urlparse
 
 import attach
@@ -24,6 +25,8 @@ from notepad_tools import start_notepad, close_notepad
 from workspace_documents import reset_workspace, cancel_workspace, save_uncertain
 from task_progress import TaskProgress
 from progress_panel import ProgressPanel
+from app_brand import set_app_identity,set_window_icon
+from popup_windows import dismissible,place_popup,wait_modal,scrolling_frame
 
 # ---- shared state -------------------------------------------------------
 messages = []            # the conversation; lives as long as the window is open
@@ -38,6 +41,8 @@ pending_image = None     # immutable preview-approved bytes, for one turn only
 pending_media = None
 speak_replies = False    # Person-only opt-in, revoked by Stop and New chat.
 recording_done = None
+activity_lines=deque(maxlen=100)  # Routine tool/timing details stay out of the conversation.
+activity_box=None
 
 # Reading settings. Change these and re-run if they don't feel right for you.
 FONT_NAME = "Segoe UI"
@@ -114,12 +119,9 @@ def high_risk_confirm(title, lines):
     win.title(title)
     win.transient(root)
     win.configure(bg=T("window"))
-    width, height = min(720, win.winfo_screenwidth() - 80), min(480, win.winfo_screenheight() - 120)
-    x, y = max(0, (win.winfo_screenwidth() - width) // 2), max(0, (win.winfo_screenheight() - height) // 2)
-    win.geometry(f"{width}x{height}+{x}+{y}")
-    win.minsize(540, 360)
-    tk.Label(win, text="HIGH RISK - EXPLICIT APPROVAL REQUIRED", bg="#B91C1C", fg="white",
-             font=(UI_FONT, 12, "bold"), padx=16, pady=14).pack(fill="x")
+    place_popup(win,720,480)
+    tk.Label(win, text="APPROVAL REQUIRED", bg=T('window'), fg=T('red'),anchor='w',
+             font=(UI_FONT, 10, "bold"), padx=18, pady=14).pack(fill="x")
     # Reserve button space FIRST so the scrolling text cannot hide the controls.
     row = tk.Frame(win, bg=T("window"))
     row.pack(side="bottom", fill="x", padx=12, pady=(0, 12))
@@ -136,24 +138,20 @@ def high_risk_confirm(title, lines):
 
     tk.Button(row, text="Yes, allow this action", command=lambda: finish(True),
               bg="#B91C1C", fg="white", padx=12, pady=8).pack(side="left")
-    no = tk.Button(row, text="No", command=finish, default="active", padx=24, pady=8)
+    no = tk.Button(row, text="No", command=finish, default="active", padx=24, pady=8,
+                   bg=T('button'),fg=T('text'),activebackground=T('pressed'),activeforeground=T('text'),relief='flat')
     no.pack(side="right")
-    win.protocol("WM_DELETE_WINDOW", finish)
-    win.bind("<Escape>", lambda event: finish())
+    dismissible(win,finish,button=False)
     win.bind("<Return>", lambda event: finish())
-    win.wait_visibility()
-    win.grab_set()
-    no.focus_set()
-    root.wait_window(win)
+    wait_modal(root,win,no)
     return answer
 
 
 def confirm(name, args):
     if name=='edge_operation':
-        lines=['SHARED EDGE TAB - ONE OPERATION ONLY','',
-               'Mode: '+str(args.get('mode')),
-               'Work profile: scripts/cookies with guarded HTTP fetching. Personal Edge: read/handoff only.','',
-               'Operation: '+str(args.get('action')),'Page: '+str(args.get('title')),
+        lines=['ONE BROWSER ACTION','',
+               'Browser: '+str(args.get('mode')),'',
+               'Action: '+str(args.get('action')),'Page: '+str(args.get('title')),
                'Full URL:',str(args.get('url')),'']
         if args.get('action')=='copy':
             lines+=['Open this exact address in the isolated browser and allow its host for this chat.',
@@ -227,12 +225,12 @@ def confirm(name, args):
         lines += ["", "Each open step sends exactly the address shown. Plans can't hold ? or #.",
                   "Other addresses, searches and new websites still need separate approval.",
                   "Approve the whole plan?"]
-        return messagebox.askyesno("Approve plan", "\n".join(lines), default="no", icon="warning") is True
+        return high_risk_confirm("Approve plan",lines)
     if name == "plan_changed":
         lines = ["THE AGENT WANTS TO LEAVE ITS PLAN", "",
                  f"Planned step:  {args.get('planned')}", f"Wants instead: {args.get('new')}", "",
                  "Yes = allow just this one action.   No = stop the plan."]
-        return messagebox.askyesno("Plan changed", "\n".join(lines), default="no", icon="warning") is True
+        return high_risk_confirm("Plan changed",lines)
     if name == "new_site":                       # the site name here was read by code, not the model
         lines = [WHAT_IT_DOES["new_site"], "", f"Site:  {args.get('host')}", "",
                  f"Full address: {args.get('url')}", "",
@@ -265,8 +263,7 @@ def confirm(name, args):
         except ValueError:
             lines.append("Site: (could not read it)")
     lines += [f"Details: {args}", "", "Allow this?"]
-    return messagebox.askyesno("Approval needed", "\n".join(lines),
-                               default="no", icon="warning") is True
+    return high_risk_confirm("Approval needed",lines)
 
 
 def apply_font():
@@ -454,6 +451,7 @@ def attach_file():
         show("Attach", "wait for the answer first, then attach")
         return
     path = filedialog.askopenfilename(
+        parent=root,
         title="Choose a file to attach",
         filetypes=[("Text and code", "*.txt *.md *.csv *.py"), ("All files", "*.*")])
     if not path:                      # Cancel or closed the window
@@ -478,10 +476,9 @@ def preview_image(image, on_approve=None, purpose="analysis"):
     win._approval_dialog = True
     win.title("Preview reference photo for local video" if purpose == "video" else "Preview image for local analysis")
     win.transient(root)
-    width = min(760, win.winfo_screenwidth() - 80)
-    height = min(640, win.winfo_screenheight() - 100)
-    win.geometry(f"{width}x{height}")
-    row = tk.Frame(win)
+    width,height=place_popup(win,760,640)
+    win.configure(bg=T('window'))
+    row = tk.Frame(win,bg=T('window'))
     row.pack(side="bottom", fill="x", padx=12, pady=12)  # Keep No visible at display scaling.
     explanation = ("These exact edited pixels will condition one local video after a separate prompt approval.\n"
                    "This is generation only; the photo cannot request tools or computer actions.\n"
@@ -489,15 +486,16 @@ def preview_image(image, on_approve=None, purpose="analysis"):
                    "This image will be sent only to the local model when you press Send.\n"
                        "Check for passwords, private chats and other sensitive information.\n"
                        "Analysis only: this image cannot trigger computer actions.")
-    tk.Label(win, text=explanation,
+    tk.Label(win, text=explanation,bg=T('window'),fg=T('text'),
              wraplength=width - 40, padx=12, pady=12).pack()
     original = image
     display_width, display_height = max(100, width - 40), max(100, height - 240)
     mode = tk.StringVar(value="hide")
-    tools = tk.Frame(win)
+    tools = tk.Frame(win,bg=T('window'))
     tools.pack()
-    tk.Radiobutton(tools, text="Drag to hide area", variable=mode, value="hide").pack(side="left")
-    tk.Radiobutton(tools, text="Drag to crop", variable=mode, value="crop").pack(side="left")
+    for title,value in [('Drag to hide area','hide'),('Drag to crop','crop')]:
+        tk.Radiobutton(tools,text=title,variable=mode,value=value,bg=T('window'),fg=T('text'),
+                       selectcolor=T('field'),activebackground=T('window'),activeforeground=T('text')).pack(side='left')
     with Image.open(BytesIO(image.png)) as source:
         source.thumbnail((display_width, display_height))
         photo = ImageTk.PhotoImage(source)
@@ -557,15 +555,12 @@ def preview_image(image, on_approve=None, purpose="analysis"):
         win.destroy()
 
     tk.Button(row, text="Use this image", command=lambda: finish(True)).pack(side="left")
-    no = tk.Button(row, text="No", command=finish, default="active")
+    no = tk.Button(row, text="No", command=finish, default="active",bg=T('button'),fg=T('text'),
+                   activebackground=T('pressed'),activeforeground=T('text'),relief='flat',padx=24,pady=8)
     no.pack(side="right")
     win.bind("<Return>", lambda event: finish())
-    win.bind("<Escape>", lambda event: finish())
-    win.protocol("WM_DELETE_WINDOW", finish)
-    win.wait_visibility()
-    win.grab_set()
-    no.focus_set()
-    root.wait_window(win)
+    dismissible(win,finish,button=False)
+    wait_modal(root,win,no)
     return answer
 
 
@@ -586,7 +581,7 @@ def attach_image():
     if busy:
         return
     stop_event.clear()
-    path = filedialog.askopenfilename(title="Choose an image or saved screenshot",
+    path = filedialog.askopenfilename(parent=root,title="Choose an image or saved screenshot",
                                      filetypes=[("Images", "*.png *.jpg *.jpeg *.webp")])
     if not path or stop_event.is_set():
         return
@@ -601,7 +596,7 @@ def animate_photo():
     if busy:
         return
     stop_event.clear()
-    path = filedialog.askopenfilename(title="Choose a reference photo for a short local video",
+    path = filedialog.askopenfilename(parent=root,title="Choose a reference photo for a short local video",
         filetypes=[("Reference photo", "*.png *.jpg *.jpeg *.webp")])
     if not path or stop_event.is_set():
         return
@@ -726,7 +721,7 @@ def transcribe_recording():
         show("Speech", "Your unsent message is preserved. Send or clear it before dictation.")
         return
     stop_event.clear()
-    path = filedialog.askopenfilename(title="Transcribe a local English WAV recording (no microphone capture)",
+    path = filedialog.askopenfilename(parent=root,title="Transcribe a local English WAV recording (no microphone capture)",
         filetypes=[("Up to 60 seconds of PCM WAV", "*.wav")])
     if not path or stop_event.is_set():
         return
@@ -760,7 +755,7 @@ def screenshot():
     stop_event.clear()
     if messagebox.askyesno("Capture practice window?",
             "Capture only the owned practice window once?\n"
-            "You will preview it before choosing whether to attach it.", default="no") is not True or stop_event.is_set():
+            "You will preview it before choosing whether to attach it.", parent=root,default="no") is not True or stop_event.is_set():
         return
     root.withdraw()
 
@@ -830,7 +825,7 @@ def attach_clip():
     if busy:
         return
     stop_event.clear()
-    path = filedialog.askopenfilename(title="Choose up to 60 seconds of local media",
+    path = filedialog.askopenfilename(parent=root,title="Choose up to 60 seconds of local media",
                                      filetypes=[("Local clips", "*.wav *.mp4")])
     if not path or stop_event.is_set():
         return
@@ -870,7 +865,7 @@ def model_check():
     stop_event.clear()
     if messagebox.askyesno("Run local model check?",
             "Run fixed synthetic tasks against both installed local models?\n"
-            "This can take a few minutes and will unload the models afterwards.", default="no") is not True or stop_event.is_set():
+            "This can take a few minutes and will unload the models afterwards.", parent=root,default="no") is not True or stop_event.is_set():
         return
 
     def evaluate():
@@ -892,7 +887,7 @@ def new_chat():
         return
     if messagebox.askyesno("New chat", "Start a new chat?\n\nThe agent will forget this conversation.\n"
                           "Artifact drafts, version history and scratch Notepad will be discarded. Exported files and saved Documents remain. Workspace read permission is forgotten; last-save recovery remains available.",
-                          default="no") is not True:
+                          parent=root,default="no") is not True:
         return
     close_edge()
     closed = close_browser()    # close the browser BEFORE wiping anything: no half-reset chats
@@ -915,6 +910,9 @@ def new_chat():
     reset_voice()
     pending_image = None
     pending_media = None
+    activity_lines.clear()
+    utility=getattr(root,'_utility_popup',None)
+    if utility is not None and utility.winfo_exists():utility._dismiss_popup()
     chat_box.configure(state="normal")
     chat_box.delete("1.0", "end")
     chat_box.configure(state="disabled")
@@ -927,6 +925,7 @@ LOG_LINES = 50   # how many of the newest log lines the viewer shows
 
 
 def share_personal_edge_tab():
+    global edge_code_window
     if busy:return
     if not high_risk_confirm('Connect an Edge tab',[
             'SHARE A TAB FROM YOUR EXISTING EDGE BROWSER','',
@@ -939,11 +938,14 @@ def share_personal_edge_tab():
     try:code=start_edge()
     except Exception:
         show('Edge','Error: could not start the local connector.');return
+    old=globals().get('edge_code_window')
+    if old is not None and old.winfo_exists():old.destroy()
     win=tk.Toplevel(root);win.title('Pair the selected Edge tab');win.transient(root)
-    tk.Label(win,text='Enter this fresh code in the Local Studio Edge extension.\nKeep the Edge connector window open.',padx=18,pady=16).pack()
-    field=tk.Entry(win,width=64);field.insert(0,code);field.pack(padx=18,pady=8)
-    tk.Label(win,text='Keep this code private. It stays in RAM and is never sent to the model.').pack(padx=18,pady=8)
-    tk.Button(win,text='Close this code window',command=win.destroy).pack(pady=8)
+    edge_code_window=win
+    dismissible(win,label='Close code window',size=(650,260))
+    ttk.Label(win,text='Enter this fresh code in the Local Studio Edge extension.\nKeep the Edge connector window open.',padding=(18,16)).pack()
+    field=tk.Entry(win,width=64,bg=T('field'),fg=T('text'),insertbackground=T('text'),relief='flat');field.insert(0,code);field.pack(fill='x',padx=18,pady=8)
+    ttk.Label(win,text='Keep this code private. It stays in RAM and is never sent to the model.',wraplength=560).pack(padx=18,pady=8)
     show('Edge','Pairing ready. Select your personal Edge tab and Share selected tab in the extension.\nAsk me to read the shared tab, copy it to the isolated browser, or open its address in the work profile.')
 
 
@@ -954,15 +956,18 @@ def connect_edge_tab():
         edge_panel.lift();return
     win=tk.Toplevel(root);win.title('Edge work browser');win.transient(root)
     edge_panel=win
-    tk.Label(win,text='Separate Edge work profile',font=(UI_FONT,16,'bold'),padx=18,pady=16).pack()
-    tk.Label(win,text='Clicks and typing stay in this app-owned profile.\nPersonal Edge sharing is read/handoff only.',padx=18,pady=8).pack()
+    dismissible(win,size=(600,440))
+    ttk.Label(win,text='Edge work browser',style='Title.TLabel',padding=(18,16)).pack(anchor='w')
+    ttk.Label(win,text='A separate space for approved website actions.',style='Muted.TLabel',padding=(18,0)).pack(anchor='w',pady=(0,12))
     def launch():
         if high_risk_confirm('Start Edge work profile',[
-            'START A SEPARATE EDGE WORK PROFILE','',str(EDGE_WORK_PROFILE),'',
-            'This is separate from your personal Edge profile. Its cookies and site data persist on disk.',
-            'Websites can run JavaScript. HTTP is fetched by code with IP pinning, size limits and redirects blocked; this is not a VM.',
-            'Downloads, file chooser selection, service workers and unsolicited permission grants are blocked.',
-            'Each agent read, click, typing or navigation needs its own approval. Stop closes only the owned work browser.',
+            'OPEN THE AI WORK BROWSER','',
+            'Your personal Edge tabs and logins stay separate.',
+            'This work profile saves its own cookies and site logins on this laptop.',
+            'Websites can run scripts. Approved clicks or typing can affect website data.',
+            'Downloads and file selection are blocked. Each AI action needs your approval.',
+            'Stop closes this work browser. Your personal Edge stays open.','',
+            'Work profile folder:',str(EDGE_WORK_PROFILE),'',
             'Start it?']):
             show('Edge',start_work());win.destroy()
     def choose():
@@ -973,16 +978,24 @@ def connect_edge_tab():
             events.put(('edge_work_tabs',data))
         threading.Thread(target=load,daemon=True).start()
     for text,callback in [('Start work Edge',launch),('Choose a work tab',choose),
-                          ('Share a personal Edge tab (read/handoff)',share_personal_edge_tab),
+                          ('Share a personal Edge tab (read/handoff)',lambda:(win.destroy(),share_personal_edge_tab())),
                           ('Disconnect / close work Edge',lambda:(close_edge(),win.destroy()))]:
-        tk.Button(win,text=text,command=callback,padx=12,pady=8).pack(fill='x',padx=18,pady=6)
+        ttk.Button(win,text=text,command=callback).pack(fill='x',padx=18,pady=5)
 
 
 def choose_edge_work_tab(data):
+    global edge_tab_picker
     if data.get('error'):
         show('Edge',data['error']);return
     win=tk.Toplevel(root);win.title('Select Edge work tab');win.transient(root)
-    tk.Label(win,text='Only tabs in the app-owned work profile are listed.',padx=16,pady=12).pack()
+    old=globals().get('edge_tab_picker')
+    if old is not None and old.winfo_exists():old.destroy()
+    edge_tab_picker=win
+    dismissible(win,label='Cancel',size=(700,520))
+    ttk.Label(win,text='Choose a work tab',style='Title.TLabel',padding=(18,16)).pack(anchor='w')
+    ttk.Label(win,text='Only tabs from the separate work profile appear here.',style='Muted.TLabel').pack(anchor='w',padx=18,pady=(0,12))
+    body=scrolling_frame(win)
+    if not data.get('tabs'):ttk.Label(body,text='No work tabs available. Close this window and start work Edge.').pack(padx=16,pady=16)
     def select(number):
         def apply():
             try:work_current().rpc('select',{'number':number});status='Work tab selected. Ask me to read Edge.'
@@ -990,8 +1003,11 @@ def choose_edge_work_tab(data):
             events.put(('memory',status))
         threading.Thread(target=apply,daemon=True).start();win.destroy()
     for tab in data.get('tabs',[]):
-        tk.Button(win,text=(tab['title']+'\n'+tab['url']),wraplength=600,justify='left',
+        tk.Button(body,text=(tab['title']+'\n'+tab['url']),wraplength=560,justify='left',bg=T('button'),fg=T('text'),
+                  activebackground=T('pressed'),activeforeground=T('text'),relief='flat',padx=10,pady=10,
                   command=lambda number=tab['number']:select(number)).pack(fill='x',padx=16,pady=5)
+    body.bind('<Configure>',lambda event:[child.configure(wraplength=max(100,event.width-60))
+              for child in body.winfo_children() if isinstance(child,tk.Button)],add='+')
 
 
 def format_entry(line):
@@ -1012,10 +1028,23 @@ def format_entry(line):
 def show_log():
     """Open a READ-ONLY window with the newest audit-log entries. The text is shown,
     never run: log lines contain whatever the model asked for, so they are untrusted."""
-    win = tk.Toplevel(root)
-    win.title("Audit log (newest at the bottom)")
+    global audit_window,activity_box
+    old=globals().get('audit_window')
+    if old is not None and old.winfo_exists():old.lift();return
+    win = audit_window = tk.Toplevel(root)
+    win.title("Activity")
+    win.transient(root)
+    dismissible(win,size=(850,540))
     win.configure(bg=T("window"))
-    holder, box = scroll_box(win, wrap="word", width=90, height=24, bg=T("card"), fg=T("text"),
+    ttk.Label(win,text='Activity',style='Title.TLabel',padding=(18,16)).pack(anchor='w')
+    tabs=ttk.Notebook(win);tabs.pack(fill='both',expand=True,padx=18,pady=(0,12))
+    current=ttk.Frame(tabs);saved=ttk.Frame(tabs)
+    tabs.add(current,text='This chat');tabs.add(saved,text='Saved audit')
+    holder,activity_box=scroll_box(current,wrap='word',bg=T('card'),fg=T('text'),font=(FONT_NAME,11),relief='flat',padx=14,pady=12)
+    holder.pack(fill='both',expand=True)
+    activity_box.insert('end','\n\n'.join(activity_lines) or 'No tool activity yet.')
+    activity_box.configure(state='disabled')
+    holder, box = scroll_box(saved, wrap="word", width=90, height=24, bg=T("card"), fg=T("text"),
                              font=(FONT_NAME, max(10, font_size - 2)), spacing3=6,
                              relief="flat", bd=0, padx=14, pady=10, highlightthickness=1,
                              highlightbackground=T("border"), highlightcolor=T("border"))
@@ -1043,6 +1072,13 @@ def show_log():
         box.insert("end", text + "\n", kind)
     box.configure(state="disabled")
     box.see("end")
+
+
+def record_activity(line):
+    activity_lines.append(str(line)[:2000])
+    if activity_box is not None and activity_box.winfo_exists():
+        activity_box.configure(state='normal');activity_box.delete('1.0','end')
+        activity_box.insert('end','\n\n'.join(activity_lines));activity_box.configure(state='disabled');activity_box.see('end')
 
 
 def resume_task():
@@ -1089,15 +1125,14 @@ def poll():
             item = events.get_nowait()
             kind = item[0]
             if kind == "log":
-                remove_pending()
                 line = item[1]
+                record_activity(line)
                 if line.startswith("[notepad] "):
                     set_notepad_phase(line[len("[notepad] "):])
                 if line.startswith("[blocked] "):      # code refused something: say so in the chat
+                    remove_pending()
                     show("Blocked", line[len("[blocked] "):])
-                else:
-                    show("tool", line)
-                add_pending()          # still working, so thinking... goes back underneath
+                    if busy:add_pending()
             elif kind == "ask":
                 _, name, args, answer_box = item
                 answer_box.put(False if stop_event.is_set() else confirm(name, args))
@@ -1271,7 +1306,9 @@ def build_window():
     global more_menu, attach_menu, theme_entry, workspace, artifacts_button, clear_chip
     global voice_auto, mic_button
     make_sharp()                 # must happen before the first window exists
+    set_app_identity()
     root = tk.Tk()
+    set_window_icon(root)
     root.title("Local Studio")
     scale = max(1.0, root.winfo_fpixels("1i") / 96)   # 1.5 on a 150% display
     root.minsize(int(1100 * scale), int(680 * scale))
@@ -1293,7 +1330,7 @@ def build_window():
     sidebar = surface(root,"sidebar",width=int(170*scale))
     sidebar.pack(side="left",fill="y")
     sidebar.pack_propagate(False)
-    label(sidebar,"LOCAL",10,"accent","sidebar",True).pack(anchor="w",padx=22,pady=(30,2))
+    label(sidebar,"ON THIS DEVICE",9,"subtle","sidebar").pack(anchor="w",padx=22,pady=(30,2))
     label(sidebar,"Studio",24,"text","sidebar",True).pack(anchor="w",padx=20,pady=(0,24))
     make_button(sidebar,"+  New chat",new_chat,kind="accent").pack(fill="x",padx=16,pady=(0,24))
     from workspace_panel import show_documents
@@ -1311,7 +1348,7 @@ def build_window():
     more_menu=tk.Menu(root,tearoff=0)
     more_menu.add_command(label="Practice",command=open_practice)
     more_menu.add_command(label="Notepad",command=open_notepad)
-    more_menu.add_command(label="Audit log",command=show_log)
+    more_menu.add_command(label="Activity",command=show_log)
     more_menu.add_command(label='Disconnect Edge tab',command=close_edge)
     more_menu.add_separator()
     more_menu.add_command(label="Model check",command=model_check)
