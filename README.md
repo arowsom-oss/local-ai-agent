@@ -14,6 +14,12 @@ The working copy lives at `C:\dev\local-ai-agent` and is a git clone of this rep
 and are ignored by git. All offline suites and the seven Windows-only live suites
 passed on 2026-10-19; `run_live_tests.bat` style runs are recorded in VALIDATION.md.
 
+## Current UI behavior
+
+Talk records directly and places an editable, unsent transcript in the message
+box. The Next message model dropdown stays available during a reply; changes
+apply to the next turn. Edge setup closes after Start/Choose/Disconnect.
+
 ## Shared project record
 
 [EDGE_BROWSER.md](EDGE_BROWSER.md) explains the separate AI Edge work profile,

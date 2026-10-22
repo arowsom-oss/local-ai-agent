@@ -4,7 +4,7 @@ A safe local AI assistant for Alexander's Windows laptop
 
 Running record updated October 21, 2026. Earlier measurements remain labeled by milestone; later chapters record subsequent changes and failures.
 
-Current handoff: the final chapters cover the separate Edge work profile and personal-tab handoff, the improvement roadmap, research and CI. The shared PROJECT_RECORD.md is on codex/edge-tab-connector-2026-10-21 in arowsom-oss/local-ai-agent. Earlier measurements stay historical. Ignored profiles, models and personal data are not published. The main scorecard remains deferred without an invented score.
+Current handoff: the final chapter covers voice, model-selection and Edge reliability fixes on codex/edge-ui-fixes-2026-10-21 in arowsom-oss/local-ai-agent, based on main 526497f. The shared PROJECT_RECORD.md is the handoff for Claude. Earlier measurements stay historical. Profiles, models and personal data stay local. The human main scorecard remains deferred.
 
 ## Purpose and current position
 
@@ -838,3 +838,22 @@ Early tests retained failures about user activation, fixture script routing, off
 ## Limits and shared handoff
 
 Redirect/SSO flows, WebSockets, cross-origin forms, large media, iframes, shadow DOM, rich-text/canvas controls and changing SPAs may not work. A button label cannot prove its remote effect. Manual installation, sharing and a real chosen website still need Alexander's review. The branch stacks on efficiency-roadmap and stays unmerged. The main scorecard remains deferred; Alexander retains authorship of the threat model and deliberately unfixed copy-button task. No model weights or personal browser data were published.
+
+<!-- PAGE -->
+# First Edge test: voice and interface repairs
+
+## Report and changes (October 21, 2026)
+
+Alexander's first work-profile trial opened Edge, but edge_read returned "Edge timed out; work browser is stopping" after a 28.13-second overall turn. He also reported repeated dictation popups, a lingering Edge setup panel and a model dropdown that did not work. Main was clean at merge 526497f when this repair branch began; no existing working files were overwritten.
+
+Talk now starts its bounded recording directly. The transcript enters an empty message box without another dialog, ready for editing and an explicit Send. It never sends itself or replaces an unsent draft. Stop still discards the result. Spoken-output consent is unchanged. These controls remain person-only; no new microphone tool is offered to the model.
+
+The native model menu opened while idle, but code disabled it throughout recording, media jobs and replies. It now stays selectable. A running turn retains its captured model; a later selection applies to the next message. The label says "Next message model". The Edge setup panel is reused and closes after Start approval, choosing a tab or Disconnect. The optional personal connector window still stays open when that mode is used.
+
+## Timeout handling and evidence
+
+Previously each routed request could block the Playwright owner in DNS and HTTP, competing with its 15-second command timer. A single bounded helper now receives copied request data only and performs public-address checking plus pinned HTTPX. Only the Playwright owner fulfills/aborts routes. An eight-second network window per approved navigation or click/type bounds the wait; reads do not renew it. Failed responses conservatively keep their byte reservation. Redirect, upload, response-size and exact-action approval restrictions remain. Snapshot equality uses the exact bounded serialized state synchronously instead of an asynchronous crypto promise.
+
+All 354 offline cases across 19 suites pass. Native speech/reference tests verify popup-free dictation, unsent-draft/Stop protection and selecting an actual dropdown option during a reply without changing that turn's model. Native Edge/connector/Tk fixtures pass, including a deliberately stalled secondary DNS request: it is aborted while page reading succeeds and the browser stays open.
+
+Two retained offline runs failed because old tests required the removed popups; those expectations were updated. One public example.com open/read returned visible documentation text promptly, but its harness failed an outdated heading expectation; that failure is retained. This was not a live model or person-approval test. The exact cause of Alexander's original timeout remains unconfirmed. Slow pages may load incompletely. Python cannot forcibly cancel Windows DNS: a retired helper must exit before a new work browser can start. Personal Edge remains read/handoff only. No scorecard result or model-quality score is invented.

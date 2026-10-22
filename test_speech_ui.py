@@ -30,18 +30,43 @@ if __name__=='__main__':
     try:
         ui.root.update()
         assert ui.mic_button.winfo_ismapped() and not ui.voice_auto.get() and not ui.speak_replies
-        with patch.object(ui,'high_risk_confirm',return_value=False), \
-                patch.object(speech_tools,'capture_and_transcribe',side_effect=AssertionError('No recording permission')):
-            ui.voice_message()
-        assert not ui.busy and ui.recording_done is None
-        # A fake microphone result goes to review and the edit box, never Send.
-        with patch.object(ui,'high_risk_confirm',return_value=True), \
+        # Talk and transcript staging need no popup. Send remains a separate gesture.
+        with patch.object(ui,'high_risk_confirm',side_effect=AssertionError('No dictation popups')), \
                 patch.object(speech_tools,'capture_and_transcribe',return_value='Synthetic voice message.'), \
                 patch.object(ui,'run_turn',side_effect=AssertionError('Transcript must not send itself')):
             ui.voice_message()
             pump(lambda:not ui.busy and ui.entry.get()=='Synthetic voice message.')
         assert ui.mic_button.cget('text')=='Talk'
+        ui.stage_dictation('Do not replace this draft.')
+        assert ui.entry.get()=='Synthetic voice message.'
         ui.entry.delete(0,'end')
+        ui.stop_event.set();ui.stage_dictation('Discard cancelled recording.')
+        assert not ui.entry.get()
+        ui.stop_event.clear()
+        # Choose a different model during a running job; the current turn's
+        # captured model stays unchanged and the next turn uses the new choice.
+        captured=[];release=__import__('threading').Event()
+        def fake_turn(*args):
+            captured.append(args[1]);release.wait(3)
+            ui.events.put(('answer','Synthetic selection reply.',.01))
+        with patch.object(ui,'worker',side_effect=fake_turn):
+            ui.model_var.set('gemma4:e2b');ui.entry.insert(0,'Synthetic model selection test')
+            ui.send();pump(lambda:bool(captured))
+            assert str(ui.model_box.cget('state'))=='readonly'
+            ui.model_box.event_generate('<Button-1>',x=ui.model_box.winfo_width()-8,y=10)
+            ui.root.update()
+            pop=ui.root.tk.call('ttk::combobox::PopdownWindow',str(ui.model_box))
+            assert ui.root.tk.call('winfo','ismapped',pop)
+            listing=pop+'.f.l'
+            ui.root.tk.call(listing,'selection','clear',0,'end')
+            ui.root.tk.call(listing,'selection','set',2)
+            ui.root.tk.call('ttk::combobox::LBSelected',listing)
+            assert ui.model_var.get()=='gemma4:12b'
+            release.set();pump(lambda:not ui.busy)
+            assert captured==['gemma4:e2b']
+            ui.entry.insert(0,'Synthetic next model selection test');ui.send()
+            pump(lambda:len(captured)==2 and not ui.busy)
+            assert captured==['gemma4:e2b','gemma4:12b']
         # Opt-in auto speech reads exactly the visible model reply using the CPU path.
         spoken=[]
         ui.voice_auto.set(True)
@@ -83,6 +108,6 @@ if __name__=='__main__':
             ui.new_chat()
         assert not ui.speak_replies and not ui.voice_auto.get()
         assert not errors,errors
-        print('PASS native voice/reference UI: consent, transcript review, no auto-send, spoken reply opt-in, Stop, photo/video Artifacts and New chat.')
+        print('PASS native voice/reference UI: no dictation popups, editable unsent transcript, draft/Stop protection, native model dropdown/current-next turn, spoken reply opt-in and reference Artifacts.')
     finally:
         ui.stop_all();ui.root.destroy()
