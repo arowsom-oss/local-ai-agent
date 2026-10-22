@@ -80,3 +80,13 @@ installed app runtime and Ollama; it is deliberately separate from offline CI.
 Cold loads and model switches still cost time. Broader mixed-workflow quality,
 context accounting and cancellable I/O are open work. Alexander still owns his
 threat-model writing and the deliberately unfixed Copy last answer task.
+
+## Requested future work: website creation and visual previews (October 22)
+
+Alexander wants website source to appear as a visible layout in Artifacts,
+with Code / Preview views. Currently HTML remains source text. The reported
+refusal/missing pane has not been reproduced from its exact tool trace.
+WEBSITE_PREVIEW_PLAN.md records a proposed static offline HTML/CSS preview,
+renderer boundary checks, native/offline acceptance fixtures, later interactive
+projects and separately approved publishing. This is planned, not implemented;
+no arbitrary-code runner, new network access or publishing permission was added.
