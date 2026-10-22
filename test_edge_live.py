@@ -46,6 +46,11 @@ def main():
     profile=parent/('edge_fixture_profile_'+uuid.uuid4().hex)
     assert profile.parent==parent and not profile.exists()
     downloads=[];choosers=[];seen=[]
+    dns_started=threading.Event();release_dns=threading.Event()
+    def dns(host):
+        if host=='slow.example':
+            dns_started.set();release_dns.wait(18)
+        return ipaddress.ip_address('93.184.216.34')
     class Stream(httpx.SyncByteStream):
         def __init__(self,data):self.data=data
         def __iter__(self):yield self.data
@@ -55,6 +60,8 @@ def main():
         assert parts.hostname=='93.184.216.34' and request.headers['Host']=='fixture.example'
         assert request.extensions['sni_hostname']=='fixture.example'
         seen.append(parts.path)
+        if parts.path=='/slow-main':return httpx.Response(200,headers={'content-type':'text/html'},
+            stream=Stream(b'<h1>Readable while a resource stalls</h1><script>setTimeout(()=>fetch("https://slow.example/"),50)</script>'))
         if parts.path=='/download':return httpx.Response(200,headers={'content-type':'application/octet-stream',
             'content-disposition':'attachment; filename=blocked.txt'},stream=Stream(b'SYNTHETIC TEST FILE'))
         return httpx.Response(200,headers=[('content-type','text/html; charset=utf-8'),
@@ -68,8 +75,8 @@ def main():
         page.on('download',lambda download:downloads.append(download.failure()))
         page.on('filechooser',lambda chooser:choosers.append(True))
     try:
-        with patch.object(work,'PROFILE',profile),patch.object(work.httpx,'Client',side_effect=client), \
-             patch.object(work.WorkBrowser,'guard',guard),patch.object(edge.fetch,'safe_ip',return_value=ipaddress.ip_address('93.184.216.34')):
+        with patch.object(work,'PROFILE',profile),patch.object(httpx,'Client',side_effect=client), \
+             patch.object(work.WorkBrowser,'guard',guard),patch.object(edge.fetch,'safe_ip',side_effect=dns):
             work.start_work();worker=work.work_current()
             assert worker.rpc('navigate',{'url':'https://fixture.example/'})=={'opened':True}
             text=operation('read')
@@ -118,10 +125,19 @@ def main():
             worker.rpc('navigate',{'url':'https://fixture.example/next'})
             tabs=worker.rpc('list');assert tabs['tabs']
             worker.rpc('select',{'number':tabs['tabs'][-1]['number']})
+            worker.rpc('navigate',{'url':'https://fixture.example/slow-main'})
+            assert dns_started.wait(2),'Slow subresource fixture did not start'
+            started=time.monotonic()
+            assert 'Readable while a resource stalls' in operation('read')
+            assert time.monotonic()-started<11 and not worker.closed
+            assert worker.fetcher.halt.is_set(),'Timed-out network worker must retire'
+            release_dns.set();worker.fetcher.thread.join(2)
             work.close_work();worker.thread.join(10);assert not worker.thread.is_alive()
             print('PASS real Edge: separate profile, pinned HTTPX/Host/SNI, cookies, isolated DOM, approval snapshots, typing and buttons')
             print('PASS real Edge: stale/replayed numbers, blocked downloads, file chooser interception, scrolling, caller threads and tab selection')
+            print('PASS real Edge: stalled subresource DNS aborted within the page window; read succeeds and browser stays open')
     finally:
+        release_dns.set()
         edge.close_edge()
         if work._worker:work._worker.thread.join(10)
         # Only this fixture's resolved, randomly named directory may be removed.
@@ -225,6 +241,11 @@ def ui_main():
         assert seen[0][1] and url in seen[0][0] and '\nExact replacement\n' in seen[0][0]
         ui.connect_edge_tab();ui.root.update()
         assert any(isinstance(w,tk.Button) and w.cget('text')=='Start work Edge' for w in visit(ui.root))
+        panel=ui.edge_panel
+        ui.connect_edge_tab();assert ui.edge_panel is panel
+        with patch.object(ui,'high_risk_confirm',return_value=True),patch.object(ui,'start_work',return_value='Synthetic work browser started'):
+            next(w for w in visit(panel) if isinstance(w,tk.Button) and w.cget('text')=='Start work Edge').invoke()
+        assert not panel.winfo_exists(),'Setup panel lingered after Start'
         print('PASS native Tk: Edge controls, full exact URL/text preview and Return defaults to No')
     finally:
         edge.close_edge();ui.artifact_panel.stop();ui.root.destroy()

@@ -4,9 +4,8 @@ from pathlib import Path
 import queue
 import threading
 import time
-from urllib.parse import urlsplit,urlunsplit
-import httpx
-import fetch
+from urllib.parse import urlsplit
+from edge_network import PinnedFetcher,WINDOW_SECONDS
 
 PROFILE=Path(__file__).resolve().parent/'edge_work_profile'
 _lock=threading.RLock()
@@ -21,6 +20,8 @@ class WorkBrowser:
         self.choice_serial=base
         self.request_count=0;self.response_bytes=0;self.allow_posts_until=0
         self.blocked_requests=0;self.post_origin=None
+        self.network_deadline=time.monotonic()+WINDOW_SECONDS
+        self.fetcher=PinnedFetcher()
         self.queue=queue.Queue();self.halt=threading.Event()
         self.thread=threading.Thread(target=self.run,name='edge-work-owner',daemon=True);self.thread.start()
 
@@ -46,7 +47,7 @@ class WorkBrowser:
             if PROFILE.is_symlink() or PROFILE.is_junction():raise ValueError('work profile cannot be a link')
             PROFILE.mkdir(exist_ok=True)
             source=(Path(__file__).resolve().parent/'edge_extension/page.js').read_text(encoding='utf-8')
-            function=source.replace('export async function edgeDOM','async function edgeDOM',1)
+            function=source.replace('export function edgeDOM','function edgeDOM',1)
             with sync_playwright() as playwright:
                 context=playwright.chromium.launch_persistent_context(str(PROFILE),channel='msedge',headless=False,
                     accept_downloads=False,service_workers='block',permissions=[],
@@ -81,6 +82,7 @@ class WorkBrowser:
                             from edge_tools import url_problem
                             if url_problem(args.get('url')):raise ValueError('URL refused')
                             self.request_count=0;self.response_bytes=0;self.allow_posts_until=0
+                            self.network_deadline=time.monotonic()+WINDOW_SECONDS
                             page=self.selected
                             if page is None or page.is_closed():
                                 page=next((p for p in context.pages if p.url=='about:blank'),None) or context.new_page()
@@ -99,6 +101,7 @@ class WorkBrowser:
                             args['_base']=self.counter_base
                             if op=='commit' and args.get('_action') in {'click','type'}:
                                 self.request_count=0;self.response_bytes=0
+                                self.network_deadline=time.monotonic()+WINDOW_SECONDS
                                 self.allow_posts_until=time.monotonic()+5
                                 parts=urlsplit(page.url);self.post_origin=(parts.scheme,parts.netloc)
                             result=self.dom(page,function,{'op':op,'args':args,'expires':deadline*1000})
@@ -115,6 +118,7 @@ class WorkBrowser:
         except Exception as exc:self.error='Could not start or operate the dedicated Edge work profile: '+type(exc).__name__
         finally:
             self.closed=True;self.tickets.clear()
+            self.fetcher.halt.set()
             if context:
                 try:context.close()
                 except Exception:pass
@@ -136,7 +140,7 @@ class WorkBrowser:
                                                            'grantUniveralAccess':False})['executionContextId']
             response=session.send('Runtime.callFunctionOn',{'functionDeclaration':function,
                 'executionContextId':world,'arguments':[{'value':command}],
-                'awaitPromise':True,'returnByValue':True,
+                'awaitPromise':False,'returnByValue':True,
                 'userGesture':command.get('op')=='commit' and command.get('args',{}).get('_action') in {'click','type'}})
             if 'exceptionDetails' in response:raise ValueError('fixed DOM helper failed')
             return response['result'].get('value',{'error':'no result'})
@@ -154,33 +158,22 @@ class WorkBrowser:
             if request.method=='POST' and (parts.scheme,parts.netloc)!=self.post_origin:raise ValueError('cross-origin POST refused')
             body=request.post_data_buffer
             if body and len(body)>256_000:raise ValueError('request body too large')
-            parts=urlsplit(request.url);host=parts.hostname;ip=fetch.safe_ip(host)
-            net=f'[{ip}]' if ip.version==6 else str(ip)
             headers={key:value for key,value in request.all_headers().items()
                      if key.lower() not in {'host','connection','proxy-authorization','proxy-connection',
                          'accept-encoding','content-length','transfer-encoding','if-none-match','if-modified-since'}}
             content_type=next((value.lower() for key,value in headers.items() if key.lower()=='content-type'),'')
             if request.method=='POST' and ('multipart/' in content_type or 'application/octet-stream' in content_type):
                 raise ValueError('file upload content type refused')
-            headers.update({'Host':host,'Accept-Encoding':'identity'})
-            with httpx.Client(timeout=10,follow_redirects=False,trust_env=False) as client:
-                with client.stream(request.method,urlunsplit(parts._replace(netloc=net)),headers=headers,
-                                   content=body,extensions={'sni_hostname':host}) as response:
-                    if (300<=response.status_code<400 or response.status_code==101
-                            or response.headers.get('content-encoding','identity').lower() not in {'identity',''}
-                            or 'attachment' in response.headers.get('content-disposition','').lower()):
-                        raise ValueError('redirect, compressed response or download refused')
-                    if int(response.headers.get('content-length','0'))>5_000_000:raise ValueError('response too large')
-                    data=bytearray()
-                    for chunk in response.iter_raw(65536):
-                        self.response_bytes+=len(chunk)
-                        if len(data)+len(chunk)>5_000_000 or self.response_bytes>20_000_000:raise ValueError('response budget exhausted')
-                        data.extend(chunk)
-                    result_headers={}
-                    for key,value in response.headers.multi_items():
-                        if key.lower() in {'connection','transfer-encoding','content-length','content-encoding','alt-svc'}:continue
-                        result_headers[key]=result_headers[key]+'\n'+value if key in result_headers else value
-                    route.fulfill(status=response.status_code,headers=result_headers,body=bytes(data))
+            if time.monotonic()>=self.network_deadline:raise ValueError('network window expired')
+            allowance=min(5_000_000,20_000_000-self.response_bytes)
+            # Failed/late responses keep their reservation, so errors cannot
+            # repeatedly transfer bodies without consuming the page byte budget.
+            self.response_bytes+=allowance
+            result=self.fetcher.request((request.method,request.url,headers,body,self.network_deadline,
+                                         allowance),self.halt)
+            self.response_bytes-=allowance-len(result['body'])
+            if self.halt.is_set() or self.closed:raise ValueError('work browser stopped')
+            route.fulfill(**result)
         except Exception:
             self.blocked_requests+=1
             route.abort('blockedbyclient')
@@ -189,7 +182,7 @@ class WorkBrowser:
 def start_work():
     global _worker
     with _lock:
-        if _worker and _worker.thread.is_alive():
+        if _worker and (_worker.thread.is_alive() or _worker.fetcher.thread.is_alive()):
             return 'Edge work browser is already running or stopping.'
         from edge_tools import next_number_base
         _worker=WorkBrowser(next_number_base())
@@ -210,6 +203,7 @@ def close_work():
     with _lock:worker=_worker
     if worker:
         worker.closed=True;worker.halt.set()
+        worker.fetcher.halt.set()
         with worker.lock:worker.tickets.clear()
     return 'Work browser access revoked; owned Edge is closing. Its separate profile stays on disk.'
 

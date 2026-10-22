@@ -6,11 +6,11 @@ reasoning policy and streaming behavior are unchanged.
 
 ## Talk to the AI and hear its text replies
 
-- Press **Talk**, approve one microphone recording, then press **Finish recording**
+- Press **Talk** to start one microphone recording, then press **Finish recording**
   or let its 60-second limit end it. The default input device records mono PCM
   locally. Stop discards the recording and stops owned workers.
-- Whisper tiny.en transcribes on CPU. Review the transcript popup, place the
-  approved text in the message box, edit it if needed, and press Send yourself.
+- Whisper tiny.en transcribes on CPU. Text appears directly in the message box
+  without a second popup. Review or edit it, then press Send yourself.
   Recording and transcription never send a message or execute its words.
 - Enable **More > Speak replies for this chat** to hear subsequent text replies.
   A separate No-default consent covers this chat's bounded playback. Replies

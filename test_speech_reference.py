@@ -290,11 +290,11 @@ def test_dictation_never_sends_or_overwrites_unsent_text():
     assert 'Nothing was sent' in notes[-1][-1]
 
 
-def test_dictation_denial_and_stop_revoke_editor_insertion():
-    fn,ns,state,notes=ui_function('stage_dictation');fn('Words')
-    assert not state['insertions']
-    def stop(*args):ns['stop_event'].set();return True
-    ns['high_risk_confirm']=stop;fn('Words')
+def test_dictation_needs_no_popup_and_stop_revokes_editor_insertion():
+    def unexpected(*args):raise AssertionError('Dictation must not open a popup')
+    fn,ns,state,notes=ui_function('stage_dictation',high_risk_confirm=unexpected)
+    fn('Words');assert state['insertions']==['Words']
+    state['insertions'].clear();ns['stop_event'].set();fn('Discarded words')
     assert not state['insertions']
 
 
@@ -380,13 +380,17 @@ def test_microphone_bytes_go_to_transcription_without_a_recording_file():
     assert stages==['recording stopped','ready']
 
 
-def test_talk_button_denial_never_opens_microphone_and_finish_works_while_busy():
-    calls=[]
+def test_talk_button_starts_without_popup_and_finish_works_while_busy():
+    calls=[];jobs=[]
     fn,ns,state,notes=ui_function('voice_message',recording_done=None,
         mic_button=types.SimpleNamespace(configure=lambda **kw:calls.append(kw)),
-        start_background=lambda target:(_ for _ in ()).throw(AssertionError('must not record')))
-    fn();assert ns['recording_done'] is None and not calls
-    done=threading.Event();ns['recording_done']=done;ns['busy']=True
+        start_background=lambda target,**kw:jobs.append(target),
+        high_risk_confirm=lambda *args:(_ for _ in ()).throw(AssertionError('No dictation popup')))
+    state['text']='Unsent draft';fn();assert not jobs
+    state['text']='';ns['busy']=True;fn();assert not jobs
+    ns['busy']=False;fn()
+    assert ns['recording_done'] is not None and len(jobs)==1 and calls[-1]['text']=='Finish recording'
+    done=ns['recording_done'];ns['busy']=True
     fn();assert done.is_set() and calls[-1]['text']=='Transcribing...'
 
 

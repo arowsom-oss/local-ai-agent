@@ -1,3 +1,21 @@
+# Edge/voice/model UI repairs (2026-10-21)
+
+354 offline cases across 19 suites pass. Native test_speech_ui.py verifies direct
+Talk, popup-free transcript staging without Send, draft/Stop protection and actual
+dropdown selection during a running reply, with current/next model separation.
+Native test_edge_live.py passes its Edge, Chromium connector and Tk fixtures,
+including stalled secondary DNS: reading finishes and the work browser stays open.
+The setup panel closes after Start and repeated opening reuses the existing panel.
+
+Earlier retained offline runs failed on old expectations that dictation required
+popups. Updating those expectations preserves Stop, unsent drafts and explicit
+Send checks. A public example.com probe opened/read promptly; its old expected
+heading assertion failed because the returned visible text had changed. No live
+model inference or actual human approval was tested. These checks exercise the
+reported timeout mechanism; they do not prove its exact original cause or that
+all websites work. A retired stuck DNS helper cannot be forcibly terminated;
+restart is refused until it exits. The human main scorecard stays deferred.
+
 # Edge work profile and personal-tab handoff (2026-10-21)
 
 All 353 offline cases across nineteen suites pass, including twenty-three new

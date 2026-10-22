@@ -217,30 +217,39 @@ def test_extension_permissions_and_personal_mode_are_narrow():
 
 
 def routed(method='GET',body=None,status=200,headers=None,data=b'<h1>Hello</h1>',active=False):
+    owner=threading.get_ident()
     controller=object.__new__(work.WorkBrowser)
     controller.request_count=0;controller.response_bytes=0
     controller.blocked_requests=0;controller.post_origin=('https','approved.example')
     controller.allow_posts_until=time.monotonic()+5 if active else 0
+    controller.network_deadline=time.monotonic()+8
+    controller.halt=threading.Event();controller.closed=False
+    controller.fetcher=work.PinnedFetcher()
     class Route:
         def __init__(self):
             self.request=h.types.SimpleNamespace(url='https://approved.example/page',method=method,
                 post_data_buffer=body,all_headers=lambda:{'Cookie':'synthetic=one','Host':'untrusted','Accept-Encoding':'gzip'})
             self.aborted=False;self.fulfilled=None
         def abort(self,reason):self.aborted=True
-        def fulfill(self,**args):self.fulfilled=args
+        def fulfill(self,**args):
+            assert threading.get_ident()==owner,'Playwright route left its owner thread'
+            self.fulfilled=args
         def continue_(self):raise AssertionError('Chromium must not do DNS or direct fetching')
     route=Route();calls=[];real_client=httpx.Client
     class Stream(httpx.SyncByteStream):
         def __iter__(self):yield data
     def network(request):
+        assert threading.get_ident()!=owner,'Pinned HTTP blocked the Playwright owner directly'
         calls.append(request)
         return httpx.Response(status,headers=headers or {'content-type':'text/html'},stream=Stream())
     def client(**options):
-        assert options['follow_redirects'] is False and options['trust_env'] is False and options['timeout']==10
+        assert options['follow_redirects'] is False and options['trust_env'] is False and 0<options['timeout']<=10
         return real_client(transport=httpx.MockTransport(network),**options)
-    with patch.object(work.fetch,'safe_ip',return_value=ipaddress.ip_address('93.184.216.34')) as dns, \
-         patch.object(work.httpx,'Client',side_effect=client):
-        controller.route(route)
+    with patch.object(edge.fetch,'safe_ip',return_value=ipaddress.ip_address('93.184.216.34')) as dns, \
+         patch.object(httpx,'Client',side_effect=client):
+        try:controller.route(route)
+        finally:
+            controller.fetcher.halt.set();controller.fetcher.thread.join(1)
     return route,calls,dns.call_count
 
 
@@ -251,6 +260,27 @@ def test_work_network_pins_ip_and_forwards_only_work_cookie_identity():
     assert request.url.host=='93.184.216.34' and request.headers['Host']=='approved.example'
     assert request.extensions['sni_hostname']=='approved.example'
     assert request.headers['Cookie']=='synthetic=one' and request.headers['Accept-Encoding']=='identity'
+
+
+def test_stuck_dns_is_bounded_and_cannot_create_a_second_network_worker():
+    import edge_network
+    entered=threading.Event();release=threading.Event()
+    def slow_dns(host):
+        entered.set();release.wait(2)
+        return ipaddress.ip_address('93.184.216.34')
+    fetcher=edge_network.PinnedFetcher();halt=threading.Event()
+    try:
+        with patch.object(edge.fetch,'safe_ip',side_effect=slow_dns), \
+             patch.object(edge_network.httpx,'Client',side_effect=AssertionError('Expired DNS must not fetch')):
+            started=time.monotonic()
+            args=('GET','https://approved.example/',{},None,started+.08,5000000)
+            refused(fetcher.request,args,halt)
+            assert entered.is_set() and time.monotonic()-started<.6
+            assert fetcher.halt.is_set() and fetcher.thread.is_alive()
+            refused(fetcher.request,args,halt)
+            release.set();fetcher.thread.join(1)
+            assert not fetcher.thread.is_alive()
+    finally:release.set();fetcher.halt.set();fetcher.thread.join(2)
 
 
 def test_work_post_requires_recent_approved_action_and_has_body_cap():

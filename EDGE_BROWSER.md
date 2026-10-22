@@ -8,6 +8,9 @@ Edge can be shared for reading or copying its address; it is not an action targe
 
 1. Restart Local Studio after updating this branch. Choose **Edge tab** in the
    sidebar, then **Start work Edge**. Review the No-default dialog.
+   The setup panel closes after approval; opening it again reuses an existing
+   panel instead of making duplicates. Choosing a tab or disconnecting also
+   closes the setup panel. The optional personal-tab connector must remain open.
 2. The app opens Microsoft Edge using only `edge_work_profile/` inside the app
    folder. This is separate from your normal Edge profile. You can open a site
    manually there, then choose **Choose a work tab** in the app; or ask the AI
@@ -22,6 +25,18 @@ Edge can be shared for reading or copying its address; it is not an action targe
 5. Stop, New chat or **Disconnect / close work Edge** revoke commands and close
    only the owned work browser. Profile cookies/site data stay on disk. No
    personal browser process is killed or attached to.
+
+Network work has an eight-second window per approved navigation or click/type;
+reads do not renew it. One bounded helper thread handles only copied request
+data, public DNS checks and pinned HTTPX; Playwright objects stay on their owner
+thread. Slow resources abort instead of serially exhausting the command timeout.
+Failed requests conservatively consume their reserved response-byte allowance.
+If DNS stalls, the helper retires. Existing page text can still be read, but
+restart the work browser before further networking. Windows DNS cannot be
+forcibly cancelled by Python; a new work browser is refused until that retired
+helper exits. Some slow pages may be incomplete. Snapshot comparison now uses
+the exact bounded serialized state synchronously, without waiting for a crypto
+promise. This does not establish the exact cause of every past timeout.
 
 The work browser needs installed Microsoft Edge and the existing Playwright
 runtime. No model weights, new Python packages, browser profile import, public

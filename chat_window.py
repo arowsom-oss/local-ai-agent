@@ -704,13 +704,7 @@ def voice_message():
         show("Speech", "Your unsent message is preserved. Send or clear it before recording.")
         return
     stop_event.clear()
-    if high_risk_confirm("Record one voice message", [
-            "RECORDS YOUR DEFAULT MICROPHONE LOCALLY", "",
-            "At most 60 seconds. Press Finish recording to transcribe sooner; Stop discards it.",
-            "Whisper transcribes on CPU. Audio stays in memory, with no recording file saved.",
-            "Review the transcript before placing it in the message box. Nothing sends automatically.",
-            "Start recording?"]) is not True or stop_event.is_set():
-        return
+    # Pressing Talk is the person's recording gesture; no second consent dialog.
     import multiprocessing
     done = multiprocessing.get_context("spawn").Event()
     recording_done = done
@@ -753,13 +747,6 @@ def stage_dictation(text):
         return
     if entry.get().strip():
         show("Speech", "A transcript is ready, but your unsent message is preserved. Transcribe again after sending or clearing it.")
-        return
-    if high_risk_confirm("Review transcription before using it", [
-            "UNTRUSTED AUDIO TRANSCRIPT - CHECK EVERY WORD", "", text, "",
-            "Place this in the message box? It will not be sent automatically. Review and press Send yourself."]) is not True or stop_event.is_set():
-        return
-    # A modal callback must not replace text entered while approval was open.
-    if entry.get().strip():
         return
     entry.insert(0, text)
     entry.focus_set()
@@ -813,7 +800,8 @@ def start_background(target, reset_stop=True):
     if reset_stop:
         stop_event.clear()
     send_button.configure(state="disabled")
-    model_box.configure(state="disabled")
+    # A running turn keeps its captured model. Selection applies to the next turn.
+    model_box.configure(state="readonly")
     stop_button.configure(state="normal", text="Stop")
     add_pending()
     start_spin()
@@ -960,8 +948,12 @@ def share_personal_edge_tab():
 
 
 def connect_edge_tab():
+    global edge_panel
     if busy:return
+    if 'edge_panel' in globals() and edge_panel.winfo_exists():
+        edge_panel.lift();return
     win=tk.Toplevel(root);win.title('Edge work browser');win.transient(root)
+    edge_panel=win
     tk.Label(win,text='Separate Edge work profile',font=(UI_FONT,16,'bold'),padx=18,pady=16).pack()
     tk.Label(win,text='Clicks and typing stay in this app-owned profile.\nPersonal Edge sharing is read/handoff only.',padx=18,pady=8).pack()
     def launch():
@@ -971,8 +963,10 @@ def connect_edge_tab():
             'Websites can run JavaScript. HTTP is fetched by code with IP pinning, size limits and redirects blocked; this is not a VM.',
             'Downloads, file chooser selection, service workers and unsolicited permission grants are blocked.',
             'Each agent read, click, typing or navigation needs its own approval. Stop closes only the owned work browser.',
-            'Start it?']):show('Edge',start_work())
+            'Start it?']):
+            show('Edge',start_work());win.destroy()
     def choose():
+        win.destroy()
         def load():
             try:data=work_current().rpc('list')
             except Exception:data={'error':'Start the work browser first and wait for its window.'}
@@ -980,7 +974,7 @@ def connect_edge_tab():
         threading.Thread(target=load,daemon=True).start()
     for text,callback in [('Start work Edge',launch),('Choose a work tab',choose),
                           ('Share a personal Edge tab (read/handoff)',share_personal_edge_tab),
-                          ('Disconnect / close work Edge',close_edge)]:
+                          ('Disconnect / close work Edge',lambda:(close_edge(),win.destroy()))]:
         tk.Button(win,text=text,command=callback,padx=12,pady=8).pack(fill='x',padx=18,pady=6)
 
 
@@ -1081,7 +1075,7 @@ def send(event=None,resume=False):
     busy = True
     progress_serial=task_progress.begin('' if image is not None or observation is not None else text,resume=resume)
     send_button.configure(state="disabled")
-    model_box.configure(state="disabled")
+    model_box.configure(state="readonly")  # Changes affect the next message only.
     stop_event.clear()                           # a fresh turn starts un-stopped
     stop_button.configure(state="normal", text="Stop")
     threading.Thread(target=worker, args=(text, model, image, observation,progress_serial,resume), daemon=True).start()
@@ -1342,7 +1336,7 @@ def build_window():
     header_right.pack(side="right")
     model_row=surface(header_right)
     model_row.pack(anchor="e")
-    label(model_row,"Model",10).pack(side="left",padx=(0,8))
+    label(model_row,"Next message model",10).pack(side="left",padx=(0,8))
     model_var=tk.StringVar(value="auto")
     model_box=ttk.Combobox(model_row,textvariable=model_var,values=MODEL_CHOICES,state="readonly",width=18,font=(UI_FONT,10))
     model_box.pack(side="left",padx=(0,6))
