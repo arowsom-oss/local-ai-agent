@@ -5,7 +5,8 @@ import queue
 import re
 import threading
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog
+from popup_windows import decisions as messagebox
 
 from artifacts import store, MAX_TEXT, MAX_MEDIA, export_snapshot
 from artifact_media import prepare_preview

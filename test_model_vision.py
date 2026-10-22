@@ -362,7 +362,7 @@ def ui_function(name, **namespace):
 
 
 def test_screenshot_denial_prevents_capture_and_preview():
-    fn, _ = ui_function("screenshot", busy=False,
+    fn, _ = ui_function("screenshot", busy=False,root=object(),
         messagebox=types.SimpleNamespace(askyesno=lambda *a, **kw: False),
         capture_primary_screen=lambda: (_ for _ in ()).throw(AssertionError("no capture")))
     fn()
@@ -400,6 +400,8 @@ def test_preview_defaults_no_for_enter_escape_close_and_has_explicit_yes():
             def winfo_screenwidth(self): return 1920
             def winfo_screenheight(self): return 1080
             def geometry(self, *a): pass
+            def configure(self,**kw):pass
+            def winfo_exists(self):return True
             def create_image(self, *a, **kw): pass
             def destroy(self): pass
             def wait_visibility(self): pass
@@ -427,7 +429,11 @@ def test_preview_defaults_no_for_enter_escape_close_and_has_explicit_yes():
 
         tk = types.SimpleNamespace(Toplevel=window, Label=Widget, Frame=Widget, Button=button,
             Canvas=Widget, Radiobutton=Widget, StringVar=lambda **kw: types.SimpleNamespace(get=lambda: kw["value"]))
-        fn, _ = ui_function("preview_image", tk=tk, root=types.SimpleNamespace(wait_window=wait))
+        def modal(root,win,no):no.focus_set();root.wait_window(win)
+        def closing(win,finish,**kw):
+            win.protocol('WM_DELETE_WINDOW',finish);win.bind('<Escape>',lambda event:finish())
+        fn, _ = ui_function("preview_image", tk=tk, root=types.SimpleNamespace(wait_window=wait),
+            place_popup=lambda win,w,h:(w,h),wait_modal=modal,dismissible=closing,T=lambda key:'white')
         with patch.object(ImageTk, "PhotoImage", return_value=types.SimpleNamespace(width=lambda:320,height=lambda:180)):
             assert fn(image) is expected
 

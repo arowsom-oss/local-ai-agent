@@ -6,6 +6,7 @@ import threading
 import tkinter as tk
 from tkinter import ttk
 import workspace_documents as documents
+from popup_windows import dismissible
 
 
 class Jobs:
@@ -98,9 +99,13 @@ def check_save(panel,confirm):
 
 
 def show_documents(panel,confirm):
+    existing=getattr(panel,'documents_window',None)
+    if existing is not None and existing.winfo_exists():existing.lift();return
     if not access(panel,confirm):return
     win=tk.Toplevel(panel);win.title('Saved Documents');win.geometry('820x540');win.minsize(700,460)
+    panel.documents_window=win
     win.transient(panel.winfo_toplevel())
+    dismissible(win,size=(820,540))
     colors=ttk.Style(panel);background=colors.lookup('TFrame','background') or '#f5f5f5';foreground=colors.lookup('TLabel','foreground') or '#111111'
     win.configure(bg=background)
     ttk.Label(win,text='Saved Documents',style='Title.TLabel').pack(anchor='w',padx=20,pady=(18,6))

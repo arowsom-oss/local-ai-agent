@@ -174,8 +174,14 @@ def extension_main():
             page=context.new_page();page.goto('https://fixture.example/')
             worker=context.service_workers[0] if context.service_workers else context.wait_for_event('serviceworker')
             tab=worker.evaluate("async()=> (await chrome.tabs.query({})).find(t=>t.url==='https://fixture.example/').id")
-            panel=context.new_page();panel.on('pageerror',lambda error:print('Extension fixture script error:',str(error)[:200],flush=True))
-            panel.goto('chrome-extension://'+worker.url.split('/')[2]+'/panel.html?tab='+str(tab))
+            panel_url='chrome-extension://'+worker.url.split('/')[2]+'/panel.html?tab='+str(tab)
+            def connector():
+                with context.expect_page() as opened:
+                    worker.evaluate("url=>chrome.windows.create({url,type:'popup',width:500,height:600})",panel_url)
+                result=opened.value;result.wait_for_load_state('domcontentloaded')
+                result.on('pageerror',lambda error:print('Extension fixture script error:',str(error)[:200],flush=True))
+                return result
+            panel=connector()
             panel.locator('#pair').fill(code);panel.locator('#share').click()
             for _ in range(100):
                 panel.wait_for_timeout(30)
@@ -206,9 +212,24 @@ def extension_main():
                 panel.wait_for_timeout(20)
                 if not edge.edge_available():break
             assert not edge.edge_available()
+            for action in ('button','escape'):
+                if panel.is_closed():panel=connector()
+                fresh=edge.start_edge();panel.locator('#pair').fill(fresh);panel.locator('#share').click()
+                for _ in range(100):
+                    panel.wait_for_timeout(20)
+                    if edge.edge_available():break
+                assert edge.edge_available()
+                if action=='button':panel.locator('#close').click()
+                else:panel.keyboard.press('Escape')
+                for _ in range(100):
+                    if panel.is_closed():break
+                    try:page.wait_for_timeout(20)
+                    except Exception:break
+                assert panel.is_closed() and not edge.edge_available(),'Connector close did not revoke sharing and close its owned popup'
             context.close()
             print('PASS real Chromium extension: loopback authentication, personal read/copy, changed-page refusal and disconnect')
             print('NOTE fixture host grant simulates activeTab; actual Edge installation/toolbar consent is a manual check.')
+            print('PASS real Chromium extension: Close connector and Escape revoke sharing and close the owned popup')
     finally:
         edge.close_edge()
         target=temp.resolve()
@@ -240,11 +261,11 @@ def ui_main():
                           'control':'Draft','before':'old','text':'Exact replacement'}) is False
         assert seen[0][1] and url in seen[0][0] and '\nExact replacement\n' in seen[0][0]
         ui.connect_edge_tab();ui.root.update()
-        assert any(isinstance(w,tk.Button) and w.cget('text')=='Start work Edge' for w in visit(ui.root))
+        assert any(isinstance(w,(tk.Button,ui.ttk.Button)) and w.cget('text')=='Start work Edge' for w in visit(ui.root))
         panel=ui.edge_panel
         ui.connect_edge_tab();assert ui.edge_panel is panel
         with patch.object(ui,'high_risk_confirm',return_value=True),patch.object(ui,'start_work',return_value='Synthetic work browser started'):
-            next(w for w in visit(panel) if isinstance(w,tk.Button) and w.cget('text')=='Start work Edge').invoke()
+            next(w for w in visit(panel) if isinstance(w,(tk.Button,ui.ttk.Button)) and w.cget('text')=='Start work Edge').invoke()
         assert not panel.winfo_exists(),'Setup panel lingered after Start'
         print('PASS native Tk: Edge controls, full exact URL/text preview and Return defaults to No')
     finally:

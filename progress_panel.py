@@ -1,6 +1,7 @@
 """Compact native task progress with a RAM-only evidence detail panel."""
 import tkinter as tk
 from tkinter import ttk
+from popup_windows import dismissible
 
 
 class ProgressPanel(ttk.Frame):
@@ -20,6 +21,7 @@ class ProgressPanel(ttk.Frame):
         if self.window is not None and self.window.winfo_exists():self.window.lift();return
         win=self.window=tk.Toplevel(self);win.title('Task progress and checkpoints');win.geometry('820x600');win.minsize(600,420)
         win.transient(self.winfo_toplevel())
+        dismissible(win,size=(820,600))
         frame=ttk.Frame(win,padding=20);frame.pack(fill='both',expand=True)
         ttk.Label(frame,text='Task progress',style='Title.TLabel').pack(anchor='w')
         ttk.Label(frame,text='Proposed steps grant no permission. Only code can report a verified result.',wraplength=740).pack(anchor='w',pady=(6,12))
