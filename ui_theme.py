@@ -16,6 +16,10 @@ def configure_styles(style, p):
     style.configure("TLabel", background=p["card"], foreground=p["text"], font=("Segoe UI", 10))
     style.configure("Muted.TLabel", foreground=p["subtle"], background=p["card"], font=("Segoe UI", 9))
     style.configure("Title.TLabel", foreground=p["text"], background=p["card"], font=("Segoe UI Semibold", 17))
+    style.configure('Archive.TCheckbutton',background=p['card'],foreground=p['text'],
+                    indicatorcolor=p['field'],font=('Segoe UI',10))
+    style.map('Archive.TCheckbutton',background=[('active',p['card'])],
+              foreground=[('disabled',p['subtle'])],indicatorcolor=[('selected',p['accent'])])
     style.configure('TNotebook',background=p['card'],borderwidth=0)
     style.configure('TNotebook.Tab',padding=(16,8),background=p['button'],foreground=p['text'])
     style.map('TNotebook.Tab',background=[('selected',p['card'])],foreground=[('selected',p['accent'])])

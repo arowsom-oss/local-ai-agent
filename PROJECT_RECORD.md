@@ -4,7 +4,7 @@ A safe local AI assistant for Alexander's Windows laptop
 
 Running record updated October 22, 2026. Earlier measurements remain labeled by milestone; later chapters record subsequent changes and failures.
 
-Current handoff: the latest chapters deliver explicit local saved chats and Projects, with safe fresh-session reopening and retained Artifact versions/media. SAVED_CHATS.md explains use, bounds, privacy and tests for Claude. The private portal, document Q&A and model candidates remain plans; no new model was downloaded. Earlier measurements stay historical and the human main scorecard remains deferred.
+Current handoff: saved chats/Projects now support verified automatic ZIP storage after seven days unused, transparent reopening, visible controls and actual disk-savings reports. AUTO_ARCHIVE.md explains the scope, migration grace and 388-offline/3-native evidence for Claude. Only saved snapshots are compressed; personal folders, original media and model weights remain untouched. Selected-document Q&A is the next proposed stage. No new model, private portal or human scorecard result is claimed.
 
 ## Purpose and current position
 
@@ -1009,3 +1009,37 @@ All 378 cases in 22 offline suites pass. Nine library cases cover a real fresh P
 Initial offline harness mistakes used a stat fake missing st_mode and the wrong core menu attribute; their logs remain. Native tests found two actual defects: reopening incorrectly requested a paused-task progress checkpoint, and Project removal left the list filtered by the deleted Project. Repairs separate core fresh-read enforcement from UI checkpoint resume and resolve a removed filter to Unfiled/all. Visual QA also found white controls and clipped Save content; themed entries/lists, a scrollable body and fixed status/footer were rechecked. These are retained failures, not erased or counted as initial passes.
 
 One actual local gemma4:e2b smoke reopened a temporary synthetic saved conversation and correctly answered its stored fruit, with zero tool calls. It saved the continued four-message conversation as version 2 and took 12.47 seconds including cold model loading. This is not a broad memory/quality claim or a scorecard run. Main scoring remains deferred and Alexander still owns the threat model and small copy fix. Next work remains selected-document Q&A, context/cancellation improvements and measured model comparisons; the private portal is not deployed. Restart the Local Studio shortcut for this feature.
+
+<!-- PAGE -->
+# Weekly ZIP storage for unused saved work
+
+## Delivered behavior - October 22, 2026
+
+Alexander requested automatic ZIP storage after about a week unused. This first version covers the app-owned saved-chat library, including every embedded Artifact version and immutable image/video snapshot. It does not scan personal folders or Downloads, delete original generated PNG/MP4 files, compress model weights or externally ZIP the live database. ZIP compression saves disk space, not steady RAM/VRAM, and is neither encryption nor a backup. AUTO_ARCHIVE.md is the shared implementation and usage handoff.
+
+Restart the app and open Chats & Projects. Auto ZIP saved chats unused for 7 days is enabled by default, with an off switch and Check unused chats now. The Storage column shows Plain or ZIP. The app checks five seconds after startup and hourly while open, skipping busy/stopped periods. There is no OS scheduled task after exit. Checks do not create a library or save an unsaved chat. A pass processes at most three eligible snapshots; tiny or poorly compressing candidates have a 24-hour retry backoff.
+
+Opening or exporting records last use; save/update also restarts the clock. Listing titles does not. Both last use and update must be seven days old, and the currently opened saved chat is excluded. Existing databases get seven days of grace on first migration because historical last-open times are unknown. Opening an archived snapshot expands it only in memory and preserves ZIP storage; updating writes a new plain snapshot. Existing fresh-session validation, permission reset and stale-target rules still apply.
+
+## Preservation and actual savings
+
+Each ZIP has exactly one chat.json member inside SQLite; nothing extracts member paths to disk. Source-schema validation and byte-for-byte verified ZIP round trip finish before one transaction replaces the batch. The logical saved version and update time stay unchanged. A snapshot must save at least 4096 bytes and 5% or it stays plain. Corrupt, invalid or oversized ZIPs refuse before applying a restored conversation. Existing expanded Artifact limits remain; the 256 MB retained-library quota counts stored bytes and expanded encoded snapshots remain capped at 96 MB each.
+
+The report distinguishes compressed-payload savings from actual database bytes reclaimed. SQLite compacts only after the ZIP transaction commits, with a temporary-space check, progress deadline and cancellation. If compaction cannot finish, committed ZIP data remains readable and pending compaction may retry later. Cancellation before ZIP commit rolls back the batch. Already committed storage changes remain after Stop or Close. Python never deletes or replaces the live database file itself. Ordinary SQLite transactions are not a promise against every crash or disk failure.
+
+<!-- PAGE -->
+# ZIP storage evidence and next stage
+
+## Tests and retained failures
+
+All 388 cases across 23 offline suites pass, including ten archive cases using temporary databases and injected clocks. Coverage includes exact bytes/history/media, fresh-process ZIP readback, last-use/current-chat exclusions, migration grace, toggle validation, batch/backoff bounds, cancellation rollback and failed verification. ZIP path/member/method/type/CRC and expansion-bound refusals are tested without extracting files. Deferred compaction preserves readable ZIP data and a later check reclaims its pages. Scheduler tests cover idempotent startup, absent databases, busy/Stop skips and captured active IDs. No archive capability is exposed as a model tool.
+
+Three affected native suites pass: Library/Projects, popup behavior and Artifacts. Actual Tk controls persist the toggle, check inactivity, show ZIP badges, skip the current saved chat, export and reopen exact archived text/Artifacts, and update a ZIP snapshot to plain storage. The library fixture passes in both lean and full app runtimes. Its short-window fixture and owned synthetic screenshot were checked, including accessible fixed Close/status and themed storage controls.
+
+One repetitive synthetic code/history snapshot saved 249399 payload bytes and reclaimed 249856 database bytes after compaction. The native repeated-notes example reclaimed 20480 database bytes. These synthetic measurements do not predict typical photo/video savings; PNG and MP4 originals are already compressed and untouched. No personal library or generated originals were archived during development. A real seven-day soak has not elapsed; tests inject old timestamps and exercise the same eligibility path.
+
+The corrupted-deflate test initially raised uncaught zlib.error; decoding now normalizes it to a safe ValueError refusal. A migration fixture initially left its own SQLite connection open, preventing temporary-folder cleanup on Windows; it now closes and commits explicitly. The native fixture initially hid an unfiled example behind its Project filter; selecting All / Unfiled corrected the harness. The initial white checkbox appearance was themed and visually rechecked. Original logs remain; failures are not rewritten as initial passes. Prior milestone counts and model measurements remain historical. Human main scoring is still deferred.
+
+## Recommended next work
+
+Selected PDF and notes Q&A with page citations is the next product stage. Start with person-selected files, bounded parsing, source/page labels and answers that admit missing evidence. Treat document instructions as untrusted reference data and keep tool approvals separate. Use installed models first; add an embedding model only if a small retrieval benchmark demonstrates a useful improvement. The private school portal and broader Windows controls remain planned work, with no new model download or remote listener introduced here. Alexander still owns the threat-model writing and the small Copy last answer fix.
