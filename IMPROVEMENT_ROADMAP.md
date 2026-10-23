@@ -91,3 +91,17 @@ request opened its real visual preview. 369 offline checks and the affected
 native fixtures pass. WEBSITE_PREVIEW_PLAN.md records the renderer boundary,
 retained initial failure and limitations. Interactive JavaScript, multi-file
 websites and publishing remain future work; this is not a general code runner.
+
+## Private school access and assistant product plan (October 22)
+
+REMOTE_ACCESS_PLAN.md now explicitly records one-owner browser access from school,
+password/passkey plus MFA, an authenticated HTTPS gateway option, owner-bound
+chat/media, honest offline status and one shared GPU broker. Remote computer
+control is excluded. No service is deployed and no tunnel/account is created.
+
+PRODUCT_FEATURE_PLAN.md adds proposed saved chats/Projects, selected-document
+Q&A with citations, streaming/Stop diagnostics, opt-in memory, coding workspace,
+study tools and inspectable research. It lists exact small embedding, Qwen3.5
+and optional OCR model candidates, with current download sizes distinguished
+from unmeasured RAM/VRAM usage. No model is downloaded or integrated. Current
+Gemma defaults, capability gates and the deferred scorecard stay unchanged.

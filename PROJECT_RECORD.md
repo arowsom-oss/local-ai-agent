@@ -4,7 +4,7 @@ A safe local AI assistant for Alexander's Windows laptop
 
 Running record updated October 22, 2026. Earlier measurements remain labeled by milestone; later chapters record subsequent changes and failures.
 
-Current handoff: the latest chapter records implemented and tested static HTML/CSS Artifact previews, with visible Preview / Code buttons and Preview first. WEBSITE_PREVIEW_PLAN.md separates this delivered feature from future interactive website work. The shared PROJECT_RECORD.md is the handoff for Claude. Earlier measurements stay historical. Profiles, models and personal data stay local. The human main scorecard remains deferred.
+Current handoff: the latest chapters expand the private school-access portal plan and propose assistant features and small open-weight model trials. These are not deployed or downloaded. The preceding chapter records implemented static HTML/CSS Preview / Code. PRODUCT_FEATURE_PLAN.md and REMOTE_ACCESS_PLAN.md provide Claude with the proposed next steps. Earlier measurements stay historical; the human main scorecard remains deferred.
 
 ## Purpose and current position
 
@@ -939,3 +939,39 @@ Only immutable PNG pixels reach Tk. Source remains limited to 32,000 characters 
 All 369 cases in 21 offline suites pass under the socket/DNS tripwire. Actual Windows fixtures verify expected HTML/CSS pixels, visible buttons, unsaved text, history, supported/unsupported selection, stale-result rejection, Stop and New chat. A hostile document also bypassed the HTML reducer in a test of the independent browser policy; scripts did not change its background and its local canary server received no requests. Existing Artifact image/video, efficiency and popup native suites pass. A synthetic preview screenshot was visually inspected.
 
 The first full-runtime native attempt returned the generic worker failure; its exact cause was not established. Direct renderer and bounded-worker probes passed, followed by successful lean-runtime and full-runtime native runs. This failure is retained, not called a fixed root cause. One actual gemma4:e2b smoke request used the normal core with non-Artifact actions refused: it called create_artifact, produced one code Artifact and opened Preview in 16.72 seconds including a cold model load. This single example does not establish general website quality. The main scorecard remains deferred. Restart the Local Studio shortcut to load the feature; the draft PR is not merged.
+
+<!-- PAGE -->
+# Private access from school: plan update
+
+## Requested experience - October 22, 2026
+
+Alexander asked to add a private website connected to his laptop AI to the plan. He wants to open an address from school, sign in, and use chat, image/video generation and his Artifacts while the Acer does the work. The remote-access plan now states this explicitly. It remains a proposal: no server, tunnel, account or firewall change has been created.
+
+The browser-only option should use a reviewed HTTPS gateway with one provisioned owner and no public signup. Password/passkey support, MFA, expiring sessions and sign-out should work on a shared browser. The address is only a link, not proof of identity. Every chat/job/media request must check the owner, including preview, cancellation and download. An emailed one-time PIN alone is not automatically MFA. A gateway identity token must be validated rather than trusting a caller-supplied email header.
+
+## Connectivity and capability boundary
+
+Cloudflare Tunnel with Access is a browser-only option to evaluate; Tailscale Serve is an alternative for devices allowed to use its private-network client. No provider is selected. Do not expose Ollama, a development server or the desktop app directly. Inference stays local, but a gateway transports traffic and may terminate HTTPS; this is not a claim of end-to-end secrecy from that provider. School policy may still prevent access.
+
+The remote MVP offers text chat, explicit image/video requests, job state and owned media only. It has no computer control, screen capture, browser automation, shell or arbitrary-file browsing. The server must enforce that boundary independently of model output. A mobile-friendly gallery can reconnect to a job after a connection drop without generating a duplicate. The laptop must remain awake, online and running; the page must say offline when it is unavailable.
+
+Saved owner-bound chats/jobs/media and one shared local/remote GPU manager are prerequisites. A separate Python process cannot copy the desktop lock and assume it coordinates GPU use. Deployment needs authenticated loopback integration, owner/session/CSRF/media tests and a reviewed tunnel configuration before a second device is connected. Remote document imports or website previews need their own bounded adapters; the current desktop tool dispatcher is not reused remotely.
+
+REMOTE_ACCESS_PLAN.md contains the expanded requirements and primary connectivity references. This notes update does not implement the portal, change installed models or run the deferred human main scorecard.
+
+<!-- PAGE -->
+# Assistant features and useful model candidates
+
+## Product priorities
+
+Alexander also asked what would make the app more useful like ChatGPT or Claude. The proposal focuses on saved searchable chats and Projects, Q&A over selected PDFs/notes with source pages, streamed visible replies and honest timing/Stop controls, opt-in inspectable memory, better code editing and static previews, source-backed study tools, and research with opened/read citations. These improve the product experience; they do not claim the local model matches a hosted frontier model's reasoning quality. PRODUCT_FEATURE_PLAN.md records scope, acceptance checks and suggested order.
+
+Saved chats and context/cancellation reliability should come before the remote portal. Selected-document retrieval follows. Retrieved files and remembered facts never become tool authority; old approvals are not restored with a saved chat. Streaming must validate a complete tool call before dispatch and must not display hidden reasoning. The existing static Preview / Code feature is delivered; multi-file and interactive execution remain future work.
+
+## Model research, checked October 22
+
+Primary Ollama pages list qwen3-embedding:0.6b at 639 MB, qwen3.5:9b-q4_K_M at 6.6 GB, qwen3.5:4b-q4_K_M at 3.3 GB and glm-ocr:q8_0 at 1.8 GB. These are rounded download sizes, not measured RAM/VRAM. The embedding model produces vectors for searching approved documents; it does not answer chats. Qwen3.5 is a multimodal/tool-capable candidate for an A/B against Gemma on coding, reasoning and selected images. The 4b version is a smaller alternative, not an additional required resident model. GLM-OCR is optional for scanned text, tables and formulas if current extraction proves insufficient.
+
+For the 12 GB VRAM/32 GB RAM laptop, test one heavy GPU job at a time with the existing 8192-token context. Runtime workspace, context cache, image tokens and Windows use require additional headroom beyond weight size. Installation alone does not consume all models' VRAM at once. No new candidate has been downloaded, integrated, benchmarked or proven better than the current Gemma models. No new memory or latency figure is claimed.
+
+Keep Gemma as the default while comparing fixed synthetic task success, tool/schema refusals, cold/warm timing, sampled memory and model/media handoff. Verify installed Ollama/backend/client compatibility and exact tags/digests. Embedding/OCR work must join the same lifecycle policy rather than bypass it. Source links and rollout gates are in PRODUCT_FEATURE_PLAN.md. This is research and documentation only; no runtime file, model allowlist, scorecard result, permission or student-owned fix changed.

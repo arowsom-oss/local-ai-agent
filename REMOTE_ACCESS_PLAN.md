@@ -1,8 +1,10 @@
 # Private remote chat and media: planned next stage
 
-Status: roadmap recorded 2026-10-19, not an implemented or deployed web service.
-The current change fixes local generated-media delivery to Artifacts. It opens
-no listening socket, creates no account and changes no firewall/router setting.
+Status: roadmap recorded 2026-10-19 and expanded 2026-10-22 at Alexander's
+request. Not an implemented or deployed web service. The local app has static
+HTML/CSS Artifact previews; that is separate from exposing the AI on a website.
+This documentation update opens no socket, installs no tunnel/model, creates no
+account and changes no firewall/router setting.
 
 ## Intended experience
 
@@ -18,6 +20,43 @@ guarded adapters. The remote surface will offer text chat, image generation,
 video generation and viewing/exporting that account's media only. It must not
 offer computer control, screenshots, browser automation, shell execution,
 filesystem browsing or access to the existing desktop tool dispatcher.
+
+## School/browser access: explicit product requirements (October 22)
+
+- Alexander opens a private HTTPS address using an ordinary permitted browser
+  at school or on his own phone. No special client should be required for the
+  browser-only option. School/device policy can still prevent access; this plan
+  does not bypass it. Desktop and web should refer to one owner's saved jobs and
+  chats once that shared storage exists; the current RAM-only chat is not synced.
+- Restrict access to one provisioned owner, with no public signup. Use a maintained
+  login system or identity provider, password/passkey support and MFA. An emailed
+  one-time code alone is not automatically two-factor authentication. A shared
+  link is only an address, never sufficient authorization. Short, revocable
+  sessions and explicit sign-out must work on a shared browser.
+- The web MVP offers text chat, explicit image/video requests, job status and
+  the owner's Artifacts/media. No remote clicks, typing, screen capture, browser
+  automation, arbitrary local-file access, shell or desktop dispatcher. The server
+  enforces the capability list even if a caller invents an endpoint/tool name.
+- The laptop stays awake, online and running the service. If unavailable, show
+  an honest offline message. Reconnect to existing job IDs after network loss;
+  never duplicate an expensive image/video job because its response was lost.
+- Put a reviewed HTTPS gateway/tunnel in front of a loopback-bound web backend.
+  Cloudflare Tunnel with Access is one browser-only candidate; Tailscale Serve
+  is a private-network alternative for devices allowed to run its client.
+  These are options, not a selected vendor or deployed service. Do not expose
+  Ollama's port, a development server, or the existing desktop app to the Internet.
+- If using gateway identity, validate its signed tokens and expected issuer,
+  audience and owner server-side. Do not trust a caller-supplied email/header or
+  leave a direct route around authentication. Every API and media response needs
+  authorization, including previews, cancellation and downloads.
+- Inference remains on the Acer. A tunnel/gateway provider transports traffic
+  and may terminate HTTPS; do not describe that as end-to-end private from the
+  provider. Document retention and the chosen provider's trust boundary before
+  deployment. Authentication reduces access risk; it cannot guarantee perfection.
+- Local and remote work share one GPU job manager, with admission limits and a
+  bounded queue. A separate web process must not copy the current Python lock
+  and assume it synchronizes with the desktop process. One broker/IPC design is
+  required before concurrent local/remote media work is enabled.
 
 ## Build order and boundaries
 
@@ -37,7 +76,10 @@ filesystem browsing or access to the existing desktop tool dispatcher.
    automatic mutation retries after an uncertain result.
 4. Build the chat, image and silent video UI with queued/running/completed/failed
    states and mobile-friendly media previews. Display generated HTML/code as
-   inert text. Reconnect to job IDs after a dropped connection rather than
+   inert text initially. A later server-side static HTML/CSS picture preview
+   must retain the local renderer's isolation, quotas and owner checks; it must
+   never become an unrestricted browser or executable webview. Reconnect to job
+   IDs after a dropped connection rather than
    submitting the same generation again.
 5. Add and verify authentication and transport before any off-laptop exposure.
    Use a maintained authentication component with one administrator-provisioned
@@ -79,3 +121,10 @@ For the private-network option, Tailscale documents
 [Serve](https://tailscale.com/docs/features/tailscale-serve) as a way to share a
 local service within a tailnet. This is an option to evaluate, not an installed
 dependency or a selected deployment.
+
+
+Current connectivity references checked October 22, 2026:
+[Cloudflare private browser application](https://developers.cloudflare.com/cloudflare-one/setup/secure-private-apps/private-web-app/),
+[Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve).
+PRODUCT_FEATURE_PLAN.md proposes the broader saved-chat, document-search and
+model evaluation stages. All remain planned unless explicitly marked delivered.
