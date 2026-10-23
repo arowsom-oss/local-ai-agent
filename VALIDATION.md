@@ -1,3 +1,19 @@
+# Static HTML/CSS visual previews (October 22, 2026)
+
+369 offline cases across 21 suites pass. Four affected native suites pass:
+test_artifact_web_live.py, test_artifact_ui.py, test_efficiency_ui.py and
+test_popup_ui.py. The new native fixture passed in both lean and full app
+runtimes after an initial generic worker failure whose cause remains unconfirmed.
+No unrelated processes were stopped. Direct renderer/bounded-job probes pass.
+
+Actual Chromium layout pixels, hostile-page script/network denial, visible
+Preview / Code buttons, unsaved/history, stale results, Stop and New chat were
+checked. A synthetic UI screenshot was visually inspected. One real local e2b
+core request created an HTML Artifact and opened Preview in 16.72s including a
+cold model load. This is not a general quality/latency guarantee or OS isolation
+proof. The human main scorecard remains deferred. WEBSITE_PREVIEW_PLAN.md has
+scope, retained failures and references.
+
 # Dismissible popups, calm UI and app icon
 
 363 offline cases/20 suites and all nine affected native suites pass. These

@@ -81,12 +81,13 @@ Cold loads and model switches still cost time. Broader mixed-workflow quality,
 context accounting and cancellable I/O are open work. Alexander still owns his
 threat-model writing and the deliberately unfixed Copy last answer task.
 
-## Requested future work: website creation and visual previews (October 22)
+## Website creation and visual previews (October 22)
 
-Alexander wants website source to appear as a visible layout in Artifacts,
-with Code / Preview views. Currently HTML remains source text. The reported
-refusal/missing pane has not been reproduced from its exact tool trace.
-WEBSITE_PREVIEW_PLAN.md records a proposed static offline HTML/CSS preview,
-renderer boundary checks, native/offline acceptance fixtures, later interactive
-projects and separately approved publishing. This is planned, not implemented;
-no arbitrary-code runner, new network access or publishing permission was added.
+Static HTML/CSS previews are implemented and tested on the feature branch:
+Artifacts opens supported drafts in Preview first, with explicit Preview / Code
+buttons. Existing source, unsaved edits and versions remain. The model can
+create a self-contained website code Artifact; one actual local-model smoke
+request opened its real visual preview. 369 offline checks and the affected
+native fixtures pass. WEBSITE_PREVIEW_PLAN.md records the renderer boundary,
+retained initial failure and limitations. Interactive JavaScript, multi-file
+websites and publishing remain future work; this is not a general code runner.

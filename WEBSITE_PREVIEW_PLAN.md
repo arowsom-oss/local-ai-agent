@@ -1,67 +1,88 @@
 # Website creation and visual Artifact previews
 
-Requested by Alexander on October 22, 2026. Future work, not implemented.
+Requested and implemented October 22, 2026 on the feature branch. Static
+HTML/CSS previews are delivered; interactive code and public publishing remain
+future work. The earlier notes-only request is retained in PROJECT_RECORD.md.
 
-## What happened and what exists
+## Delivered behavior
 
-Alexander asked the local agent to build a website. It replied that it could not,
-and the Artifacts sidebar did not appear. This is a person-reported observation;
-the exact prompt, reply, model and tool trace have not been captured or reproduced.
-Do not classify it as a confirmed panel failure or a completed website test.
+- Visible Preview / Code buttons above the content; supported code opens Preview
+  first. Existing documents keep Text, and images/videos keep native previews.
+- Self-contained HTML/CSS renders as a scrollable screenshot of the first
+  800 x 1000 CSS pixels, fitted to the panel width. Buttons/links are pictures.
+- Code editing, unsaved drafts, selected historical revisions and Save edit stay
+  separate. Preview renders the exact captured editor buffer without saving it.
+- New HTML Artifacts select themselves unless an unsaved editor buffer needs
+  preserving. A whole HTML last answer can become a code Artifact through More.
+- Model guidance requests a real code Artifact for a website, with inline CSS
+  and no external resources, rather than claiming website creation is impossible.
+- Python, standalone JavaScript/CSS, SVG and arbitrary programs remain source
+  only. No package install, shell, general code runner or public publishing.
 
-Current code can create bounded document/code Artifacts. HTML, CSS, SVG and
-JavaScript stay inert source text. ArtifactPanel.refresh opens the pane when a
-new stored Artifact arrives; ordinary answer text does not automatically become
-an Artifact. The person can also select Artifacts in the main sidebar and use
-More > Draft from last answer. There is currently no HTML renderer or run button.
+## Renderer boundary
 
-## First deliverable: Code / Preview
+artifact_web_preview.py reduces at most 32,000 source characters and 2,500 start
+tags to display markup. Scripts, SVG/MathML, frames/embeds, link/meta/base and
+URL-bearing/event attributes are omitted; inline CSS is retained. This reducer
+is only one layer, not a standalone HTML security proof.
 
-Add a person-controlled Preview tab beside Code in Artifacts for a single-page
-HTML/CSS draft. A supported draft should be stored as a real Artifact and the
-panel should open. The local agent should explain the difference between writing
-website source, showing a local preview, and publishing a public website.
+A fresh headless Chromium with its browser sandbox enabled receives one exact
+synthetic HTTPS document through route.fulfill. It never calls route.continue_.
+All other requests abort. A response-header CSP sets sandbox, default-src none,
+script/resource/frame/form/base restrictions and inline style only. JavaScript,
+permissions, downloads and service workers are disabled, and the context is
+offline. WebSockets close. Background-network flags and a failed proxy add
+defense in depth. No personal profile or Python/JavaScript bridge is attached.
 
-The first preview should be static, offline and created from the exact selected
-Artifact revision. Start with scripts disabled and all external resources and
-navigation denied, including CSS URLs/imports, images, fonts, frames, forms,
-redirects and popups. No host filesystem access, uploads, downloads, personal
-browser profile, Python bridge or arbitrary code execution. Escape model source
-when showing it in the editor; never concatenate it into a trusted host script.
-These are acceptance requirements, not claims of an existing renderer boundary.
+Only a bounded PNG is returned to Tk. The worker and descendant browser tree
+use the existing Windows Job Object wrapper with a 1,536 MB commit bound and
+20-second receive deadline. A lock serializes renders; a cancelled waiting call
+returns within at most five seconds. Stop, Code, selection changes and New chat
+cancel the selection's job; generation serials discard late results. Source is
+never substituted by an error or silently exported. Ordinary code export is
+still an explicitly chosen, non-overwriting .txt file.
 
-Choose the renderer after verifying its Windows sandbox, network interception,
-file access and lifecycle behavior with hostile fixtures. For an initial version,
-an isolated browser-rendered screenshot can provide a visual preview inside Tk
-without granting page interactions. Document CSS/layout limitations honestly.
-Do not simply open generated HTML in the person's normal Edge session.
+These are browser/application restrictions, not a Windows network sandbox or a
+claim that every Chromium background request or browser vulnerability is ruled
+out. No external image/font loading, interactive page, full-height capture or
+visual preview for every programming language is supported. Missing Chromium
+or a failed sandbox/worker produces an error; there is no auto-download or
+unsafe personal-browser fallback. No new dependency or model weight was added.
 
-Preserve bounded source/history, explicit selected revision, unsaved edits,
-Stop/New chat cleanup and the separate approvals for saving or publishing.
-Show clear errors for unsupported content; never report a preview as delivered
-unless actual rendering completed. Make the pane discoverable even if generation
-fails or the model writes code in the chat instead of calling create_artifact.
+## Evidence and retained failure
 
-## Later website capabilities
+369 cases in 21 offline suites pass with socket/DNS audit tripwires; six new
+fake-browser/worker cases cover detection, reduction, headers, request abortion,
+browser cleanup, bounded pixels and Stop/error cleanup. test_artifact_web_live.py
+uses actual Windows Chromium and Tk to check layout pixels, Preview-first and
+explicit buttons, unsaved/history, unsupported code, new Artifact selection,
+stale results, Stop and New chat. Its hostile document bypasses reduction to test
+independent browser policy: page script did not change pixels and a loopback
+canary received no CSS/image/frame/fetch/WebSocket/popup requests. Existing
+native Artifact media, efficiency and popup suites pass too.
 
-After the static preview is verified, consider interactive JavaScript in a
-separately isolated runtime, multi-file projects and explicit website export.
-Publishing/hosting needs a separate exact-destination approval and a defined
-credential/deployment adapter. A local preview does not publish anything.
-General Python, shell or downloaded-package execution is separate future work.
+An initial full-runtime run failed with the generic renderer/worker error; the
+exact cause was not established. Direct renderer and bounded-worker probes,
+then lean and full-runtime native runs passed. This is retained as a failure,
+not a claimed root-cause fix or proof of perfect reliability. Local logs are
+work/web_preview_native_second.log, work/web_preview_full_runtime_retry.log,
+work/web_preview_render_probe.log and work/web_preview_job_probe.log.
 
-## Acceptance evidence before marking complete
+One actual local gemma4:e2b smoke request through run_turn, with all non-Artifact
+actions refused, called create_artifact and opened a real visible Preview. It
+took 16.72 seconds including cold model loading; no hidden reasoning text or
+personal conversation is retained. This is one successful example, not a broad
+website-quality score. The unchanged human main scorecard remains deferred.
 
-- Native Windows fixture: HTML/CSS produces an actual visible layout; Code and
-  Preview switch without losing unsaved edits or changing the selected revision.
-- Offline malicious fixtures: script, event handler, network and CSS resource
-  loads, form submission, navigation, frames, file URLs, downloads and popups
-  cannot escape the proposed boundary. Assert denied network requests with fakes
-  and exercise the actual renderer offline, rather than trusting page text.
-- Bounded rendering: malformed/oversized documents, timeouts, Stop, New chat,
-  replacement previews and closed views leave no stale replies or owned workers.
-- A real local-model smoke request creates an Artifact and shows the preview;
-  retain refusals and failures. This is separate from the deferred main scorecard.
+## Future work
 
-No runtime code, dependencies, permissions or scorecard results changed in this
-notes update. Alexander still owns his threat-model writing and small copy fix.
+Broader HTML/SVG/CSS coverage, external asset import under exact approval,
+responsive viewports and longer-page capture can follow resource/isolation
+tests. Interactive JavaScript and multi-file projects require separate isolated
+runtime design. Publishing needs an exact destination, credential adapter and
+explicit approval. Previewing a picture does not deploy a website.
+
+Design references: [Playwright routing](https://playwright.dev/python/docs/network),
+[browser context options](https://playwright.dev/python/docs/api/class-browser),
+[Chromium sandbox option](https://playwright.dev/python/docs/api/class-browsertype),
+[CSP sandbox](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/sandbox).

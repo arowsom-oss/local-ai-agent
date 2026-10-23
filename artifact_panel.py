@@ -1,4 +1,4 @@
-"""Tk artifact workspace: text only, native image/video preview, no web renderer."""
+"""Tk workspace with inert source and isolated static HTML/CSS pixel previews."""
 from io import BytesIO
 from pathlib import Path
 import queue
@@ -10,6 +10,7 @@ from popup_windows import decisions as messagebox
 
 from artifacts import store, MAX_TEXT, MAX_MEDIA, export_snapshot
 from artifact_media import prepare_preview
+from artifact_web_preview import html_source, prepare_web_preview
 
 
 class _PreviewStop:
@@ -39,6 +40,10 @@ class ArtifactPanel(ttk.Frame):
         self.preview_stop = None
         self.serial = 0
         self.mail = queue.Queue()
+        self.web_mail = queue.Queue()
+        self.web_image = None
+        self.view_mode = 'code'
+        self.web_width = None
         heading=ttk.Frame(self)
         heading.pack(fill="x",pady=(0,4))
         ttk.Label(heading,text="Artifacts",style="Title.TLabel").pack(side="left")
@@ -77,11 +82,19 @@ class ArtifactPanel(ttk.Frame):
         footer.pack(side="bottom",fill="x",pady=(12,0))
         self.status_label=ttk.Label(footer,textvariable=self.status,style="Muted.TLabel",wraplength=420)
         self.status_label.pack(fill="x")
-        self.privacy_label=ttk.Label(footer,text="Drafts shared with local AI · Code stays inert.",
+        self.privacy_label=ttk.Label(footer,text="Drafts shared with local AI · Previews are pictures; code never runs.",
                                      style="Muted.TLabel",wraplength=420)
         self.privacy_label.pack(fill="x",pady=(7,0))
         self.bind("<Configure>",self.resize)
         self.play_row=ttk.Frame(self)
+        self.view_row=ttk.Frame(self)
+        self.view_row.pack(fill='x',pady=(0,10))
+        self.preview_button=ttk.Button(self.view_row,text='Preview',command=self.show_web_preview)
+        self.preview_button.pack(side='left',padx=(0,6))
+        self.code_button=ttk.Button(self.view_row,text='Code',command=self.show_code)
+        self.code_button.pack(side='left')
+        self.preview_button.configure(state='disabled')
+        self.code_button.configure(state='disabled')
         self.body=ttk.Frame(self)
         self.body.pack(fill="both",expand=True)
         self.editor=tk.Text(self.body,width=36,wrap="word",undo=True,font=("Segoe UI",12),relief="flat",bd=0,
@@ -103,6 +116,11 @@ class ArtifactPanel(ttk.Frame):
         self.body.columnconfigure(1,weight=1)
         self.editor.bind("<<Modified>>",self.modified)
         self.image=ttk.Label(self.body,anchor="center")
+        self.web_canvas=tk.Canvas(self.body,highlightthickness=0,bd=0)
+        self.web_scroll=ttk.Scrollbar(self.body,command=self.web_canvas.yview)
+        self.web_canvas.configure(yscrollcommand=self.web_scroll.set)
+        self.web_canvas.bind('<Configure>',lambda event:self.draw_web_preview())
+        self.web_canvas.bind('<MouseWheel>',lambda event:self.web_canvas.yview_scroll(-int(event.delta/120),'units'))
         self.play_button=ttk.Button(self.play_row,text="Play / pause",command=self.toggle_play)
         self.play_button.pack(side="left")
         self.timeline=tk.Scale(self.play_row,from_=0,to=0,orient="horizontal",showvalue=False,
@@ -123,7 +141,7 @@ class ArtifactPanel(ttk.Frame):
 
     def scroll_horizontal(self,first,last):
         self.horizontal.set(first,last)
-        if (self.selected is not None and self.selected.kind == "code"
+        if (self.view_mode == 'code' and self.selected is not None and self.selected.kind == "code"
                 and (float(first) > 0 or float(last) < 1)):
             self.horizontal.grid()
         else:
@@ -140,6 +158,7 @@ class ArtifactPanel(ttk.Frame):
         self.editor.tag_configure("comment",foreground=palette["subtle"])
         self.timeline.configure(bg=palette["card"],fg=palette["subtle"],troughcolor=palette["field"],
                                 activebackground=palette["accent"])
+        self.web_canvas.configure(bg=palette['field'])
         self.editor.tag_configure("heading",font=("Segoe UI Semibold",17),foreground=palette["accent"],spacing1=12,spacing3=10)
 
     def format_editor(self):
@@ -195,6 +214,12 @@ class ArtifactPanel(ttk.Frame):
         self.selected = self.version = None
         self.dirty, self.playing = False, False
         self.frames, self.photo = [], None
+        self.web_image = None
+        self.web_canvas.grid_remove()
+        self.web_scroll.grid_remove()
+        self.view_mode = 'code'
+        self.preview_button.configure(state='disabled',style='TButton')
+        self.code_button.configure(state='disabled',style='TButton')
         self.signature = None
         self.choice.set("")
         self.choice.configure(values=())
@@ -223,7 +248,8 @@ class ArtifactPanel(ttk.Frame):
         if signature == self.signature:
             return
         previous_ids = {number for number, _ in self.signature or ()}
-        new_media = [a for a in items if a.number not in previous_ids and a.kind in ("image", "video")]
+        new_media = [a for a in items if a.number not in previous_ids and
+                     (a.kind in ("image", "video") or (a.kind=='code' and html_source(a.current.content) is not None))]
         self.signature = signature
         if items and getattr(self, "on_change", None):
             self.on_change()                       # chat-first window: slide the pane in
@@ -272,6 +298,11 @@ class ArtifactPanel(ttk.Frame):
         self.pause_playback()
         self.serial += 1
         self.frames, self.photo = [], None
+        self.web_image = None
+        self.web_width = None
+        self.web_canvas.grid_remove()
+        self.web_scroll.grid_remove()
+        self.view_mode = 'code'
         self.image.configure(image="", text="")
         self.selected = store.get(number)
         a = self.selected
@@ -297,7 +328,15 @@ class ArtifactPanel(ttk.Frame):
             self.editor.grid()
             self.text_bar.grid()
             self.status.set(f"Artifact {a.number}, revision {self.version.number}. {'Editable draft' if editable else 'Historical version'}; text only.")
+            self.code_button.configure(state='normal',text='Code' if a.kind=='code' else 'Text',style='Accent.TButton')
+            self.preview_button.configure(state='normal' if a.kind=='code' else 'disabled',style='TButton')
+            if a.kind=='code' and html_source(self.version.content) is not None:
+                self.show_web_preview()
+            elif a.kind=='code':
+                self.status.set('Source view. Visual preview supports HTML/CSS; this code is not executed.')
         else:
+            self.preview_button.configure(state='disabled',style='TButton')
+            self.code_button.configure(state='disabled',style='TButton')
             self.editor.grid_remove()
             self.text_bar.grid_remove()
             self.gutter.grid_remove()
@@ -309,6 +348,97 @@ class ArtifactPanel(ttk.Frame):
                 self.decode(a.kind, self.version.data)
             else:
                 self.display_preview(preview)
+
+    def show_code(self):
+        if self.selected is None or self.selected.kind not in ('document','code'):
+            return
+        self.cancel_preview()
+        self.serial += 1
+        self.view_mode = 'code'
+        self.web_canvas.grid_remove()
+        self.web_scroll.grid_remove()
+        self.image.grid_remove()
+        self.editor.grid()
+        self.text_bar.grid()
+        self.format_editor()
+        self.code_button.configure(style='Accent.TButton')
+        self.preview_button.configure(style='TButton')
+        self.status.set('Edit source, then choose Preview to see the current draft. Preview does not save changes.')
+
+    def show_web_preview(self):
+        if self.selected is None or self.selected.kind!='code':
+            return
+        content = self.editor.get('1.0','end-1c')
+        if html_source(content) is None:
+            self.status.set('Visual preview supports HTML/CSS webpages. This code stays in source view and is never executed.')
+            return
+        if self.stop_event.is_set():
+            self.status.set('Preview cancelled by Stop. Start a new turn or New chat before previewing.')
+            return
+        self.cancel_preview()
+        self.serial += 1
+        serial = self.serial
+        cancelled = self.preview_stop = _PreviewStop(self.stop_event)
+        self.view_mode = 'preview'
+        self.web_image = None
+        self.web_width = None
+        self.editor.grid_remove()
+        self.text_bar.grid_remove()
+        self.gutter.grid_remove()
+        self.horizontal.grid_remove()
+        self.image.grid_remove()
+        self.web_canvas.delete('all')
+        self.web_canvas.grid(row=0,column=0,columnspan=2,sticky='nsew')
+        self.web_scroll.grid(row=0,column=2,sticky='ns')
+        self.web_canvas.yview_moveto(0)
+        self.web_canvas.create_text(20,24,anchor='nw',text='Preparing visual preview…',tags='notice')
+        self.preview_button.configure(style='Accent.TButton')
+        self.code_button.configure(style='TButton')
+        self.status.set('Rendering static HTML/CSS. Scripts and external resources are disabled.')
+        def work():
+            try:
+                image = prepare_web_preview(content,cancelled)
+                if not cancelled.is_set():
+                    self.web_mail.put((serial,image,None))
+            except Exception:
+                if not cancelled.is_set():
+                    self.web_mail.put((serial,None,'Preview unavailable, stopped or over its limits. Source is preserved; choose Code.'))
+        threading.Thread(target=work,daemon=True).start()
+
+    def poll_web_preview(self):
+        try:
+            while True:
+                serial,image,error = self.web_mail.get_nowait()
+                if serial!=self.serial or self.view_mode!='preview' or self.stop_event.is_set():
+                    continue
+                if error:
+                    self.web_canvas.delete('all')
+                    self.web_canvas.create_text(20,24,anchor='nw',text=error,width=300)
+                    self.status.set(error)
+                else:
+                    self.web_image = image
+                    self.web_width = None
+                    self.draw_web_preview()
+                    source = 'Unsaved draft' if self.dirty else f'Revision {self.version.number}'
+                    self.status.set(source + ' · Static HTML/CSS preview. Scroll to see more. Buttons and links are pictures.')
+        except queue.Empty:
+            pass
+
+    def draw_web_preview(self):
+        if self.view_mode!='preview' or self.web_image is None:
+            return
+        width=min(self.web_image.width,max(100,self.web_canvas.winfo_width()))
+        if width==self.web_width:
+            return
+        from PIL import Image,ImageTk
+        with Image.open(BytesIO(self.web_image.png)) as image:
+            size=(width,max(1,round(image.height*width/image.width)))
+            image=image.resize(size,Image.Resampling.LANCZOS)
+            self.photo=ImageTk.PhotoImage(image)
+        self.web_width=width
+        self.web_canvas.delete('all')
+        self.web_canvas.create_image(0,0,anchor='nw',image=self.photo)
+        self.web_canvas.configure(scrollregion=(0,0,*size))
 
     def cancel_preview(self):
         if self.preview_stop is not None:
@@ -369,7 +499,7 @@ class ArtifactPanel(ttk.Frame):
     def from_answer(self):
         text = self.answer()
         try:
-            a = store.create("From last answer", "document", text)
+            a = store.create("From last answer", "code" if html_source(text) is not None else "document", text)
             self.refresh()
             if self.discard_ok():
                 self.load(a.number)
@@ -490,6 +620,8 @@ class ArtifactPanel(ttk.Frame):
 
     def tick(self):
         self.refresh()
+        if getattr(self,'web_mail',None) is not None:
+            self.poll_web_preview()
         try:
             while True:
                 serial, frames, imported, error = self.mail.get_nowait()
