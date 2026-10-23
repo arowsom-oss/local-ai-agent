@@ -29,6 +29,12 @@ def configure_styles(style, p):
     style.configure("TCombobox", fieldbackground=p["field"], background=p["field"],
                     foreground=p["text"], arrowcolor=p["subtle"], bordercolor=p["border"],
                     lightcolor=p["field"], darkcolor=p["field"], borderwidth=1, padding=6, arrowsize=12)
+    style.configure('TEntry',fieldbackground=p['field'],foreground=p['text'],insertcolor=p['text'],
+                    bordercolor=p['border'],lightcolor=p['field'],darkcolor=p['field'],padding=6)
+    style.configure('Treeview',background=p['field'],fieldbackground=p['field'],foreground=p['text'],
+                    borderwidth=0,rowheight=30,font=('Segoe UI',10))
+    style.map('Treeview',background=[('selected',p['select'])],foreground=[('selected',p['text'])])
+    style.configure('Treeview.Heading',background=p['button'],foreground=p['subtle'],font=('Segoe UI',10),padding=6)
     style.map("TCombobox", fieldbackground=[("readonly",p["field"])], foreground=[("readonly",p["text"])],
               selectbackground=[("readonly",p["field"])], selectforeground=[("readonly",p["text"])])
     style.configure("Vertical.TScrollbar", background=p["border"], troughcolor=p["card"],

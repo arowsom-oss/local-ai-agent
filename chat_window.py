@@ -43,6 +43,10 @@ speak_replies = False    # Person-only opt-in, revoked by Stop and New chat.
 recording_done = None
 activity_lines=deque(maxlen=100)  # Routine tool/timing details stay out of the conversation.
 activity_box=None
+conversation_entries=[]  # Explicitly saved user/visible-assistant text; no tool protocol or reasoning.
+saved_chat=None
+current_project=None
+restored_chat=False
 
 # Reading settings. Change these and re-run if they don't feel right for you.
 FONT_NAME = "Segoe UI"
@@ -886,19 +890,33 @@ def new_chat():
         show("New chat", "wait for the answer first")
         return
     if messagebox.askyesno("New chat", "Start a new chat?\n\nThe agent will forget this conversation.\n"
-                          "Artifact drafts, version history and scratch Notepad will be discarded. Exported files and saved Documents remain. Workspace read permission is forgotten; last-save recovery remains available.",
+                          "Unsaved Artifact drafts, version history and scratch Notepad will be discarded. Saved chats, exported files and saved Documents remain. Workspace read permission is forgotten; last-save recovery remains available.",
                           parent=root,default="no") is not True:
         return
+    if not clear_chat_state():return False
+    show("New chat", "started. Saved chats remain in Chats & Projects; this conversation has fresh permissions.")
+    free_vram()
+    entry.focus_set()
+    return True
+
+
+def clear_chat_state():
+    """Person-controlled session replacement; never restore approval/tool state."""
+    global last_answer,last_raw_answer,pending_image,pending_media,saved_chat,current_project,restored_chat
     close_edge()
     closed = close_browser()    # close the browser BEFORE wiping anything: no half-reset chats
     if closed.startswith("Error"):
         show("New chat", f"not started: {closed}")
-        return
+        return False
     close_desktop()
     close_notepad()
     set_notepad_phase("closed")
     stop_all()
     messages.clear()            # empty the SAME list (don't make a new one)
+    conversation_entries.clear()
+    saved_chat=None
+    current_project=None
+    restored_chat=False
     task_progress.reset()
     artifact_store.clear()
     artifact_panel.reset()
@@ -916,9 +934,51 @@ def new_chat():
     chat_box.configure(state="normal")
     chat_box.delete("1.0", "end")
     chat_box.configure(state="disabled")
-    show("New chat", "started. The agent has forgotten everything before this.")
-    free_vram()
-    entry.focus_set()
+    entry.delete(0,'end')
+    return True
+
+
+def open_saved_chat(snapshot):
+    """Restore validated pixels/text only, then wait for a new user request."""
+    global saved_chat,current_project,restored_chat,last_answer,last_raw_answer,welcome_visible
+    from chat_library import restored_context
+    from artifacts import Store
+    # Validate everything before closing or clearing the active conversation.
+    verified=Store().replace_saved(snapshot['items'])
+    context=restored_context(snapshot['messages'],snapshot['notes'])
+    if not clear_chat_state():return False
+    artifact_store.replace_saved(verified)
+    conversation_entries.extend(dict(message) for message in snapshot['messages'])
+    messages.extend(context)
+    for message in conversation_entries:
+        show('You' if message['role']=='user' else 'Agent',message['content'])
+    welcome_visible=False
+    saved_chat={key:snapshot[key] for key in ('id','version','title','project')}
+    current_project=snapshot['project']
+    restored_chat=True
+    last_raw_answer=next((message['content'] for message in reversed(conversation_entries) if message['role']=='assistant'),'')
+    last_answer=clean(last_raw_answer)
+    artifact_panel.refresh()
+    show('Chats','Reopened locally. Prior actions are historical; permissions and controls are fresh. '
+         'Only a shortened reference archive is supplied to the model. Send a new request to continue.')
+    return True
+
+
+def start_project_chat(project):
+    global current_project,restored_chat
+    if new_chat() is not True:return False
+    from chat_library import restored_context
+    current_project=project['id']
+    messages.extend(restored_context([],project['notes']))
+    restored_chat=True
+    show('Project',project['title']+' · Reference notes ready; no old approvals or actions restored.')
+    return True
+
+
+def show_chats():
+    from chat_library_panel import show_library
+    import sys
+    return show_library(sys.modules[__name__])
 
 
 LOG_LINES = 50   # how many of the newest log lines the viewer shows
@@ -1102,6 +1162,8 @@ def send(event=None,resume=False):
         return
     entry.delete(0, "end")
     show("You", text)
+    conversation_entries.append({'role':'user','content':text})
+    require_fresh_read=resume or restored_chat
     add_pending()
     start_spin()
     model = model_var.get()                      # read it here, on the main thread
@@ -1114,7 +1176,7 @@ def send(event=None,resume=False):
     model_box.configure(state="readonly")  # Changes affect the next message only.
     stop_event.clear()                           # a fresh turn starts un-stopped
     stop_button.configure(state="normal", text="Stop")
-    threading.Thread(target=worker, args=(text, model, image, observation,progress_serial,resume), daemon=True).start()
+    threading.Thread(target=worker, args=(text, model, image, observation,progress_serial,require_fresh_read), daemon=True).start()
 
 
 def poll():
@@ -1139,12 +1201,14 @@ def poll():
             elif kind == "answer":
                 remove_pending()
                 last_raw_answer = str(item[1] or "")
+                conversation_entries.append({'role':'assistant','content':last_raw_answer})
                 last_answer = clean(item[1])
                 show("Agent", f"{last_answer}\n[{item[2]:.2f}s]")
                 finish_turn()
                 if speak_replies and not stop_event.is_set():
                     read_aloud(automatic=True)
             elif kind == "error":
+                conversation_entries.append({'role':'assistant','content':'Error: '+str(item[1])})
                 remove_pending()
                 show("Error", item[1])
                 finish_turn()
@@ -1333,6 +1397,7 @@ def build_window():
     label(sidebar,"ON THIS DEVICE",9,"subtle","sidebar").pack(anchor="w",padx=22,pady=(30,2))
     label(sidebar,"Studio",24,"text","sidebar",True).pack(anchor="w",padx=20,pady=(0,24))
     make_button(sidebar,"+  New chat",new_chat,kind="accent").pack(fill="x",padx=16,pady=(0,24))
+    make_button(sidebar,"Chats & Projects",show_chats).pack(fill='x',padx=16,pady=4)
     from workspace_panel import show_documents
     make_button(sidebar,"Documents",lambda:(show_artifacts(),show_documents(artifact_panel,confirm))).pack(fill="x",padx=16,pady=4)
     artifacts_button=make_button(sidebar,"Artifacts",toggle_artifacts)

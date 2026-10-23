@@ -1,13 +1,14 @@
 # Product features and model candidates
 
-October 22, 2026. Research and proposals, not implementation or download.
+October 22, 2026. Saved chats/Projects v1 is delivered on the feature branch;
+other proposals and model candidates remain plans, not downloads.
 The current chat models are gemma4:e2b and gemma4:12b; they remain unchanged.
 The comparison is about useful app capabilities, not claiming the local system
 matches the reasoning quality or service scale of ChatGPT or Claude.
 
 ## Recommended product work
 
-1. Saved chats and Projects: explicitly persist conversations and selected
+1. Saved chats and Projects (v1 delivered; see SAVED_CHATS.md): explicitly persist conversations and selected
    Artifacts, with titles, search, reopen, export and deletion controls. A
    project's instructions are person-authored; retrieved text stays untrusted.
    Restoring a chat must never restore old action approvals or stale browser IDs.

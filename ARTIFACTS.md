@@ -54,7 +54,9 @@ extension. Existing destination files are refused even if the picker offers to
 replace one. A write failure can leave an incomplete destination file; the UI
 reports failure, and does not overwrite or clean up another file.
 
-Artifacts/history live only in this process for the chat. New chat clears them;
+Unsaved Artifacts/history live in this process for the chat. A person can now
+explicitly save all versions/media with Chats & Projects (see SAVED_CHATS.md).
+New chat clears the active store while saved copies remain;
 IDs are never reused. Stop pauses playback, kills owned decoder workers and
 discards stale decoder replies; text drafts remain. No background playback or
 external media application is opened. After Stop, start a fresh turn/New chat

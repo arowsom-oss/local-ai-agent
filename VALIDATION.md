@@ -1,3 +1,20 @@
+# Saved chats and Projects (October 22, 2026)
+
+378 cases/22 offline suites pass. Ten affected native suites pass: chat library,
+Artifacts, static web previews, efficiency UI, popups, speech, vision, progress
+and both Documents suites. The library fixture passed in lean and full app
+runtimes; its final closed-save callback was separately rechecked. A fresh
+Python process reopened the temporary DB; one actual local e2b recall answered
+the saved synthetic fruit without tools and stored the continued chat as v2
+in 12.47 seconds including cold loading. This is not a general quality score.
+
+Retained failures include two harness assumptions, the native progress-resume
+and removed-Project filter bugs found and fixed, and the initial clipped/white
+library visual. Current synthetic screenshot and short-window controls were
+visually/native checked. No personal chat data was saved by development tests.
+SAVED_CHATS.md records privacy, bounds and scope. The main scorecard is deferred;
+no new model, remote portal or document Q&A feature is claimed.
+
 # Static HTML/CSS visual previews (October 22, 2026)
 
 369 offline cases across 21 suites pass. Four affected native suites pass:
