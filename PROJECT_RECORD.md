@@ -4,7 +4,7 @@ A safe local AI assistant for Alexander's Windows laptop
 
 Running record updated October 22, 2026. Earlier measurements remain labeled by milestone; later chapters record subsequent changes and failures.
 
-Current handoff: the latest chapter records Alexander's October 22 request for website creation and visual Artifact previews, planned but not implemented. WEBSITE_PREVIEW_PLAN.md holds acceptance requirements for Claude. The preceding chapters cover the tested popup, calmer UI and icon work. Earlier measurements stay historical. Profiles, models and personal data stay local. The human main scorecard remains deferred.
+Current handoff: the latest chapter records implemented and tested static HTML/CSS Artifact previews, with visible Preview / Code buttons and Preview first. WEBSITE_PREVIEW_PLAN.md separates this delivered feature from future interactive website work. The shared PROJECT_RECORD.md is the handoff for Claude. Earlier measurements stay historical. Profiles, models and personal data stay local. The human main scorecard remains deferred.
 
 ## Purpose and current position
 
@@ -918,3 +918,24 @@ Preserve source editing, unsaved drafts, exact revisions, history, Stop/New chat
 Interactive JavaScript, multi-file projects and website export can follow verified static previews. Public hosting needs a separate destination/credential policy and explicit publishing approval. Writing code, rendering a local preview and publishing a website are separate capabilities. General Python or shell execution is not part of this request.
 
 WEBSITE_PREVIEW_PLAN.md contains the proposed acceptance checks and current limitations; IMPROVEMENT_ROADMAP.md links this future item. This is a documentation-only update with no new renderer, dependencies or execution authority. Earlier tests remain historical. Alexander retains authorship of the threat model and his small copy-button fix.
+
+<!-- PAGE -->
+# Visual website Artifacts: Preview first
+
+## Implemented behavior - October 22, 2026
+
+Alexander asked for a visible button rather than a hover-only control, with the result shown first and a way to switch to code. HTML/CSS code Artifacts now open their visual Preview automatically. Explicit Preview and Code buttons sit above the content. A new HTML Artifact selects itself unless an unsaved editor buffer needs preserving. Documents keep Text; images and videos keep their existing previews. Python, standalone JavaScript/CSS, SVG and other code stay source-only with a clear unsupported-preview message. This is not an all-language code runner.
+
+The preview is a scrollable picture of an 800 by 1000 pixel browser viewport, fitted to the pane width. It shows HTML/CSS layout, colors and controls, but those controls are pictures. The person can switch to Code, edit the source, and press Preview without saving. The preview identifies an unsaved draft or selected historical revision. Save edit retains the existing version checks. Source, history and explicit non-overwriting .txt export stay available. Publishing is not implemented.
+
+## Rendering boundary and limits
+
+A bounded HTML parser retains display elements/styles and removes scripts, frames, embeds, metadata navigation and URL-bearing attributes. A fresh headless Chromium instance renders only a fixed synthetic document fulfilled by code. Every other route aborts. Independent controls disable page JavaScript, downloads, service workers, permissions and network use; a response-header Content Security Policy restricts scripts, resources, forms and navigation. Browser background-network flags and a failed proxy add defense in depth. No personal profile, Python bridge, arbitrary evaluation or model-provided command is used.
+
+Only immutable PNG pixels reach Tk. Source remains limited to 32,000 characters and 2,500 parsed start tags. A Windows Job Object bounds the owned worker/browser tree to 1,536 MB committed memory; receive has a 20-second deadline, with at most five seconds waiting for a previous preview to stop. One render runs at a time. Stop, Code, selection changes and New chat cancel work; serials reject late pixels. These are application/browser controls and an owned process-tree bound, not a proven OS network sandbox or a claim that Chromium has no vulnerabilities. External images/fonts and interactive JavaScript do not work in this first preview.
+
+## Evidence, failure and handoff
+
+All 369 cases in 21 offline suites pass under the socket/DNS tripwire. Actual Windows fixtures verify expected HTML/CSS pixels, visible buttons, unsaved text, history, supported/unsupported selection, stale-result rejection, Stop and New chat. A hostile document also bypassed the HTML reducer in a test of the independent browser policy; scripts did not change its background and its local canary server received no requests. Existing Artifact image/video, efficiency and popup native suites pass. A synthetic preview screenshot was visually inspected.
+
+The first full-runtime native attempt returned the generic worker failure; its exact cause was not established. Direct renderer and bounded-worker probes passed, followed by successful lean-runtime and full-runtime native runs. This failure is retained, not called a fixed root cause. One actual gemma4:e2b smoke request used the normal core with non-Artifact actions refused: it called create_artifact, produced one code Artifact and opened Preview in 16.72 seconds including a cold model load. This single example does not establish general website quality. The main scorecard remains deferred. Restart the Local Studio shortcut to load the feature; the draft PR is not merged.
