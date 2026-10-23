@@ -80,3 +80,12 @@ Save controls name the opened saved target independently of list selection.
 Delete/Open/Project removal keep No-default confirmations. Lists, entries and
 Project text share the palette. Closing a pending Open discards it; a committed
 Save can still finish and update its saved metadata without reopening the view.
+
+## Saved snapshot ZIP controls
+
+Chats & Projects adds a Storage (Plain/ZIP) column and a themed Auto ZIP checkbox
+with Check unused chats now. Existing scrolling/fixed Close/status remain.
+The toggle persists locally, defaults on and leaves archived snapshots readable
+when off. No additional approval popup or model action is added. Actual status
+separates payload bytes saved from database bytes reclaimed; disabled/deferred
+checks explain why. AUTO_ARCHIVE.md has the seven-day scope and native evidence.

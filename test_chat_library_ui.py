@@ -187,6 +187,44 @@ def main():
                 panel.win._dismiss_popup();gate.set();pump(lambda:not ui.busy)
             assert panel.closed and any(r['title']=='Closed-save copy' for r in saved.library.list_chats())
             assert ui.saved_chat['title']=='Closed-save copy'
+            # Actual storage controls: inactivity is injected, never a real week wait.
+            import artifacts
+            payload=artifacts.Store();payload.create('Archived notes','document','Study point.\n'*1500)
+            entries=[{'role':'user','content':'Exact saved archive `example`'}]
+            archived=saved.library.save('Old ZIP example',None,entries,payload.items())
+            current=ui.saved_chat['id']
+            with saved.library.connection() as db:
+                old=time.time()-saved.ARCHIVE_AGE-60
+                db.execute('UPDATE chats SET last_used=?,updated=? WHERE id IN (?,?)',(old,old,current,archived['id']))
+            panel=ui.show_chats();pump(lambda:not ui.busy)
+            panel.project.current(0);panel.refresh();pump(lambda:not ui.busy)
+            panel.auto_zip.set(False);panel.toggle_archive();pump(lambda:not ui.busy)
+            assert not saved.library.archive_enabled()
+            panel.auto_zip.set(True);panel.toggle_archive();pump(lambda:not ui.busy)
+            assert saved.library.archive_enabled()
+            button(panel.win,'Check unused chats now').invoke();pump(lambda:not ui.busy)
+            rows={r['id']:r for r in panel.rows}
+            assert rows[archived['id']]['archived'] and not rows[current]['archived']
+            assert panel.tree.item(str(archived['id']),'values')[-1]=='ZIP'
+            panel.tree.selection_set(str(archived['id']));ui.root.update()
+            screenshot=Path(__file__).resolve().parents[2]/'outputs/local_studio_weekly_archives.png'
+            box=(panel.win.winfo_rootx(),panel.win.winfo_rooty(),panel.win.winfo_rootx()+panel.win.winfo_width(),
+                 panel.win.winfo_rooty()+panel.win.winfo_height())
+            ImageGrab.grab(bbox=box).save(screenshot)
+            destination=Path(folder)/'archived-chat.txt'
+            with patch.object(panel_module.filedialog,'asksaveasfilename',return_value=str(destination)):
+                panel.export_selected();pump(lambda:not ui.busy)
+            assert '`example`' in destination.read_text()
+            with patch.object(panel_module.decisions,'askyesno',return_value=True):
+                panel.open_selected();pump(lambda:not ui.busy and panel.closed)
+            assert ui.conversation_entries==entries and ui.artifact_store.items()[0].current.content=='Study point.\n'*1500
+            assert ui.saved_chat['version']==1
+            panel=ui.show_chats();pump(lambda:not ui.busy)
+            panel.save_current(True);pump(lambda:not ui.busy)
+            assert ui.saved_chat['version']==2
+            assert not next(r for r in panel.rows if r['id']==archived['id'])['archived']
+            print('PASS real ZIP toggle/check, open-chat exclusion, ZIP badge, export/reopen and update to plain storage',flush=True)
+            panel.win._dismiss_popup()
             assert not errors,errors
             print('PASS late-close/Stop, deletion cancellation, Project removal, saved/current separation, New chat and Project start',flush=True)
         finally:

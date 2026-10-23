@@ -115,3 +115,15 @@ was added. SAVED_CHATS.md has the limits and 378-offline/10-native evidence,
 retained failures and one synthetic real-model recall. Selected-document Q&A,
 context/cancellation work and model comparisons remain next stages. The human
 main scorecard is still deferred and no proposed model has been downloaded.
+
+## Weekly saved-snapshot ZIP storage delivered (October 22)
+
+Verified automatic ZIP after seven unused days now covers local saved chats and
+embedded Artifact history/media, with current-chat exclusion, migration grace,
+toggle/manual check and transparent reopening. SQLite compaction measures actual
+disk reclaimed; no personal-folder scan, model compression or generated-original
+cleanup is added. AUTO_ARCHIVE.md records 388 offline cases/23 suites and three
+affected native suites. Selected PDF/notes Q&A with citations remains the next
+recommended stage, using installed models before any new download. Main scoring
+stays deferred. Broader managed-folder archiving would need explicit folder scope,
+usage tracking and transparent file restore before considering original cleanup.

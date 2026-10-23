@@ -1,3 +1,23 @@
+# Weekly saved-snapshot ZIP storage (October 22, 2026)
+
+388 cases/23 offline suites pass, including ten new ZIP/storage cases with a real
+fresh Python-process archive reopen. Three affected native suites pass: Library,
+popups and Artifacts. Library controls pass in lean and full app runtimes. The
+synthetic screenshot is visually checked. All use temporary data, no network or
+model request and injected inactivity clocks; no real seven-day soak is claimed.
+
+One synthetic repetitive code/history snapshot saved 249399 payload bytes and
+reclaimed 249856 database bytes; a native repeated-notes example reclaimed 20480.
+Those do not predict media savings. No personal library/originals were archived.
+CRC/size/method/member refusals, failed byte verification, current/recent exclusion,
+batch cancellation rollback, grace/backoff and deferred compaction are covered.
+
+Retained failures: corrupt deflate exposed uncaught zlib.error (now a safe refusal);
+the old-schema fixture leaked its own Windows SQLite handle; the native fixture
+hid an Unfiled example behind its Project filter. Harness errors were repaired;
+the white checkbox was themed and rechecked. AUTO_ARCHIVE.md details scope and
+limits. Main scorecard deferred; no new model/portal/document Q&A is claimed.
+
 # Saved chats and Projects (October 22, 2026)
 
 378 cases/22 offline suites pass. Ten affected native suites pass: chat library,

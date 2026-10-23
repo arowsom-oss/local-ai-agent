@@ -20,7 +20,9 @@ passed on 2026-10-19; `run_live_tests.bat` style runs are recorded in VALIDATION
 and media. Search titles, reopen, export or delete saved copies; Project notes
 are reference data. Reopening clears permissions and uses fresh tool targets.
 Nothing is auto-saved on exit. Local storage is unencrypted and ignored by git.
-See SAVED_CHATS.md for the workflow, bounds and tests.
+Unused saved snapshots can automatically use verified ZIP storage after seven
+days, with a toggle and transparent reopening. See AUTO_ARCHIVE.md and
+SAVED_CHATS.md for scope, bounds and tests.
 
 Supported HTML/CSS Artifacts now open in a visual **Preview** first. Use the
 visible **Code** button to edit and **Preview** to see the current draft. It is

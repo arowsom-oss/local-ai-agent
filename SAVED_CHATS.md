@@ -74,7 +74,8 @@ version. It deletes only that stored copy/snapshots. Current open work, exported
 files and generated-folder originals remain. Removing a Project keeps its chats
 as Unfiled. Database deletion is logical, not secure erasure; freed SQLite pages,
 backups, memory or disk recovery may retain bytes. No recursive file deletion
-tool, automatic cleanup job or model delete capability is added.
+tool or model delete capability is added. Automatic ZIP storage is now available
+for unused saved snapshots; see AUTO_ARCHIVE.md. It does not delete generated originals.
 
 Database work runs off Tk with short lock timeouts and transactional commits;
 chat actions wait while a library operation is active. Closing a utility while
@@ -96,7 +97,7 @@ window. This is not crash-proof secure storage or a cloud sync feature.
 - Existing Artifact limits: 20 per chat, 12 text versions, 32,000 characters per
   version, 20 MB per media item and 64 MB retained raw payload across versions.
   The encoded chat snapshot has a 96 MB ceiling; total retained library payload
-  is capped at 256 MB and SQLite has an additional page-count limit. Temporary
+  is capped at 256 MB of stored compressed/plain bytes and SQLite has an additional page-count limit. Temporary
   transaction journals and ordinary process memory are not the same budget.
 - Fixed database filenames; titles never become paths. SQLite parameters, strict
   payload schemas, no link/reparse paths and fresh Artifact IDs are enforced.
@@ -104,7 +105,16 @@ window. This is not crash-proof secure storage or a cloud sync feature.
   These checks do not defeat a hostile process that can rewrite this app's code
   or race its filesystem access as the same Windows user.
 
-## Evidence and next stage
+## Weekly ZIP storage
+
+Saved snapshots unused for seven days can now use verified ZIP storage, enabled
+by default with a visible toggle and manual check. Current opened chats are excluded.
+Open/export work normally and reset last use; older libraries get seven days of
+migration grace. The app checks at startup and hourly while idle, not after exit.
+Only snapshots are compressed, not personal files, generated originals or models.
+AUTO_ARCHIVE.md records full behavior, actual disk reclaim and 388-case evidence.
+
+## Earlier saved-chat milestone evidence and next stage
 
 378 cases across 22 offline suites pass, including nine new library cases for
 fresh-process readback, history/media, strict schemas, quotas, stale writes,
