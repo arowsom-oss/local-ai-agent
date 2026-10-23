@@ -71,3 +71,12 @@ and owned practice UIA cases passed separately. That failure remains in evidence
 no running personal/app process was stopped to free the shortcut. Native-menu
 and icon-getter fixture assumptions were corrected with retained logs. No human
 main scorecard, live model quality test or full Windows security audit is claimed.
+
+## Saved chats/Projects utility
+
+The sidebar has Chats & Projects. Its content scrolls while status and Close
+remain fixed; Escape/X dismiss it. The Project editor also has Close/Escape/X.
+Save controls name the opened saved target independently of list selection.
+Delete/Open/Project removal keep No-default confirmations. Lists, entries and
+Project text share the palette. Closing a pending Open discards it; a committed
+Save can still finish and update its saved metadata without reopening the view.

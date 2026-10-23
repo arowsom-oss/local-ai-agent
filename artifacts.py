@@ -50,6 +50,32 @@ class Store:
         with self._lock:
             return tuple(self._items.values())
 
+    def replace_saved(self, items):
+        """Person-only validated restore; atomically replace with fresh Artifact IDs."""
+        if not isinstance(items,tuple) or len(items)>MAX_ARTIFACTS:
+            raise ValueError('Invalid saved Artifacts')
+        check=Store()
+        for item in items:
+            if not isinstance(item,Artifact) or not 1<=len(item.versions)<=MAX_VERSIONS:
+                raise ValueError('Invalid saved Artifact versions')
+            for index,version in enumerate(item.versions):
+                if not isinstance(version,Version) or version.number!=index+1:
+                    raise ValueError('Invalid saved Artifact version number')
+                if item.kind in ('document','code') and version.data==b'':
+                    if index==0: copied=check.create(item.title,item.kind,version.content)
+                    else: copied=check.revise(copied.number,copied.current.number,version.content)
+                elif item.kind in ('image','video') and len(item.versions)==1 and version.content=='':
+                    check.media(item.title,item.kind,version.data)
+                else:raise ValueError('Invalid saved Artifact kind')
+        with self._lock:
+            fresh={}
+            for item in check.items():
+                number=self._next+len(fresh)
+                fresh[number]=replace(item,number=number)
+            self._next+=len(fresh)
+            self._items=fresh
+            return tuple(fresh.values())
+
     def get(self, number):
         with self._lock:
             if type(number) is not int or number not in self._items:
