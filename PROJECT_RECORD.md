@@ -2,9 +2,9 @@
 
 A safe local AI assistant for Alexander's Windows laptop
 
-Running record updated October 21, 2026. Earlier measurements remain labeled by milestone; later chapters record subsequent changes and failures.
+Running record updated October 22, 2026. Earlier measurements remain labeled by milestone; later chapters record subsequent changes and failures.
 
-Current handoff: the final chapters cover consistent close/cancel controls, a calmer interface and the new Local Studio icon on codex/popup-close-controls-2026-10-21 in arowsom-oss/local-ai-agent. The shared PROJECT_RECORD.md is the handoff for Claude. Earlier measurements stay historical. Profiles, models and personal data stay local. The human main scorecard remains deferred.
+Current handoff: the latest chapter records Alexander's October 22 request for website creation and visual Artifact previews, planned but not implemented. WEBSITE_PREVIEW_PLAN.md holds acceptance requirements for Claude. The preceding chapters cover the tested popup, calmer UI and icon work. Earlier measurements stay historical. Profiles, models and personal data stay local. The human main scorecard remains deferred.
 
 ## Purpose and current position
 
@@ -897,3 +897,24 @@ The Local Studio shortcut uses the app's existing pythonw runtime and bundled IC
 ## Evidence and handoff
 
 Native checks verify the actual Windows icon handle and explicit application identity, Activity routing and replacement of an earlier utility panel. Light/dark main-window, browser-panel and Activity previews were rendered and visually inspected using synthetic chat and Artifact content. They are not model outputs or a claim of macOS-native widgets. UI_DESIGN.md contains the popup inventory, close semantics, Apple references and the retained test limitations. A fresh app restart is required to load these changes. The human main scorecard is still deferred; no score or model-quality result is invented.
+
+<!-- PAGE -->
+# Future website creation and visual previews
+
+## Alexander's request - October 22, 2026
+
+Alexander reported that a website request received a refusal and no Artifacts sidebar appeared. He asked to record website creation as future work and wants code to become something he can see. The exact exchange and tool trace have not been captured; this is not a reproduced panel bug or a scored model failure.
+
+The current app can create code Artifacts, including website source, but HTML and scripts stay inert text. The Artifacts pane opens when a stored Artifact arrives. A plain chat answer or refusal does not create one. The main sidebar also has an Artifacts button; More > Draft from last answer can preserve a response as text. There is no HTML renderer in this version.
+
+## Proposed first step: Code / Preview
+
+Add a person-controlled visual preview beside source code for a single-page HTML/CSS Artifact. Render the selected revision in a bounded, isolated offline renderer and show the result in the pane. An initial screenshot preview is a possible design, not an implemented feature. Scripts, all external resource loads, navigation, forms, popups, downloads and filesystem access must be denied. Generated source must not gain a Python bridge or personal Edge profile. Renderer isolation and interception need real Windows evidence before these limits can be claimed.
+
+Preserve source editing, unsaved drafts, exact revisions, history, Stop/New chat cleanup and explicit saving approvals. Test visible layout with an actual native fixture and hostile offline pages for scripts, CSS resource loads, file URLs, frames, forms, navigation and oversized content. A model smoke request must actually create the Artifact and display it before the feature is called complete. This work does not run or change the deferred main scorecard.
+
+## Later scope and handoff
+
+Interactive JavaScript, multi-file projects and website export can follow verified static previews. Public hosting needs a separate destination/credential policy and explicit publishing approval. Writing code, rendering a local preview and publishing a website are separate capabilities. General Python or shell execution is not part of this request.
+
+WEBSITE_PREVIEW_PLAN.md contains the proposed acceptance checks and current limitations; IMPROVEMENT_ROADMAP.md links this future item. This is a documentation-only update with no new renderer, dependencies or execution authority. Earlier tests remain historical. Alexander retains authorship of the threat model and his small copy-button fix.
