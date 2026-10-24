@@ -4,7 +4,7 @@ A safe local AI assistant for Alexander's Windows laptop
 
 Running record updated October 23, 2026. Earlier measurements remain labeled by milestone; later chapters record subsequent changes and failures.
 
-Current handoff: Sources Q&A now reads explicitly selected PDF/UTF-8 notes with bounded local keyword retrieval, code-checked quotes and physical page references. Answers can be kept in Artifacts. DOCUMENT_QA.md records limits, privacy, 404-offline/5-native evidence and actual e2b smoke results for Claude. No new model, OCR, embeddings or remote portal was added. The prepared human main scorecard remains deferred and prior measurements stay historical.
+Current handoff: Local website stage 1 adds a laptop-only browser chat/Artifact preview, saved web records, bounded idempotent jobs and a shared in-process model lock. LOCAL_WEB_PORTAL.md explains use, temporary local sessions, limits and 422-offline/5-native/browser/real-e2b evidence for Claude. It is not deployed or reachable at school; maintained owner/MFA authentication and HTTPS connectivity remain prerequisites. Main scorecard 526497f has one submitted prompt waiting for person site permission, with no graded steps.
 
 ## Purpose and current position
 
@@ -1077,3 +1077,39 @@ One actual e2b synthetic PDF smoke answered three questions with correct page re
 The smoke exposed an existing observability bug: every structured-format response was labeled classifier even when it answered a document question. The phase now identifies only the actual router schema as classifier; other structured answers log model. The actual-model rerun and a regression case confirm the correction. Two retained harness failures were a file-stat fake missing st_mode and an Escape event generated before the window had focus. Both were corrected, with original failure logs retained. No human main scorecard result was invented; Alexander still owns threat-model writing and the small Copy last answer fix.
 
 No scanned-page OCR, embeddings, persisted source library, full-document guarantee, immediate Ollama cancellation or private school portal is claimed. PDF extraction can lose table structure, figures and reading order; empty-page warnings do not detect every extraction error. Local source snapshots and explicitly retained quotes need ordinary privacy care. Next, run the prepared human scorecard and review the stacked draft branches. Expand the document retrieval/answer evaluation set before choosing an embedding/OCR download. Context/streaming/cancellation reliability and owner-authenticated remote chat remain later stages. The existing browser approvals and computer-use restrictions are unchanged.
+
+<!-- PAGE -->
+# Local website: first stage toward school access
+
+## Delivered scope - October 23, 2026
+
+Alexander asked whether to begin the private Chromebook website or do more local work first. This milestone starts the browser interface and local backend while keeping Internet exposure disabled. Restart Local Studio, open More > Local website, choose Start preview, then Open preview. The responsive site has saved web conversations, local-model chat, a job status view and text/code Artifacts with inert previews and text downloads. It uses the existing Local Studio icon. This is a local working prototype, not a school-access deployment or a production sign-in system. LOCAL_WEB_PORTAL.md is the implementation and usage handoff.
+
+The backend binds only 127.0.0.1:8765 and runs in the desktop Python process. Web inference shares model_router's actual lock with desktop chat and media, avoiding the unsafe assumption that locks in two processes synchronize. A single web worker admits three waiting jobs plus its active request and one pending turn per conversation. Web, desktop Auto/manual, media analysis and Sources pass Stop through the lock; queued cancellation prevents inference and cancelled compaction preserves history; a running call may still finish, with late output discarded. Desktop Stop also cancels web jobs. A completed job is not undone by late Cancel, and the API reports that distinction.
+
+Each submitted request has an idempotency key. Repeating the same payload/key returns its existing job; changed content with the same key refuses. Network loss does not trigger an automatic resubmission. Reload reads saved job state. On restart, unfinished work becomes interrupted without replay. Records are in a separate gitignored portal_data/portal.sqlite3, not the desktop chat library, Documents, generated files or arbitrary paths. Submitted web text is saved automatically as unencrypted local data. Desktop New chat does not erase that separate history. Existing desktop source/tool approvals remain unrelated to web requests.
+
+## Local controls and explicit next prerequisites
+
+The desktop gives a temporary per-start launch key in a URL fragment. The browser removes that fragment and exchanges it for a bounded server-managed session: HttpOnly/SameSite Strict, 30-minute expiry, sign-out revocation and local sign-in throttling. API reads and Artifact retrieval require the session; state changes require same-origin JSON plus CSRF. Host, Origin, peer, method, known-field and duplicate-key checks refuse invalid requests. A fixed preview owner scopes record lookup; no caller chooses owner IDs or filesystem paths. Rendered model text uses textContent, never executable HTML or tool dispatch.
+
+These are development controls, not password/passkey/MFA authentication. The preview HTTP cookie lacks Secure and the bounded standard-library HTTP server is not a production server. No tunnel, account, firewall rule, public listener, direct Ollama access or remote computer control was added. Before school use, select a maintained owner/MFA login and reviewed HTTPS gateway, validate real tokens/session/owner rules, and test unauthorized access through that deployment. The Acer must stay awake/online; school policy can still block access. Media generation, uploads and desktop/web synchronization remain later stages.
+
+<!-- PAGE -->
+# Local website evidence and remaining gates
+
+## Bounded work and verification
+
+The preview caps storage at 20 web chats, 96 jobs, 30 text/code Artifacts and 4 MB of retained payload, with an additional SQLite page/file ceiling. Message and reply sizes, recent complete context pairs and HTTP body/connection limits are enforced. SQL uses parameters, paths are fixed and link/reparse storage paths refuse. There is no cleanup or original-file deletion job. A production retention/export/deletion design is required before media jobs. The current process lock does not coordinate other Ollama clients or older app instances; a separate-process server needs a real broker/IPC design.
+
+All 422 cases across 25 offline suites pass, including 18 portal cases. They exercise unauthorized/expired/revoked sessions, owner-scoped records, CSRF/Host/Origin/peer refusals, throttling, fixed assets and schemas, path/tool endpoint refusals, duplicate request IDs, quota/queue limits, restart interruption and context budgets. Cancelled queued work never reaches inference while a simulated desktop media lease holds the shared lock. Running late content is discarded and completed-cancel responses remain truthful. Text chat always has empty tools and no thinking, using the installed allowlist/shared 8192-token context.
+
+Five affected native suites pass: portal/Tk/HTTP, Sources Q&A, saved chats, popups and efficiency. Genuine loopback requests cover sign-in cookies, CSRF, chat/retry, Artifact lookup, host refusal and logout revocation. The actual desktop website control starts/stops and closes through Close/Escape/X in lean/full runtimes. No private desktop data or model weights were copied into the prototype's test records.
+
+## Browser and actual-model evidence
+
+In-app Chromium with synthetic data/fake inference completed chat, kept and inspected an Artifact, reloaded to existing jobs, downloaded 188 text bytes and signed out with private DOM text cleared. A literal script tag remained text and created no script elements in chat/Artifact panes. DOM measurements fit 1280px and 390px layouts without horizontal overflow, with the viewport restored afterward. Full-page and overridden-viewport screenshot capture failed in the preview tooling; a normal-viewport screenshot succeeded and was inspected. This is not an actual school Chromebook/network test or a claim of broad browser compatibility.
+
+One real e2b request through the genuine HTTP API returned the exact synthetic requested text in 9.719 seconds. Repeating its request ID returned the same job, with one inference call total, no tools and context 8192. No new model or real media job was used. This small example is not a broad security, quality or performance benchmark. Sessions are local development access only, with no remote identity provider configured. Review the stacked draft before merging; replace/verify production server, identity, sessions and HTTPS before any off-laptop exposure.
+
+Main's actual scorecard attempt now targets 526497f, separate from this feature branch and the earlier unrun 58adaf fixture. Its first exact prompt reached a New website permission and waits for Alexander's input. No step is graded and no scorecard failure/pass was invented. The observer's normal UI event poll was started without changing exported main source. Alexander still owns the threat-model writing and Copy last answer fix. The website can be developed in parallel, but scorecard completion and deployment review remain outstanding gates.

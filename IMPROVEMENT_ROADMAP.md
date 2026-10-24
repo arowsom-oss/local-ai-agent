@@ -140,3 +140,15 @@ OCR, embeddings, persisted source storage and the school portal remain plans.
 Next validation is the prepared human main scorecard; next engineering choices
 need a broader retrieval evaluation and context/cancellation reliability work.
 The student's threat model and small copy fix remain reserved for them.
+
+## Local website foundation delivered - October 23
+
+The first browser experience runs only on the Acer: saved web chats, text/code
+Artifacts, bounded idempotent jobs and a shared in-process model lock. Temporary
+local session controls are tested but are not production identity/MFA. No tunnel
+or off-laptop access is enabled. LOCAL_WEB_PORTAL.md records 422 offline checks,
+five native suites, browser evidence and one actual e2b HTTP smoke. Next: finish
+the scorecard, review the draft, select maintained owner/MFA/HTTPS connectivity,
+validate real deployment access controls, then test a permitted second device.
+Media and desktop/web synchronization remain later work. Main scorecard 526497f
+has one prompt waiting for person site permission and zero graded steps.

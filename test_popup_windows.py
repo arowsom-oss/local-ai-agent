@@ -69,7 +69,7 @@ def test_all_custom_popup_constructors_have_close_handling():
               'connect_edge_tab','choose_edge_work_tab','show_log'},
               'progress_panel.py':{'details'},'workspace_panel.py':{'show_documents'},
               'popup_windows.py':{'askyesno'},'chat_library_panel.py':{'__init__','project_editor'},
-              'document_qa_panel.py':{'__init__'}}
+              'document_qa_panel.py':{'__init__'},'portal_ui.py':{'__init__'}}
     for name,functions in expected.items():
         tree=ast.parse(Path(__file__).with_name(name).read_text(encoding='utf-8'))
         found=set()

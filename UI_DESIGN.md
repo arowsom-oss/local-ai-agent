@@ -101,3 +101,14 @@ Read-only result panes never render links/code. Keep answer creates a fresh
 Artifact without dropping a dirty editor. There are no per-question approval
 popups, action tools or persistent-source authorization grants. DOCUMENT_QA.md
 records privacy and the fact that quote matching is not factual entailment.
+
+## Local website preview
+
+More > Local website provides Start/Open/Copy access link/Stop website, with
+Close/Escape/X. Closing keeps a started preview running; Stop revokes sessions
+and cancels jobs. The webpage reuses the app icon, a restrained sage/off-white
+palette, readable chat and a responsive text Artifact pane. No remote computer
+control, media button or fake password/MFA claim appears. Model markup is plain
+text. Sign-out clears private DOM content and late async results are gated.
+Synthetic browser checks verify reload, download and responsive fit; screenshot
+capture at an overridden size was unavailable, so the normal viewport was saved.

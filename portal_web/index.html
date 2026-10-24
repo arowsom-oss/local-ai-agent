@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Local Studio — Web preview</title><link rel="icon" href="/brand.png"><link rel="stylesheet" href="/style.css"><script defer src="/app.js"></script></head>
+<body>
+<main class="shell">
+  <aside class="sidebar"><a class="brand" href="/" aria-label="Local Studio home"><img class="mark" src="/brand.png" width="40" height="40" alt=""><span>Local Studio<small>Your laptop, in a browser</small></span></a>
+    <div class="scope"><span class="dot"></span> Local preview <span class="pill">Stage 1</span></div>
+    <section id="navigation" hidden><button id="new-chat" class="primary wide">＋ New conversation</button><h2>Conversations</h2><div id="chats" class="chats"></div><p class="quiet">Web conversations are saved separately from the desktop app.</p><button id="sign-out" class="wide">Sign out</button></section>
+    <div class="sidebar-bottom"><b>A quiet place to think.</b><p>Chat and text Artifacts are ready to try. School access, sign-in with MFA and media generation are later stages.</p></div>
+  </aside>
+  <section class="workspace">
+    <header><div><span class="eyebrow">LOCAL STUDIO / WEB</span><h1 id="page-title">Make room for an idea.</h1></div><span class="device">● Acer laptop</span></header>
+    <p id="notice" class="notice" role="status" aria-live="polite">This preview works on this laptop only. It is not connected to the internet as a service.</p>
+    <section id="login" class="login-card"><span class="eyebrow">PRIVATE LOCAL SESSION</span><h2>Pick up where inspiration starts.</h2><p>Start the local website from Local Studio’s More menu, then use its access link or paste the temporary key below.</p><form id="login-form"><label for="access-key">Temporary preview key</label><input id="access-key" type="password" autocomplete="off" required maxlength="100"><button class="primary" type="submit">Open my workspace <span aria-hidden="true">↗</span></button></form><p class="quiet">This is a local development key, not your school account or a production password.</p></section>
+    <div id="studio" hidden>
+      <div class="work-grid">
+        <section class="conversation"><div id="messages" class="messages" aria-live="polite"></div>
+          <form id="compose"><label for="message">Your message</label><textarea id="message" rows="3" placeholder="Explain an idea, draft something, or help me study…" maxlength="4000" required></textarea><div class="compose-actions"><label class="model-label" for="model">Model <select id="model"></select></label><button id="send" class="primary" type="submit">Send message ↑</button></div><p class="quiet">Text only · No browsing or computer control · Recent context is limited to fit the local model.</p></form>
+        </section>
+        <aside class="artifacts"><div class="section-heading"><h2>Artifacts</h2><span id="artifact-count" class="pill">0</span></div><p class="quiet">Keep a useful reply as a document or inert code. Preview and download it here.</p><div id="artifacts"></div><div id="artifact-view" hidden><h3 id="artifact-title"></h3><pre id="artifact-body"></pre><button id="download">Download text</button></div></aside>
+      </div>
+    </div>
+    <footer>Runs on your Acer. Your laptop must stay awake and online for future remote access.</footer>
+  </section>
+</main>
+</body></html>

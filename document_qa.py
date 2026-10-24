@@ -150,7 +150,7 @@ def ask(sources,question,model,stop_event,log=lambda line:None):
     if model not in models.ALLOWED_MODELS:raise ValueError('Choose an installed allowed local model')
     passages=retrieve(sources,question)
     if not passages:return Answer(MISSING,(),False)
-    response=models.chat(model=model,tools=[],think=False,format=schema(passages),timing_log=log,
+    response=models.chat(model=model,tools=[],think=False,format=schema(passages),timing_log=log,stop_event=stop_event,
         messages=prompt(question,passages),options={'temperature':0,'num_ctx':models.TEXT_CONTEXT,'num_predict':1000})
     if stop_event.is_set():raise ValueError('Document Q&A cancelled; late answer discarded')
     message=models._field(response,'message')

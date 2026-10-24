@@ -15,13 +15,13 @@ OFFLINE=(
     'test_task_progress.py','test_workspace_io.py','test_reliability.py',
     'test_document_edit.py','test_generated_artifacts.py','test_speech_reference.py',
     'test_model_timing.py','test_efficiency.py','test_prompt_injection.py',
-    'test_edge_tools.py','test_popup_windows.py','test_artifact_web_preview.py','test_chat_library.py','test_chat_archives.py','test_document_qa.py',
+    'test_edge_tools.py','test_popup_windows.py','test_artifact_web_preview.py','test_chat_library.py','test_chat_archives.py','test_document_qa.py','test_portal.py',
 )
 NATIVE={
     'test_artifact_ui.py','test_browser_live.py','test_desktop_live.py',
     'test_efficiency_ui.py','test_notepad_live.py','test_progress_ui.py',
     'test_speech_ui.py','test_vision_ui.py','test_workspace_io_live.py','test_workspace_live.py',
-    'test_edge_live.py','test_popup_ui.py','test_artifact_web_live.py','test_chat_library_ui.py','test_document_qa_ui.py',
+    'test_edge_live.py','test_popup_ui.py','test_artifact_web_live.py','test_chat_library_ui.py','test_document_qa_ui.py','test_portal_live.py',
 }
 
 def main():
