@@ -118,7 +118,7 @@ def create_artifact(title: str, kind: str, content: str) -> str:
 
     Args:
         title: A short display label, never a file path.
-        kind: Exactly document or code. HTML and scripts are displayed as text only.
+        kind: Exactly document or code. HTML/CSS code has a static visual preview; scripts never execute.
         content: Complete draft text, 1 to 32000 characters. Never executed or saved automatically.
     """
     try:

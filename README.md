@@ -16,6 +16,11 @@ passed on 2026-10-19; `run_live_tests.bat` style runs are recorded in VALIDATION
 
 ## Current UI behavior
 
+Supported HTML/CSS Artifacts now open in a visual **Preview** first. Use the
+visible **Code** button to edit and **Preview** to see the current draft. It is
+an offline picture, with scripts and external resources disabled. Other code
+stays source-only. See WEBSITE_PREVIEW_PLAN.md for tests and limitations.
+
 UI_DESIGN.md describes the calmer light/dark interface, safe Close/Cancel/X
 handling and original app icon. Routine tool/timing detail is in **More > Activity**.
 One utility panel opens at a time. Use the Local Studio launcher shortcut for

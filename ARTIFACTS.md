@@ -3,8 +3,11 @@
 The right-hand panel is a workspace for a document, source code, image or video.
 The draggable divider changes its share of the window. It adds no cloud API or
 model dependency. A document is displayed as editable plain text, including any
-Markdown markers. Source code, HTML and SVG stay inert text: there is no browser
-renderer, run button, external URL handling or Python/JavaScript bridge.
+Markdown markers. Code remains inert. Supported single-page HTML/CSS now opens a static visual
+Preview first, with explicit Preview / Code buttons. Other code stays in source
+view. There is no general run button, external URL handling or Python bridge.
+Page JavaScript is disabled; the preview returns local pixels, not an interactive
+webview. WEBSITE_PREVIEW_PLAN.md documents the renderer and its limits.
 
 ## Try it
 
@@ -134,3 +137,27 @@ reopening/cancellation. The native Tk fixture now uses scripted model/worker
 results through actual core registration and verifies PNG/MP4 auto-selection,
 decoding, playback and reopening a retained video after New chat. The GPU models
 are not invoked by these regression tests.
+
+
+## Static HTML/CSS Preview / Code
+
+Create or import a code Artifact beginning with HTML markup, optionally wrapped
+in an html Markdown fence. The panel opens and shows Preview first. Choose Code
+to edit, then Preview to render the current buffer without saving. Unsaved text
+and historical versions keep their identity. New HTML Artifacts select themselves
+unless an unsaved draft needs preserving. Draft from last answer recognizes a
+whole HTML answer; prose mixed with code remains a document.
+
+The scrollable preview shows the first 800 x 1000 CSS pixels, fitted to the pane
+width. It is a picture: links, forms and buttons do not act. Scripts, external
+assets/fonts, frames and navigation are disabled. CSS-only/JavaScript-only code,
+Python and SVG currently remain source-only. This does not publish a website or
+install packages. Unsupported content and failed rendering keep the source.
+
+Rendering uses the already installed Playwright Chromium in a fresh context,
+with no browser/model downloads or new dependencies. A stopped/failed renderer
+has no external-viewer fallback. The owned worker/tree is limited to 1536 MB
+committed memory and a 20-second receive deadline; queued cancellation waits at
+most five seconds. Stop/New chat and selection changes discard stale previews.
+The browser restrictions are not OS-level network isolation; see the renderer
+policy and retained first-run failure in WEBSITE_PREVIEW_PLAN.md.
