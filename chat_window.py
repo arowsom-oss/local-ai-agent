@@ -931,6 +931,8 @@ def clear_chat_state():
     activity_lines.clear()
     utility=getattr(root,'_utility_popup',None)
     if utility is not None and utility.winfo_exists():utility._dismiss_popup()
+    from document_qa_panel import reset_sources
+    reset_sources(root)
     chat_box.configure(state="normal")
     chat_box.delete("1.0", "end")
     chat_box.configure(state="disabled")
@@ -979,6 +981,12 @@ def show_chats():
     from chat_library_panel import show_library
     import sys
     return show_library(sys.modules[__name__])
+
+
+def show_sources():
+    from document_qa_panel import show_sources as open_sources
+    import sys
+    return open_sources(sys.modules[__name__])
 
 
 LOG_LINES = 50   # how many of the newest log lines the viewer shows
@@ -1398,6 +1406,7 @@ def build_window():
     label(sidebar,"Studio",24,"text","sidebar",True).pack(anchor="w",padx=20,pady=(0,24))
     make_button(sidebar,"+  New chat",new_chat,kind="accent").pack(fill="x",padx=16,pady=(0,24))
     make_button(sidebar,"Chats & Projects",show_chats).pack(fill='x',padx=16,pady=4)
+    make_button(sidebar,'Sources Q&A',show_sources).pack(fill='x',padx=16,pady=4)
     from workspace_panel import show_documents
     make_button(sidebar,"Documents",lambda:(show_artifacts(),show_documents(artifact_panel,confirm))).pack(fill="x",padx=16,pady=4)
     artifacts_button=make_button(sidebar,"Artifacts",toggle_artifacts)

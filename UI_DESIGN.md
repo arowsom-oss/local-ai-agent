@@ -89,3 +89,15 @@ The toggle persists locally, defaults on and leaves archived snapshots readable
 when off. No additional approval popup or model action is added. Actual status
 separates payload bytes saved from database bytes reclaimed; disabled/deferred
 checks explain why. AUTO_ARCHIVE.md has the seven-day scope and native evidence.
+
+## Sources Q&A
+
+One themed utility window adds explicit sources, a bounded question, answer and
+an inspectable citation/extracted-text view. Main model selection applies; all
+listed sources are in scope. The fixed Close/status footer stays visible while
+the body scrolls. Close/Escape/X cancels pending work; late results never reopen
+or replace data. It retains selected snapshots until explicit Forget/New chat.
+Read-only result panes never render links/code. Keep answer creates a fresh
+Artifact without dropping a dirty editor. There are no per-question approval
+popups, action tools or persistent-source authorization grants. DOCUMENT_QA.md
+records privacy and the fact that quote matching is not factual entailment.

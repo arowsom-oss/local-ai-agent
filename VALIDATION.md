@@ -1,3 +1,25 @@
+# Sources document Q&A (October 23, 2026)
+
+404 cases/24 offline suites pass. Fifteen Q&A cases plus a timing-label regression
+cover PDF extraction and bounds, immutable selected reads, quote/ID refusals,
+abstention, cancellation, active PDF data and absence of action tool authority.
+Five affected native suites pass: Q&A, saved chats, popups, Artifacts, efficiency.
+Q&A controls pass in lean/full runtimes; the later dirty-editor guard is rechecked.
+The synthetic UI screenshot and short-window access were visually/native checked.
+
+One actual e2b smoke answers three synthetic PDF questions correctly with checked
+quotes/page mappings (including a poisoned reference page), and abstains on a
+fourth without inference. Final first-answer wall time 10.919 s includes 9.260 s
+loading; warm answers take 0.550/0.541 s. The first historical run has 23.411 s
+wall including 21.264 s loading. No general robustness, latency or quality score.
+
+The smoke found a logging bug: structured replies appeared as classifier calls;
+now only the router schema has that phase. Retained harness failures involve a
+stat fake missing st_mode and unfocused Escape injection; both are corrected.
+DOCUMENT_QA.md explains lack of OCR/embeddings/persistent source storage, limited
+keyword coverage, quote checks versus entailment, and delayed Ollama cancellation.
+No personal documents, new model download or main scorecard result is involved.
+
 # Weekly saved-snapshot ZIP storage (October 22, 2026)
 
 388 cases/23 offline suites pass, including ten new ZIP/storage cases with a real

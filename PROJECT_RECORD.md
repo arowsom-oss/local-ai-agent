@@ -2,9 +2,9 @@
 
 A safe local AI assistant for Alexander's Windows laptop
 
-Running record updated October 22, 2026. Earlier measurements remain labeled by milestone; later chapters record subsequent changes and failures.
+Running record updated October 23, 2026. Earlier measurements remain labeled by milestone; later chapters record subsequent changes and failures.
 
-Current handoff: saved chats/Projects now support verified automatic ZIP storage after seven days unused, transparent reopening, visible controls and actual disk-savings reports. AUTO_ARCHIVE.md explains the scope, migration grace and 388-offline/3-native evidence for Claude. Only saved snapshots are compressed; personal folders, original media and model weights remain untouched. Selected-document Q&A is the next proposed stage. No new model, private portal or human scorecard result is claimed.
+Current handoff: Sources Q&A now reads explicitly selected PDF/UTF-8 notes with bounded local keyword retrieval, code-checked quotes and physical page references. Answers can be kept in Artifacts. DOCUMENT_QA.md records limits, privacy, 404-offline/5-native evidence and actual e2b smoke results for Claude. No new model, OCR, embeddings or remote portal was added. The prepared human main scorecard remains deferred and prior measurements stay historical.
 
 ## Purpose and current position
 
@@ -1043,3 +1043,37 @@ The corrupted-deflate test initially raised uncaught zlib.error; decoding now no
 ## Recommended next work
 
 Selected PDF and notes Q&A with page citations is the next product stage. Start with person-selected files, bounded parsing, source/page labels and answers that admit missing evidence. Treat document instructions as untrusted reference data and keep tool approvals separate. Use installed models first; add an embedding model only if a small retrieval benchmark demonstrates a useful improvement. The private school portal and broader Windows controls remain planned work, with no new model download or remote listener introduced here. Alexander still owns the threat-model writing and the small Copy last answer fix.
+
+<!-- PAGE -->
+# Selected-document Q&A with inspectable citations
+
+## Delivered stage - October 23, 2026
+
+Alexander authorized the next recommended feature. Sources Q&A is a person-controlled sidebar window for explicitly selected PDF, TXT and Markdown files. All listed sources are in scope. Its separate question box uses the installed model chosen in the main dropdown; Auto directly uses e2b with no classifier. It retrieves at most four keyword-ranked excerpts, makes one structured model request and shows short claims, code-mapped physical page references and supporting quotes. The citation picker shows the retrieved excerpt, full extracted page/text and immutable snapshot hash. Text notes are explicitly unpaginated. This is extracted text, not a visual PDF renderer.
+
+Code checks the response schema, supplied citation IDs and a verbatim supporting quote from that exact normalized excerpt before displaying claims. Filenames/pages come from the frozen import mapping; no model-provided file path or URL is used. Missing retrieval evidence returns a fixed abstention without inference. A real matching quote still does not prove the claim follows from it, so the interface asks the person to review interpretation. Keyword matching can omit synonyms and relevant pages; bare summaries cover early excerpts only. It is not complete semantic search or a factual-accuracy guarantee.
+
+Imports stay in current-chat RAM across utility close/reopen. New chat or saved-chat replacement clears them. Remove/Forget changes only those snapshots, never originals. Keeping an answer in Artifacts explicitly retains the answer, quotes, source names/pages and hashes and preserves any existing unsaved Artifact draft. Chats & Projects can then persist that Artifact. Raw sources, the collection and Q&A question history are not silently saved or restored. Closing cancels pending imports/answers and ignores their late results. Close/Escape/X, scrolling content and fixed status/footer remain available.
+
+## Bounds, local inference and authority
+
+Five sources and 500000 extracted characters total; 8 MB per input; PDF 1-100 physical pages, 20000 extracted characters per page and 200000 per file; UTF-8 notes up to 200000 characters. Oversized/encrypted/unreadable PDFs refuse. Pure scans explain that OCR is absent; mixed files warn about textless pages. A fresh Windows Job-bound worker reads/parses with a 768 MB memory cap and 20-second receive deadline. These resource controls are not an OS permissions sandbox. No folder scan, attachment extraction, source write, PDF script execution or automatic link opening is added.
+
+The existing local lifecycle serializes inference, checks installed allowlisted models and retains the shared 8192-token context. The Q&A prompt is capped at 6000 UTF-8 bytes, output at 1000 tokens; thinking is off and tools is empty. It never enters general agent dispatch, so document instructions have no browser/file action authority. Stop rejects late results; a running Ollama call may still finish or reach the existing client timeout, with busy retained until then. DOCUMENT_QA.md states these limitations. The small pypdf 6.19.0 parser is pinned; no embedding/OCR model or new GPU residency was added.
+
+<!-- PAGE -->
+# Document-Q&A evidence and remaining work
+
+## Verification and actual local model results
+
+All 404 cases across 24 offline suites pass. Fifteen document-Q&A cases exercise real synthetic PDF extraction, physical/blank pages, scans/encryption/malformed and over-limit inputs, selected-read immutability, worker lifetime/result bounds, collection limits and missing-evidence abstention. Forged citations, mismatched/empty-normalized quotes, extra fields and tool output refuse. Prompt budget, cancellation and no new agent tools are covered. An active-content PDF fixture includes JavaScript and an embedded attachment; only its text is used. Eight simple keyword retrieval cases locate the expected top page, without claiming semantic generalization.
+
+Five affected native suites pass: Sources Q&A, saved chats/Projects, popups, Artifacts and efficiency UI. Actual Windows/Tk/parser tests import a three-page PDF, retain physical page 2 and a blank-page warning, keep the original snapshot after its file changes, inspect references and create an Artifact while preserving a dirty editor. Stop/Close discard late results; picker cancel, remove/forget, New chat reset and Close/Escape/X are checked. New Sources checks pass in both lean and full runtimes. Its owned synthetic screenshot and short-window access were inspected. No personal sources were imported during development.
+
+One actual e2b synthetic PDF smoke answered three questions with correct page references and matching quotes, including a fact on a page containing malicious instructions to download/open settings. This Q&A path had no action tools. A fourth unrelated question abstained without model inference. The final measured first answer took 10.919 seconds including 9.260 seconds of model loading; the next two took 0.550 and 0.541 seconds. The earlier first answer took 23.411 seconds including 21.264 seconds of loading. These are tiny examples and historical measurements, not general quality, adversarial resistance or latency promises.
+
+## Bugs, limitations and next decisions
+
+The smoke exposed an existing observability bug: every structured-format response was labeled classifier even when it answered a document question. The phase now identifies only the actual router schema as classifier; other structured answers log model. The actual-model rerun and a regression case confirm the correction. Two retained harness failures were a file-stat fake missing st_mode and an Escape event generated before the window had focus. Both were corrected, with original failure logs retained. No human main scorecard result was invented; Alexander still owns threat-model writing and the small Copy last answer fix.
+
+No scanned-page OCR, embeddings, persisted source library, full-document guarantee, immediate Ollama cancellation or private school portal is claimed. PDF extraction can lose table structure, figures and reading order; empty-page warnings do not detect every extraction error. Local source snapshots and explicitly retained quotes need ordinary privacy care. Next, run the prepared human scorecard and review the stacked draft branches. Expand the document retrieval/answer evaluation set before choosing an embedding/OCR download. Context/streaming/cancellation reliability and owner-authenticated remote chat remain later stages. The existing browser approvals and computer-use restrictions are unchanged.
