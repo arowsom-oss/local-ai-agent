@@ -50,7 +50,7 @@ def _log_timing(response, model, request, callback):
     try:
         row = {"model": model, "num_ctx": (request.get("options") or {}).get("num_ctx"),
                "think": request.get("think"),
-               "phase": "classifier" if request.get("format") is not None else "model"}
+               "phase": "classifier" if request.get("format") == _SCHEMA else "model"}
         for key in ("load_duration", "prompt_eval_duration", "eval_duration", "total_duration"):
             value = _field(response, key)
             if type(value) is int and value >= 0:

@@ -127,3 +127,16 @@ affected native suites. Selected PDF/notes Q&A with citations remains the next
 recommended stage, using installed models before any new download. Main scoring
 stays deferred. Broader managed-folder archiving would need explicit folder scope,
 usage tracking and transparent file restore before considering original cleanup.
+
+## Selected-document Q&A v1 delivered (October 23)
+
+Sources Q&A now imports selected PDF/UTF-8 notes with bounded worker parsing,
+keyword excerpts, fixed local-model inference without tools, code-checked quotes
+and physical page mappings. Inspect references and keep answers as Artifacts.
+404 cases/24 offline suites and five affected native suites pass; actual e2b
+answers three synthetic questions correctly and abstains on a missing fourth.
+DOCUMENT_QA.md records limitations, failures and cold/warm timing separately.
+OCR, embeddings, persisted source storage and the school portal remain plans.
+Next validation is the prepared human main scorecard; next engineering choices
+need a broader retrieval evaluation and context/cancellation reliability work.
+The student's threat model and small copy fix remain reserved for them.
