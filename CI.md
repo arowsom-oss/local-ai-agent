@@ -5,9 +5,9 @@ main, using Windows and Python 3.12. It installs requirements-ci.txt, then runs
 scripts/run_offline_tests.py without -O. No GPU packages, model weights or
 Chromium download are required.
 
-The runner executes all twenty-three classified offline suites in separate
+The runner executes all twenty-four classified offline suites in separate
 processes. It refuses unclassified new test files, so adding a suite requires
-an explicit offline/native classification. Fourteen native/GUI suites are excluded
+an explicit offline/native classification. Fifteen native/GUI suites are excluded
 because they require actual applications or desktop integration. These checks
 do not run the scorecard or assess model quality.
 

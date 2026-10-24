@@ -6,3 +6,4 @@ Pillow==12.3.0
 av==19.0.1
 numpy==2.2.6
 comtypes==1.4.17
+pypdf==6.19.0

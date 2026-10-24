@@ -68,6 +68,13 @@ def test_timing_reports_durations_and_counts_without_model_text():
     assert 'PRIVATE' not in ''.join(logs)
 
 
+def test_structured_answers_are_not_mislabeled_as_router_classifiers():
+    logs=[]
+    with fixture():
+        router.chat(model=router.FAST_MODEL,messages=[],format={'type':'object','properties':{'answerable':{'type':'boolean'}}},timing_log=logs.append)
+    assert timing_rows(logs)[0]['phase']=='model'
+
+
 def test_invalid_optional_metrics_are_omitted_not_echoed():
     logs=[]
     with fixture() as client:

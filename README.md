@@ -16,6 +16,12 @@ passed on 2026-10-19; `run_live_tests.bat` style runs are recorded in VALIDATION
 
 ## Current UI behavior
 
+**Sources Q&A** answers questions about explicitly selected PDF/UTF-8 notes with
+inspectable excerpts, checked quote/ID references and physical PDF page numbers.
+It uses installed local models with no action tools, OCR or embedding download.
+Sources stay in current-chat RAM; answers can be kept in Artifacts. See
+DOCUMENT_QA.md for usage, limits, cancellation and evidence.
+
 **Chats & Projects** explicitly saves local conversations with Artifact history
 and media. Search titles, reopen, export or delete saved copies; Project notes
 are reference data. Reopening clears permissions and uses fresh tool targets.

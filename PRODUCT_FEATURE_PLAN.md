@@ -1,7 +1,7 @@
 # Product features and model candidates
 
-October 22, 2026. Saved chats/Projects v1 is delivered on the feature branch;
-other proposals and model candidates remain plans, not downloads.
+October 23, 2026. Saved chats/Projects and selected-document Q&A v1 are delivered
+on feature branches; other proposals/model candidates remain plans, not downloads.
 The current chat models are gemma4:e2b and gemma4:12b; they remain unchanged.
 The comparison is about useful app capabilities, not claiming the local system
 matches the reasoning quality or service scale of ChatGPT or Claude.
@@ -13,9 +13,10 @@ matches the reasoning quality or service scale of ChatGPT or Claude.
    project's instructions are person-authored; retrieved text stays untrusted.
    Restoring a chat must never restore old action approvals or stale browser IDs.
    This creates the storage foundation for later desktop/web continuity.
-2. Document Q&A with citations: bounded, person-selected PDF/text imports, page
+2. Document Q&A with citations (v1 delivered; DOCUMENT_QA.md): bounded, person-selected PDF/text imports, page
    references and retrieval over an approved collection. Start with plain text
-   extraction; use OCR for scanned pages. Embeddings select relevant passages;
+   extraction. Current retrieval is keyword-based; OCR/embeddings are future
+   candidates to evaluate, not implemented downloads. For the current version,
    the chat model answers from those passages, marks gaps and cites exact source
    IDs/pages. Never treat a retrieved document as authority or scan the whole PC.
    Correct source lookup and retrieval evaluation matter more than adding models.
@@ -45,8 +46,9 @@ matches the reasoning quality or service scale of ChatGPT or Claude.
    requests and owned Artifacts, with a shared bounded GPU queue. No remote
    computer use. REMOTE_ACCESS_PLAN.md records the expanded school-access plan.
 
-Suggested order: saved chats/Projects and context/cancellation reliability,
-then selected-document Q&A, then a small model comparison. The private portal
+Saved chats/Projects and selected-document Q&A v1 are delivered. Next: run the
+prepared human scorecard, expand retrieval tests, improve context/cancellation
+reliability, then measure whether a specialist/model comparison is worthwhile. The private portal
 depends on persistent owner-bound records, shared GPU scheduling and tested auth.
 The human main scorecard remains deferred at Alexander's request; do not invent
 results or use these proposals as a reason to merge unreviewed work.
