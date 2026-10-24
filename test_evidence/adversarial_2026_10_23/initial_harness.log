@@ -1,0 +1,41 @@
+FAIL test_poisoned_text_file_and_model_following_injection_cannot_request_actions
+Traceback (most recent call last):
+  File "C:\Users\Alexander\Documents\Codex\2026-10-15\i-m-a-high-school-student\work\computer_use_repo\test_feature_adversarial.py", line 324, in <module>
+    try:test();print('PASS '+test.__name__,flush=True)
+        ^^^^^^
+  File "C:\Users\Alexander\Documents\Codex\2026-10-15\i-m-a-high-school-student\work\computer_use_repo\test_feature_adversarial.py", line 57, in test_poisoned_text_file_and_model_following_injection_cannot_request_actions
+    patch.object(h.core,'download_file',side_effect=AssertionError('Download escaped document Q&A')):
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexander\AppData\Local\Programs\Python\Python312\Lib\unittest\mock.py", line 1467, in __enter__
+    original, local = self.get_original()
+                      ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexander\AppData\Local\Programs\Python\Python312\Lib\unittest\mock.py", line 1437, in get_original
+    raise AttributeError(
+AttributeError: <module 'step4_core_test_target' from 'C:\\Users\\Alexander\\Documents\\Codex\\2026-10-15\\i-m-a-high-school-student\\work\\computer_use_repo\\agent_core.py'> does not have the attribute 'download_file'
+PASS test_quote_absent_from_actual_selected_file_is_refused_even_with_valid_citation_id
+PASS test_quote_from_another_source_cannot_be_laundered_through_citation_one
+PASS test_saved_chat_traversal_titles_are_inert_database_text_not_filesystem_paths
+PASS test_saved_chat_path_strings_cannot_select_or_delete_a_chat
+PASS test_saved_snapshots_cannot_store_authority_roles_tool_protocol_or_permission_fields
+FAIL test_reopened_poisoned_chat_revokes_live_authority_and_requires_a_new_site_popup
+Traceback (most recent call last):
+  File "C:\Users\Alexander\Documents\Codex\2026-10-15\i-m-a-high-school-student\work\computer_use_repo\test_feature_adversarial.py", line 324, in <module>
+    try:test();print('PASS '+test.__name__,flush=True)
+        ^^^^^^
+  File "C:\Users\Alexander\Documents\Codex\2026-10-15\i-m-a-high-school-student\work\computer_use_repo\test_feature_adversarial.py", line 162, in test_reopened_poisoned_chat_revokes_live_authority_and_requires_a_new_site_popup
+    loaded=library.load(row['id']);namespace=reopened(loaded)
+                                             ^^^^^^^^^^^^^^^^
+  File "C:\Users\Alexander\Documents\Codex\2026-10-15\i-m-a-high-school-student\work\computer_use_repo\test_feature_adversarial.py", line 145, in reopened
+    assert not documents.allowed and not documents.pending,'Workspace permission/ticket survived reopen'
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Workspace permission/ticket survived reopen
+PASS test_archived_chat_with_forged_authority_is_refused_through_real_library_load
+PASS test_zip_traversal_absolute_encoded_and_windows_member_names_refuse_before_open
+PASS test_oversized_zip_container_is_rejected_before_zip_parser_runs
+PASS test_zip_declared_expansion_over_limit_is_rejected_before_decompression
+PASS test_zip_stream_is_bounded_even_if_member_metadata_lies
+PASS test_html_reducer_removes_script_event_handlers_navigation_and_external_targets
+PASS test_html_browser_has_independent_no_script_no_network_policy_and_csp
+PASS test_html_routes_block_external_subresources_second_navigation_post_and_child_frames
+PASS test_html_unexpected_navigation_is_refused_and_browser_closed
+14/16 adversarial cases passed.

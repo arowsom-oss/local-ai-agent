@@ -1,0 +1,137 @@
+[
+  {
+    "suite": "test_browser_search.py",
+    "returncode": 0,
+    "seconds": 0.5384
+  },
+  {
+    "suite": "test_browser_network.py",
+    "returncode": 0,
+    "seconds": 0.4892
+  },
+  {
+    "suite": "test_fetch_page.py",
+    "returncode": 0,
+    "seconds": 0.2829
+  },
+  {
+    "suite": "test_model_vision.py",
+    "returncode": 0,
+    "seconds": 0.9152
+  },
+  {
+    "suite": "test_computer_features.py",
+    "returncode": 0,
+    "seconds": 0.5397
+  },
+  {
+    "suite": "test_artifacts.py",
+    "returncode": 0,
+    "seconds": 0.296
+  },
+  {
+    "suite": "test_notepad.py",
+    "returncode": 0,
+    "seconds": 0.2322
+  },
+  {
+    "suite": "test_notepad_workflow.py",
+    "returncode": 0,
+    "seconds": 0.2644
+  },
+  {
+    "suite": "test_workspace_documents.py",
+    "returncode": 0,
+    "seconds": 0.3026
+  },
+  {
+    "suite": "test_task_progress.py",
+    "returncode": 0,
+    "seconds": 0.2347
+  },
+  {
+    "suite": "test_workspace_io.py",
+    "returncode": 0,
+    "seconds": 0.3277
+  },
+  {
+    "suite": "test_reliability.py",
+    "returncode": 0,
+    "seconds": 0.3728
+  },
+  {
+    "suite": "test_document_edit.py",
+    "returncode": 0,
+    "seconds": 0.2574
+  },
+  {
+    "suite": "test_generated_artifacts.py",
+    "returncode": 0,
+    "seconds": 0.3134
+  },
+  {
+    "suite": "test_speech_reference.py",
+    "returncode": 0,
+    "seconds": 0.8418
+  },
+  {
+    "suite": "test_model_timing.py",
+    "returncode": 0,
+    "seconds": 0.3825
+  },
+  {
+    "suite": "test_efficiency.py",
+    "returncode": 0,
+    "seconds": 0.3423
+  },
+  {
+    "suite": "test_prompt_injection.py",
+    "returncode": 0,
+    "seconds": 0.286
+  },
+  {
+    "suite": "test_edge_tools.py",
+    "returncode": 0,
+    "seconds": 1.1632
+  },
+  {
+    "suite": "test_popup_windows.py",
+    "returncode": 0,
+    "seconds": 0.4897
+  },
+  {
+    "suite": "test_artifact_web_preview.py",
+    "returncode": 0,
+    "seconds": 0.3156
+  },
+  {
+    "suite": "test_chat_library.py",
+    "returncode": 0,
+    "seconds": 0.7985
+  },
+  {
+    "suite": "test_chat_archives.py",
+    "returncode": 0,
+    "seconds": 1.0329
+  },
+  {
+    "suite": "test_document_qa.py",
+    "returncode": 0,
+    "seconds": 0.3368
+  },
+  {
+    "suite": "test_portal.py",
+    "returncode": 0,
+    "seconds": 5.3182
+  },
+  {
+    "suite": "test_copy_last_answer.py",
+    "returncode": 1,
+    "seconds": 0.1637
+  },
+  {
+    "suite": "test_feature_adversarial.py",
+    "returncode": 0,
+    "seconds": 0.5107
+  }
+]
