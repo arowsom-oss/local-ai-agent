@@ -59,4 +59,12 @@ document.getElementById('share').addEventListener('click',async()=>{
   }catch(error){tell(String(error.message));secret='';base='';}
 });
 document.getElementById('stop').addEventListener('click',disconnect);
+async function closeConnector(){
+  const close=document.getElementById('close');close.disabled=true;close.textContent='Closing...';
+  // Revoke immediately; a dead relay cannot keep this window open for seconds.
+  await Promise.race([disconnect(),new Promise(resolve=>setTimeout(resolve,500))]);
+  window.close();
+}
+document.getElementById('close').addEventListener('click',closeConnector);
+window.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();closeConnector();}});
 window.addEventListener('pagehide',()=>{shared=false;generation++;});
