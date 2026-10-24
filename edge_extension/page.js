@@ -1,5 +1,5 @@
 // Serialized by chrome.scripting; do not close over any module/global page code.
-export async function edgeDOM(command) {
+export function edgeDOM(command) {
   try {
     const validURL=value=>{
       const u=new URL(value);
@@ -44,7 +44,7 @@ export async function edgeDOM(command) {
         return {kind:'button',label:label(el),type:el.type||'',formMethod:el.form?.method||''};
       return null;
     }
-    const snapshot=async()=>{
+    const snapshot=()=>{
       const found=[];
       for(const el of [...document.querySelectorAll('a[href],button,input,textarea')].slice(0,500)) {
         if(!visible(el))continue;
@@ -53,8 +53,8 @@ export async function edgeDOM(command) {
       }
       const text=(document.body?.innerText||'').slice(0,20000);
       const value=JSON.stringify({url:location.href,title:document.title,text,elements:found.map(x=>x.info)});
-      const digest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)))].map(v=>v.toString(16).padStart(2,'0')).join('');
-      return {found,text,digest,url:location.href};
+      // Exact bounded snapshot equality needs no asynchronous crypto promise.
+      return {found,text,digest:value,url:location.href};
     };
     const state=globalThis.__localStudioEdge || (globalThis.__localStudioEdge={counter:0,observed:null,pending:null});
     const args=command.args;
@@ -62,7 +62,7 @@ export async function edgeDOM(command) {
     if(command.op==='prepare') {
       if(!args || !['read','copy','click','type','scroll'].includes(args.action))throw Error('unsupported action');
       if(args.action==='scroll' && !['up','down'].includes(args.text))throw Error('invalid direction');
-      const snap=await snapshot();let item=null;
+      const snap=snapshot();let item=null;
       if(args.action==='click'||args.action==='type') {
         const old=state.observed;
         if(!old || old.digest!==snap.digest)throw Error('read again');
@@ -86,7 +86,7 @@ export async function edgeDOM(command) {
     if(command.op!=='commit')throw Error('unsupported command');
     const pending=state.pending;state.pending=null; // one use, even on failure
     if(!pending || pending.ticket!==args.ticket || Date.now()>=pending.expires)throw Error('approval expired');
-    const snap=await snapshot();
+    const snap=snapshot();
     if(snap.digest!==pending.snap.digest)throw Error('page changed');
     const action=pending.args.action;
     if(action==='copy')return {url:location.href};
