@@ -8,8 +8,11 @@ from contextlib import contextmanager
 
 FAST_MODEL = "gemma4:e2b"
 REASONING_MODEL = "gemma4:12b"
+# Chosen by hand only. choose_model() below can return only the fast or reasoning model,
+# so Auto never loads this one. Tag unverified until pulled on the laptop.
+LARGE_MODEL = "gemma4:26b-a4b-it-qat"
 VISION_MODEL = FAST_MODEL
-ALLOWED_MODELS = (FAST_MODEL, REASONING_MODEL)
+ALLOWED_MODELS = (FAST_MODEL, REASONING_MODEL, LARGE_MODEL)
 MODEL_CHOICES = ("auto",) + ALLOWED_MODELS
 LOCAL_ENDPOINT = "http://127.0.0.1:11434"
 IDLE_KEEP_ALIVE = "60s"
