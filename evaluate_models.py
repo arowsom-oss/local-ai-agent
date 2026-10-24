@@ -2,7 +2,7 @@
 from pathlib import Path
 import json
 import time
-from model_router import chat, release_models, ALLOWED_MODELS, _get_client
+from model_router import chat, release_models, FAST_MODEL, REASONING_MODEL, _get_client
 
 TASKS = (
     ("addition", "Reply with only the number: 17 + 25.", "42"),
@@ -15,7 +15,7 @@ TASKS = (
 def evaluate(stop_event=None):
     results = []
     try:
-        for model in ALLOWED_MODELS:
+        for model in (FAST_MODEL, REASONING_MODEL):  # The hand-chosen large model is never benchmarked unasked.
             for ident, prompt, expected in TASKS:
                 if stop_event is not None and stop_event.is_set():
                     return "Model check stopped; the current server request may finish separately."
