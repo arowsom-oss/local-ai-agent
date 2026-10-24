@@ -16,6 +16,12 @@ passed on 2026-10-19; `run_live_tests.bat` style runs are recorded in VALIDATION
 
 ## Current UI behavior
 
+**More > Local website** starts a laptop-only chat/Artifact website preview.
+It saves separate web conversations, uses bounded idempotent jobs and shares
+the desktop model lock. Temporary local access keys are not production login.
+It is not deployed or reachable from school. See LOCAL_WEB_PORTAL.md for use,
+privacy, test evidence and the required authentication/HTTPS next stage.
+
 **Sources Q&A** answers questions about explicitly selected PDF/UTF-8 notes with
 inspectable excerpts, checked quote/ID references and physical PDF page numbers.
 It uses installed local models with no action tools, OCR or embedding download.

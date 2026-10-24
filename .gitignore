@@ -26,3 +26,4 @@ workflow_evaluation*.json
 .venv/
 edge_work_profile/
 chat_library/
+portal_data/
