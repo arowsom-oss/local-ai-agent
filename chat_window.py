@@ -1491,7 +1491,7 @@ def build_window():
     conversation_header=surface(conversation,"card")
     conversation_header.pack(fill="x",padx=20,pady=(16,5))
     label(conversation_header,"Conversation",12,"text","card",True).pack(side="left")
-    copy_button=make_button(conversation_header,"Copy last answer",lambda:copy_text(last_answer))
+    copy_button=make_button(conversation_header,"Copy last answer",lambda:copy_text(last_raw_answer))
     copy_button.pack(side="right")
     global progress_panel
     progress_panel=ProgressPanel(conversation,task_progress,resume_task)

@@ -1,3 +1,21 @@
+# Adversarial tests and unfixed Copy regression (October 23, 2026)
+
+Current result: 438 passing cases, one failing Copy last answer regression,
+26/27 offline suites pass. The socket-guarded runner exits nonzero. No application
+source was changed; the student owns this Copy fix and THREAT_MODEL.md.
+
+Sixteen new adversarial cases pass against Q&A injection/tool output and false
+quotes; saved chat traversal names/selectors, plain/ZIP reopen authority; ZIP
+container/expansion/read bounds; HTML reduction, browser policy and navigation.
+One real Chromium case passes using an owned loopback canary, with no Internet.
+Fifteen temporary in-memory gate removals are all detected by the unchanged
+attack assertions; these negative controls are not extra application passes.
+
+GATE_EVIDENCE.md maps 138 exact gate locations, scope and limitations. Retained
+evidence includes release logs and the two initial harness wiring failures;
+neither refusal assertion was weakened. Earlier all-green milestones below are
+historical. The new Copy regression remains failing and CI should report it.
+
 # Local website preview (October 23, 2026)
 
 422 cases/25 offline suites pass, including 18 portal tests for session/CSRF/owner

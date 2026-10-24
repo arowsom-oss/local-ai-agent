@@ -1,5 +1,10 @@
 # Local Studio: local AI, Artifacts and practice computer use
 
+**Test-only branch status:** one intentionally failing, student-owned Copy last
+answer regression. 438 cases pass; the byte-for-byte Copy case fails. No feature
+or application-source changes. [GATE_EVIDENCE.md](GATE_EVIDENCE.md) has the attack
+results, exact enforcing functions/lines and instructions. CI is expected to be red.
+
 Python 3.12 on Windows. Ollama runs locally; Python decides which tools can run.
 This is a working first version of the ten improvements in TOP10_STATUS.md.
 Desktop control is limited to an owned practice app and a separately approved,

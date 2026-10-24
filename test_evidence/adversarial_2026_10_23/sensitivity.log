@@ -1,0 +1,16 @@
+DETECTED Q&A tool-output refusal
+DETECTED Q&A quote membership
+DETECTED Saved transcript role/schema gate
+DETECTED Saved snapshot authority-field gate
+DETECTED Reopen permission revocation
+DETECTED ZIP input byte cap
+DETECTED HTML script reduction
+DETECTED HTML disabled JavaScript
+DETECTED HTML offline context
+DETECTED HTML CSP
+DETECTED HTML navigation postcondition
+DETECTED ZIP fixed member name
+DETECTED ZIP declared expansion cap
+DETECTED ZIP bounded inflate read
+DETECTED HTML abort unauthorized routes
+15/15 in-memory removed gates detected.

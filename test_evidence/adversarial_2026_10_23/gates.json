@@ -1,0 +1,988 @@
+{
+  "source_commit": "4a02efc61d6f89fdb78792a83b94a18a9ce3733c",
+  "rows": [
+    {
+      "limit": "Only absolute local PDF/TXT/MD selections; no UNC or alternate-data-stream names",
+      "file": "document_sources.py",
+      "function": "read_selected",
+      "line": 39,
+      "source_line": "if not path.is_absolute() or path.suffix.lower() not in {'.pdf','.txt','.md'} or ':' in path.name:"
+    },
+    {
+      "limit": "Refuse network drive types on Windows",
+      "file": "document_sources.py",
+      "function": "read_selected",
+      "line": 45,
+      "source_line": "if get_drive(path.anchor) not in (2,3,5,6):raise ValueError('Use a local drive, not a network location')"
+    },
+    {
+      "limit": "Refuse symlink/reparse paths, including ancestors",
+      "file": "document_sources.py",
+      "function": "read_selected",
+      "line": 48,
+      "source_line": "if stat.S_ISLNK(info.st_mode) or getattr(info,'st_file_attributes',0)&1024:"
+    },
+    {
+      "limit": "Regular file, 1\u20138,000,000 bytes",
+      "file": "document_sources.py",
+      "function": "read_selected",
+      "line": 51,
+      "source_line": "if not stat.S_ISREG(before.st_mode) or not 1<=before.st_size<=MAX_FILE:"
+    },
+    {
+      "limit": "Bounded read and before/open/after identity-size-time comparison",
+      "file": "document_sources.py",
+      "function": "read_selected",
+      "line": 56,
+      "source_line": "if len(data)>MAX_FILE or signature(before)!=signature(opened) or signature(opened)!=signature(after) or signature(after)!=signature(path.stat()):"
+    },
+    {
+      "limit": "PDF signature and strict parser",
+      "file": "document_sources.py",
+      "function": "parse_pdf",
+      "line": 66,
+      "source_line": "reader=reader_factory(BytesIO(data),strict=True)"
+    },
+    {
+      "limit": "Encrypted PDFs refuse",
+      "file": "document_sources.py",
+      "function": "parse_pdf",
+      "line": 67,
+      "source_line": "if reader.is_encrypted:raise ValueError('Encrypted PDFs are unsupported; choose a readable copy')"
+    },
+    {
+      "limit": "1\u2013100 physical PDF pages",
+      "file": "document_sources.py",
+      "function": "parse_pdf",
+      "line": 68,
+      "source_line": "if not 1<=len(reader.pages)<=MAX_PAGES:raise ValueError('PDF must have 1\u2013100 pages')"
+    },
+    {
+      "limit": "20,000 characters/page; 200,000 extracted total",
+      "file": "document_sources.py",
+      "function": "parse_pdf",
+      "line": 73,
+      "source_line": "if len(text)>MAX_PAGE or total>MAX_TEXT:raise ValueError('PDF exceeds extracted-text limits; select a smaller document')"
+    },
+    {
+      "limit": "No text / scanned-only PDF refuses",
+      "file": "document_sources.py",
+      "function": "parse_pdf",
+      "line": 75,
+      "source_line": "if not any(text.strip() for text in pages):"
+    },
+    {
+      "limit": "TXT/MD strict UTF-8; nonempty and at most 200,000 characters",
+      "file": "document_sources.py",
+      "function": "_parse",
+      "line": 86,
+      "source_line": "if not text.strip() or len(text)>MAX_TEXT:raise ValueError('Notes must contain 1\u2013200000 characters of UTF-8 text')"
+    },
+    {
+      "limit": "Parser worker 768 MiB committed-memory bound",
+      "file": "document_sources.py",
+      "function": "import_source",
+      "line": 98,
+      "source_line": "worker=Worker(_parse,filename,memory_mb=768)"
+    },
+    {
+      "limit": "Parser receive deadline 20 seconds and Stop",
+      "file": "document_sources.py",
+      "function": "import_source",
+      "line": 99,
+      "source_line": "result=worker.receive(20,stop_event)"
+    },
+    {
+      "limit": "Worker result exact schema, name \u2264120, digest/tuple/page and character validation",
+      "file": "document_sources.py",
+      "function": "import_source",
+      "line": 103,
+      "source_line": "if set(result)!={'name','kind','digest','pages'}:raise ValueError('Invalid parser result')"
+    },
+    {
+      "limit": "Recheck worker result content/type/digest/page totals before Source creation",
+      "file": "document_sources.py",
+      "function": "import_source",
+      "line": 111,
+      "source_line": "or sum(map(len,pages))>MAX_TEXT or not any(p.strip() for p in pages)):"
+    },
+    {
+      "limit": "Always stop parser worker",
+      "file": "document_sources.py",
+      "function": "import_source",
+      "line": 115,
+      "source_line": "if worker is not None:worker.stop()"
+    },
+    {
+      "limit": "Fresh monotonically numbered source, no duplicate snapshot digest",
+      "file": "document_qa.py",
+      "function": "Collection.add",
+      "line": 43,
+      "source_line": "if not isinstance(source,Source) or source.number!=self.next_number:raise ValueError('Stale source import')"
+    },
+    {
+      "limit": "At most five sources and 500,000 collection characters",
+      "file": "document_qa.py",
+      "function": "Collection.add",
+      "line": 45,
+      "source_line": "if len(self.sources)>=MAX_SOURCES or sum(len(p) for s in (*self.sources,source) for p in s.pages)>MAX_COLLECTION:"
+    },
+    {
+      "limit": "Question 1\u2013500 chars, \u22641000 UTF-8 bytes, supported controls",
+      "file": "document_qa.py",
+      "function": "question_text",
+      "line": 62,
+      "source_line": "or len(question.encode('utf-8'))>1000"
+    },
+    {
+      "limit": "Repeat collection/unique-number checks at retrieval",
+      "file": "document_qa.py",
+      "function": "retrieve",
+      "line": 72,
+      "source_line": "if (len({s.number for s in sources})!=len(sources) or sum(len(p) for s in sources for p in s.pages)>MAX_COLLECTION):"
+    },
+    {
+      "limit": "At most 6000 prompt bytes",
+      "file": "document_qa.py",
+      "function": "retrieve",
+      "line": 95,
+      "source_line": "if len(prompt(question,trial)[1]['content'].encode('utf-8'))+len(INSTRUCTION.encode('utf-8'))>CONTEXT_BYTES:"
+    },
+    {
+      "limit": "At most four excerpts",
+      "file": "document_qa.py",
+      "function": "retrieve",
+      "line": 98,
+      "source_line": "if len(passages)==4:break"
+    },
+    {
+      "limit": "Code-generated excerpt IDs/text in user data, no filename/path/metadata",
+      "file": "document_qa.py",
+      "function": "prompt",
+      "line": 105,
+      "source_line": "data={'question':question,'reference_excerpts':["
+    },
+    {
+      "limit": "Missing retrieval evidence returns fixed abstention without inference",
+      "file": "document_qa.py",
+      "function": "ask",
+      "line": 152,
+      "source_line": "if not passages:return Answer(MISSING,(),False)"
+    },
+    {
+      "limit": "Installed model allowlist only",
+      "file": "document_qa.py",
+      "function": "ask",
+      "line": 150,
+      "source_line": "if model not in models.ALLOWED_MODELS:raise ValueError('Choose an installed allowed local model')"
+    },
+    {
+      "limit": "No tools; no thinking; context 8192; output \u22641000 tokens requested",
+      "file": "document_qa.py",
+      "function": "ask",
+      "line": 153,
+      "source_line": "response=models.chat(model=model,tools=[],think=False,format=schema(passages),timing_log=log,stop_event=stop_event,"
+    },
+    {
+      "limit": "Reject model tool calls independently of supplied tool menu",
+      "file": "document_qa.py",
+      "function": "ask",
+      "line": 157,
+      "source_line": "if models._field(message,'tool_calls'):raise ValueError('Document Q&A refuses action/tool output')"
+    },
+    {
+      "limit": "Stop before request and discard late results",
+      "file": "document_qa.py",
+      "function": "ask",
+      "line": 155,
+      "source_line": "if stop_event.is_set():raise ValueError('Document Q&A cancelled; late answer discarded')"
+    },
+    {
+      "limit": "Response \u226412000 chars; parse JSON",
+      "file": "document_qa.py",
+      "function": "validate_answer",
+      "line": 121,
+      "source_line": "if not isinstance(content,str) or len(content)>12000:raise ValueError('Invalid cited-answer response')"
+    },
+    {
+      "limit": "Exact outer/claim schemas and boolean answerable",
+      "file": "document_qa.py",
+      "function": "validate_answer",
+      "line": 124,
+      "source_line": "if not isinstance(data,dict) or set(data)!={'answerable','claims'} or type(data['answerable']) is not bool or not isinstance(data['claims'],list):"
+    },
+    {
+      "limit": "1\u20135 supported claims, no claims for abstention",
+      "file": "document_qa.py",
+      "function": "validate_answer",
+      "line": 130,
+      "source_line": "if not 1<=len(claims)<=5:raise ValueError('Cited answer must contain 1\u20135 claims')"
+    },
+    {
+      "limit": "Claim \u2264600 chars, quote 12\u2013400, printable strings, real citation ID",
+      "file": "document_qa.py",
+      "function": "validate_answer",
+      "line": 137,
+      "source_line": "or not 12<=len(quote)<=400 or citation not in lookup):"
+    },
+    {
+      "limit": "Normalized quote must belong to THAT cited excerpt",
+      "file": "document_qa.py",
+      "function": "validate_answer",
+      "line": 140,
+      "source_line": "if len(normalized(quote))<12 or normalized(quote) not in passage.text:"
+    },
+    {
+      "limit": "Titles 1\u201380 printable chars; names stay metadata",
+      "file": "chat_library.py",
+      "function": "title_text",
+      "line": 27,
+      "source_line": "if not isinstance(text,str) or not 1<=len(text.strip())<=80 or not text.isprintable():"
+    },
+    {
+      "limit": "Positive int IDs, excluding bool/path strings",
+      "file": "chat_library.py",
+      "function": "identifier",
+      "line": 33,
+      "source_line": "if type(value) is not int or value<=0:"
+    },
+    {
+      "limit": "At most 400 explicit text messages",
+      "file": "chat_library.py",
+      "function": "transcript_text",
+      "line": 40,
+      "source_line": "if not isinstance(messages,list) or len(messages)>MAX_MESSAGES:"
+    },
+    {
+      "limit": "Exact role/content keys; only user/assistant, no system/tool/call state",
+      "file": "chat_library.py",
+      "function": "transcript_text",
+      "line": 45,
+      "source_line": "or message['role'] not in {'user','assistant'} or not isinstance(message['content'],str)):"
+    },
+    {
+      "limit": "Unsupported controls refuse; transcript \u22641,000,000 UTF-8 JSON bytes",
+      "file": "chat_library.py",
+      "function": "transcript_text",
+      "line": 52,
+      "source_line": "if len(encoded.encode('utf-8'))>MAX_TRANSCRIPT:"
+    },
+    {
+      "limit": "At most 20 Artifacts, 12 versions, exact kind/payload schemas",
+      "file": "chat_library.py",
+      "function": "decode_artifacts",
+      "line": 59,
+      "source_line": "if not isinstance(rows,list) or len(rows)>MAX_ARTIFACTS:"
+    },
+    {
+      "limit": "Saved text uses bounded Store; media single version, base64 \u226420 MB decoded",
+      "file": "chat_library.py",
+      "function": "decode_artifacts",
+      "line": 76,
+      "source_line": "if version['content']!='' or not isinstance(version['data'],str) or len(version['data'])>4*((MAX_MEDIA+2)//3):"
+    },
+    {
+      "limit": "Snapshot \u226496,000,000 UTF-8 bytes",
+      "file": "chat_library.py",
+      "function": "snapshot",
+      "line": 96,
+      "source_line": "if len(encoded.encode('utf-8'))>MAX_SNAPSHOT:"
+    },
+    {
+      "limit": "Reopen exact schema=1: no permission/plan/host fields",
+      "file": "chat_library.py",
+      "function": "decode_snapshot",
+      "line": 105,
+      "source_line": "if not isinstance(data,dict) or set(data)!={'schema','messages','artifacts'} or type(data['schema']) is not int or data['schema']!=1:"
+    },
+    {
+      "limit": "Project notes \u22642000 chars; restored model archive tail \u22644000 chars",
+      "file": "chat_library.py",
+      "function": "restored_context",
+      "line": 117,
+      "source_line": "tail=json.dumps(messages,ensure_ascii=False)[-4000:]"
+    },
+    {
+      "limit": "Restored history is one user reference entry, no executable tool/system protocol",
+      "file": "chat_library.py",
+      "function": "restored_context",
+      "line": 118,
+      "source_line": "return [{'role':'user','content':"
+    },
+    {
+      "limit": "Fixed library.sqlite3 path, not title-derived",
+      "file": "chat_library.py",
+      "function": "Library.connection",
+      "line": 134,
+      "source_line": "path=self.root/'library.sqlite3'"
+    },
+    {
+      "limit": "Library root/database/journal links/reparse paths refuse",
+      "file": "chat_library.py",
+      "function": "Library.connection",
+      "line": 138,
+      "source_line": "if candidate.is_symlink() or getattr(info,'st_file_attributes',0)&getattr(stat,'FILE_ATTRIBUTE_REPARSE_POINT',1024):"
+    },
+    {
+      "limit": "Database file \u2264280 MB; SQLite busy timeout 2 s; max 65536 pages",
+      "file": "chat_library.py",
+      "function": "Library.connection",
+      "line": 147,
+      "source_line": "db.execute('PRAGMA max_page_count=65536')"
+    },
+    {
+      "limit": "Project notes validation \u22642000 and printable/newline/tab",
+      "file": "chat_library.py",
+      "function": "Library.notes",
+      "line": 177,
+      "source_line": "if not isinstance(text,str) or len(text)>2000 or any(not c.isprintable() and c not in '\\n\\r\\t' for c in text):"
+    },
+    {
+      "limit": "At most 20 Projects",
+      "file": "chat_library.py",
+      "function": "Library.save_project",
+      "line": 186,
+      "source_line": "if db.execute('SELECT count(*) FROM projects').fetchone()[0]>=MAX_PROJECTS:"
+    },
+    {
+      "limit": "Title query \u2264100 chars; parameterized literal search, limit 100 rows",
+      "file": "chat_library.py",
+      "function": "Library.list_chats",
+      "line": 204,
+      "source_line": "'WHERE instr(lower(title),lower(?))>0 AND (? IS NULL OR project=?) ORDER BY updated DESC LIMIT 100',"
+    },
+    {
+      "limit": "At most 100 saved chats",
+      "file": "chat_library.py",
+      "function": "Library.save",
+      "line": 219,
+      "source_line": "if db.execute('SELECT count(*) FROM chats').fetchone()[0]>=MAX_CHATS:raise ValueError('At most 100 chats may be saved')"
+    },
+    {
+      "limit": "Update requires matching saved version",
+      "file": "chat_library.py",
+      "function": "Library.save",
+      "line": 223,
+      "source_line": "if not old or old[0]!=expected_version:raise ValueError('Saved chat changed; reopen it or save a new copy')"
+    },
+    {
+      "limit": "Library retained payload \u2264256,000,000 bytes",
+      "file": "chat_library.py",
+      "function": "Library.save",
+      "line": 225,
+      "source_line": "if used+len(payload.encode('utf-8'))>MAX_LIBRARY:raise ValueError('Library exceeds 256 MB; delete a saved chat before saving more')"
+    },
+    {
+      "limit": "ZIP decode AND snapshot validation before exposing a loaded chat",
+      "file": "chat_library.py",
+      "function": "Library.load",
+      "line": 242,
+      "source_line": "messages,items=decode_snapshot(unzip_payload(payload))"
+    },
+    {
+      "limit": "Delete requires matching numeric ID/version",
+      "file": "chat_library.py",
+      "function": "Library.delete_chat",
+      "line": 249,
+      "source_line": "if db.execute('DELETE FROM chats WHERE id=? AND version=?',(identifier(chat),identifier(version))).rowcount!=1:"
+    },
+    {
+      "limit": "Reopen validates before reset, then clears previous session",
+      "file": "chat_window.py",
+      "function": "open_saved_chat",
+      "line": 953,
+      "source_line": "if not clear_chat_state():return False"
+    },
+    {
+      "limit": "Close Edge/browser/desktop/notepad/workers before new context",
+      "file": "chat_window.py",
+      "function": "clear_chat_state",
+      "line": 908,
+      "source_line": "close_edge()"
+    },
+    {
+      "limit": "Clear old messages and Artifacts; revoke old site/workspace approvals",
+      "file": "chat_window.py",
+      "function": "clear_chat_state",
+      "line": 927,
+      "source_line": "forget_sites()              # websites allowed in the old chat are forgotten too"
+    },
+    {
+      "limit": "Actual host approval reset",
+      "file": "agent_core.py",
+      "function": "forget_sites",
+      "line": 393,
+      "source_line": "fetch.session_hosts.clear()"
+    },
+    {
+      "limit": "Workspace revoke invalidates pending tickets and observations",
+      "file": "workspace_documents.py",
+      "function": "Workspace.revoke",
+      "line": 78,
+      "source_line": "self.cancel()"
+    },
+    {
+      "limit": "Restored Artifacts get fresh IDs",
+      "file": "artifacts.py",
+      "function": "Store.replace_saved",
+      "line": 73,
+      "source_line": "number=self._next+len(fresh)"
+    },
+    {
+      "limit": "Fresh new-site popup still required after reopen",
+      "file": "agent_core.py",
+      "function": "_run_turn_impl",
+      "line": 883,
+      "source_line": "if not approved(ask_approval, \"new_site\", {\"host\": host, \"url\": url}):"
+    },
+    {
+      "limit": "Approved plan is a local new-turn variable, not deserialized history",
+      "file": "agent_core.py",
+      "function": "_run_turn_impl",
+      "line": 548,
+      "source_line": "plan = None        # an approved plan lasts for this one message only"
+    },
+    {
+      "limit": "Plain payload / ZIP input \u226496,000,000 bytes",
+      "file": "chat_archives.py",
+      "function": "unpack",
+      "line": 15,
+      "source_line": "if not isinstance(payload,bytes) or not 1<=len(payload)<=MAX_BYTES:"
+    },
+    {
+      "limit": "Exactly one member",
+      "file": "chat_archives.py",
+      "function": "unpack",
+      "line": 20,
+      "source_line": "if len(members)!=1:raise ValueError('ZIP chat must have one member')"
+    },
+    {
+      "limit": "Only exact chat.json; no paths, directories, encryption; DEFLATE only; declared size 1\u201396 MB",
+      "file": "chat_archives.py",
+      "function": "unpack",
+      "line": 22,
+      "source_line": "if (info.filename!=MEMBER or info.is_dir() or info.flag_bits&1"
+    },
+    {
+      "limit": "Bounded inflate reads only MAX_BYTES+1",
+      "file": "chat_archives.py",
+      "function": "unpack",
+      "line": 26,
+      "source_line": "data=file.read(MAX_BYTES+1)"
+    },
+    {
+      "limit": "Actual length must match metadata and remain \u226496 MB",
+      "file": "chat_archives.py",
+      "function": "unpack",
+      "line": 27,
+      "source_line": "if len(data)!=info.file_size or len(data)>MAX_BYTES:"
+    },
+    {
+      "limit": "CRC/decompression/UTF-8 failures refuse",
+      "file": "chat_archives.py",
+      "function": "unpack",
+      "line": 30,
+      "source_line": "except (OSError,RuntimeError,zipfile.BadZipFile,UnicodeError,zlib.error) as exc:"
+    },
+    {
+      "limit": "Packing checks Stop/deadline every 262144-byte chunk; deadline 20 s",
+      "file": "chat_archives.py",
+      "function": "pack",
+      "line": 42,
+      "source_line": "if cancelled() or time.monotonic()>deadline:raise ValueError('ZIP cancelled or timed out')"
+    },
+    {
+      "limit": "Byte-for-byte verification before replacement",
+      "file": "chat_archives.py",
+      "function": "pack",
+      "line": 46,
+      "source_line": "if unpack(result).encode('utf-8')!=raw:raise ValueError('ZIP verification failed')"
+    },
+    {
+      "limit": "Only bool archive setting accepted; disabled means no archive work",
+      "file": "chat_library.py",
+      "function": "Library.set_archive_enabled",
+      "line": 259,
+      "source_line": "if type(enabled) is not bool:raise ValueError('Invalid archive setting')"
+    },
+    {
+      "limit": "Validate exclusion IDs and finite positive clock",
+      "file": "chat_library.py",
+      "function": "Library.archive_unused",
+      "line": 269,
+      "source_line": "if type(now) not in (float,int) or not 0<now<float('inf'):raise ValueError('Invalid archive clock')"
+    },
+    {
+      "limit": "Seven-day updated/last-use threshold; one-day retry backoff; query \u22648",
+      "file": "chat_library.py",
+      "function": "Library.archive_unused",
+      "line": 279,
+      "source_line": "'AND updated<=? AND last_archive_attempt<=? ORDER BY last_archive_attempt,last_used,id LIMIT 8',"
+    },
+    {
+      "limit": "Never archive current/excluded chat; \u22643 processed per pass",
+      "file": "chat_library.py",
+      "function": "Library.archive_unused",
+      "line": 286,
+      "source_line": "if processed>=3:break"
+    },
+    {
+      "limit": "Validate full snapshot before packing",
+      "file": "chat_library.py",
+      "function": "Library.archive_unused",
+      "line": 290,
+      "source_line": "decode_snapshot(payload)"
+    },
+    {
+      "limit": "Require \u22654096 bytes AND \u22655 percent payload saving",
+      "file": "chat_library.py",
+      "function": "Library.archive_unused",
+      "line": 294,
+      "source_line": "if saving<4096 or len(compressed)>size*.95:"
+    },
+    {
+      "limit": "Rollback whole uncommitted archive batch on Stop/error",
+      "file": "chat_library.py",
+      "function": "Library.archive_unused",
+      "line": 303,
+      "source_line": "db.rollback()"
+    },
+    {
+      "limit": "VACUUM only after commit and enough temporary free disk",
+      "file": "chat_library.py",
+      "function": "Library.archive_unused",
+      "line": 312,
+      "source_line": "if shutil.disk_usage(self.root).free < before*2+8_000_000:"
+    },
+    {
+      "limit": "VACUUM progress cancellation/deadline 10 s",
+      "file": "chat_library.py",
+      "function": "Library.archive_unused",
+      "line": 316,
+      "source_line": "db.set_progress_handler(lambda:int(cancelled() or time.monotonic()>deadline),1000)"
+    },
+    {
+      "limit": "Maintenance skips busy/stopped/active/absent-library, checks hourly after 5 s startup",
+      "file": "chat_archive_service.py",
+      "function": "start_maintenance.tick",
+      "line": 28,
+      "source_line": "if (not ui.busy and not ui.stop_event.is_set() and not active.is_set()"
+    },
+    {
+      "limit": "Only recognized HTML/CSS, source 1\u201332000 chars",
+      "file": "artifact_web_preview.py",
+      "function": "html_source",
+      "line": 28,
+      "source_line": "if not isinstance(content, str) or not 1 <= len(content) <= MAX_TEXT:"
+    },
+    {
+      "limit": "At most 2500 start elements",
+      "file": "artifact_web_preview.py",
+      "function": "_StaticHTML.handle_starttag",
+      "line": 48,
+      "source_line": "if self.nodes > 2500:"
+    },
+    {
+      "limit": "Drop script/frame/active subtrees",
+      "file": "artifact_web_preview.py",
+      "function": "_StaticHTML.handle_starttag",
+      "line": 52,
+      "source_line": "if tag in _DROP:"
+    },
+    {
+      "limit": "Tag and attribute allowlists; no href/src/action/on* targets",
+      "file": "artifact_web_preview.py",
+      "function": "_StaticHTML.handle_starttag",
+      "line": 59,
+      "source_line": "if name in _ATTRS and value is not None:"
+    },
+    {
+      "limit": "Attribute quote escaping and restricted input/button types",
+      "file": "artifact_web_preview.py",
+      "function": "_StaticHTML.handle_starttag",
+      "line": 60,
+      "source_line": "safe.append(' ' + name + '=\"' + escape(value, quote=True) + '\"')"
+    },
+    {
+      "limit": "Chromium sandbox plus dead local proxy/background flags",
+      "file": "artifact_web_preview.py",
+      "function": "render_document",
+      "line": 107,
+      "source_line": "browser = playwright.chromium.launch(headless=True, chromium_sandbox=True,"
+    },
+    {
+      "limit": "JavaScript OFF, offline, no downloads/permissions, service workers blocked, 800x1000 viewport",
+      "file": "artifact_web_preview.py",
+      "function": "render_document",
+      "line": 112,
+      "source_line": "context = browser.new_context(java_script_enabled=False, accept_downloads=False,"
+    },
+    {
+      "limit": "Only first synthetic GET main-frame navigation may be fulfilled; every other route aborts",
+      "file": "artifact_web_preview.py",
+      "function": "render_document.intercept",
+      "line": 118,
+      "source_line": "if (not served[0] and request.url == PREVIEW_URL and request.method == 'GET'"
+    },
+    {
+      "limit": "Deny script/connect/frame/image/media/base/form via sandbox CSP",
+      "file": "artifact_web_preview.py",
+      "function": "render_document.intercept",
+      "line": 122,
+      "source_line": "'Content-Security-Policy': CSP, 'Cache-Control': 'no-store',"
+    },
+    {
+      "limit": "Close WebSockets, dialogs, downloads, file chooser and extra pages",
+      "file": "artifact_web_preview.py",
+      "function": "render_document",
+      "line": 128,
+      "source_line": "context.route_web_socket('**/*', lambda socket: socket.close())"
+    },
+    {
+      "limit": "5 s navigation; URL and single-page postcondition",
+      "file": "artifact_web_preview.py",
+      "function": "render_document",
+      "line": 134,
+      "source_line": "if not served[0] or page.url != PREVIEW_URL or len(context.pages) != 1:"
+    },
+    {
+      "limit": "5 s screenshot; PNG 1\u20138 MB; fixed viewport, no full-page expansion",
+      "file": "artifact_web_preview.py",
+      "function": "render_document",
+      "line": 138,
+      "source_line": "if not isinstance(png, bytes) or not 1 <= len(png) <= 8_000_000:"
+    },
+    {
+      "limit": "Always close browser",
+      "file": "artifact_web_preview.py",
+      "function": "render_document",
+      "line": 142,
+      "source_line": "browser.close()"
+    },
+    {
+      "limit": "Serialize previews, acquire deadline 5 s, Stop checked",
+      "file": "artifact_web_preview.py",
+      "function": "prepare_web_preview",
+      "line": 158,
+      "source_line": "while not _render_lock.acquire(timeout=.05):"
+    },
+    {
+      "limit": "Renderer process tree 1536 MiB, receive deadline 20 s",
+      "file": "artifact_web_preview.py",
+      "function": "prepare_web_preview",
+      "line": 165,
+      "source_line": "worker = Worker(_render, {'content': content}, memory_mb=1536)"
+    },
+    {
+      "limit": "Require exact preview dimensions and stop worker/release lock",
+      "file": "artifact_web_preview.py",
+      "function": "prepare_web_preview",
+      "line": 171,
+      "source_line": "if (image.width, image.height) != (VIEWPORT['width'], VIEWPORT['height']):"
+    },
+    {
+      "limit": "Worker cannot start target before Windows Job assignment",
+      "file": "process_guard.py",
+      "function": "Worker.__init__",
+      "line": 94,
+      "source_line": "self.job = Job(self.process.pid, memory_mb)"
+    },
+    {
+      "limit": "Windows Job committed process/job memory limits; kill descendants on close",
+      "file": "process_guard.py",
+      "function": "Job.__init__",
+      "line": 44,
+      "source_line": "limits.basic.flags = 0x2000 | 0x100 | 0x200  # kill on close, process/job commit bounds"
+    },
+    {
+      "limit": "Worker receive enforces monotonic deadline and Stop",
+      "file": "process_guard.py",
+      "function": "Worker.receive",
+      "line": 104,
+      "source_line": "while not self.dead.is_set() and time.monotonic() < deadline:"
+    },
+    {
+      "limit": "Literal loopback bind 127.0.0.1, default port 8765",
+      "file": "portal_server.py",
+      "function": "Portal.__init__",
+      "line": 224,
+      "source_line": "self.controller=None;self.http=LocalServer(('127.0.0.1',port),Handler)"
+    },
+    {
+      "limit": "Fixed opaque 32-hex IDs; no caller-supplied paths",
+      "file": "portal_store.py",
+      "function": "identifier",
+      "line": 17,
+      "source_line": "if not isinstance(value,str) or re.fullmatch('[0-9a-f]{32}',value) is None:raise ValueError('Invalid record ID')"
+    },
+    {
+      "limit": "Fixed store path, ancestor/link/reparse refusal, file \u22648 MB / SQLite \u22641950 pages",
+      "file": "portal_store.py",
+      "function": "Store.db",
+      "line": 50,
+      "source_line": "db.execute('PRAGMA max_page_count=1950');db.execute('BEGIN IMMEDIATE')"
+    },
+    {
+      "limit": "20 web chats; title \u226480 chars",
+      "file": "portal_store.py",
+      "function": "Store.new_chat",
+      "line": 63,
+      "source_line": "if db.execute('SELECT count(*) FROM chats WHERE owner=?',(self.owner,)).fetchone()[0]>=20:raise ValueError('At most 20 web chats in this preview')"
+    },
+    {
+      "limit": "96 requests; one pending per chat; message \u22644000 chars / 5000 UTF-8 bytes",
+      "file": "portal_store.py",
+      "function": "Store.submit",
+      "line": 72,
+      "source_line": "if len(message.encode('utf-8'))>5000:raise ValueError('Message exceeds 5000 UTF-8 bytes')"
+    },
+    {
+      "limit": "Retry same request ID must match full payload digest",
+      "file": "portal_store.py",
+      "function": "Store.submit",
+      "line": 78,
+      "source_line": "if old[1]!=digest:raise ValueError('Request ID was already used for different content')"
+    },
+    {
+      "limit": "Owner checked for chat access",
+      "file": "portal_store.py",
+      "function": "Store.require_chat",
+      "line": 68,
+      "source_line": "if not db.execute('SELECT 1 FROM chats WHERE id=? AND owner=?',(identifier(chat),self.owner)).fetchone():raise ValueError('Record unavailable')"
+    },
+    {
+      "limit": "Owner checked for job access",
+      "file": "portal_store.py",
+      "function": "Store.job",
+      "line": 89,
+      "source_line": "row=db.execute('SELECT chat,model,message,status,answer FROM jobs WHERE id=? AND owner=?',(identifier(key),self.owner)).fetchone()"
+    },
+    {
+      "limit": "Owner checked for Artifact access",
+      "file": "portal_store.py",
+      "function": "Store.artifact",
+      "line": 133,
+      "source_line": "row=db.execute('SELECT kind,body FROM artifacts WHERE id=? AND owner=?',(identifier(key),self.owner)).fetchone()"
+    },
+    {
+      "limit": "Retained payload \u22644,000,000 bytes; transaction rollback on excess",
+      "file": "portal_store.py",
+      "function": "Store.quota",
+      "line": 58,
+      "source_line": "if used>4_000_000:raise ValueError('Portal storage quota reached')"
+    },
+    {
+      "limit": "Reply \u226432000 chars; errors \u2264200; completed states immutable",
+      "file": "portal_store.py",
+      "function": "Store.update",
+      "line": 100,
+      "source_line": "if row[0] in ('completed','failed','cancelled','interrupted'):return False"
+    },
+    {
+      "limit": "At most 30 web Artifacts; completed document/code only",
+      "file": "portal_store.py",
+      "function": "Store.keep",
+      "line": 127,
+      "source_line": "if db.execute('SELECT count(*) FROM artifacts WHERE owner=?',(self.owner,)).fetchone()[0]>=30:raise ValueError('At most 30 web Artifacts in this preview')"
+    },
+    {
+      "limit": "On startup unfinished owned jobs become interrupted, no replay",
+      "file": "portal_store.py",
+      "function": "Store.__init__",
+      "line": 35,
+      "source_line": "db.execute(\"UPDATE jobs SET status='interrupted',error='App restarted; no automatic retry' WHERE owner=? AND status IN ('queued','running')\",(owner,))"
+    },
+    {
+      "limit": "Only allowed model; three waiting queue slots",
+      "file": "portal_server.py",
+      "function": "Controller.submit",
+      "line": 44,
+      "source_line": "if self.queue.full() and not old:raise ValueError('Web queue is full; no request was submitted')"
+    },
+    {
+      "limit": "History \u226410 completed pairs and combined recent content \u22646000 bytes",
+      "file": "portal_server.py",
+      "function": "Controller.work",
+      "line": 81,
+      "source_line": "if size+extra>6000:break"
+    },
+    {
+      "limit": "No web tools/thinking; context 8192; output request 1024 tokens; Stop passed to shared slot",
+      "file": "portal_server.py",
+      "function": "Controller.work",
+      "line": 84,
+      "source_line": "tools=[],think=False,stop_event=event,options={'num_ctx':models.TEXT_CONTEXT,'num_predict':1024,'temperature':.4})"
+    },
+    {
+      "limit": "Reject tool calls/truncated/invalid text; no automatic retry",
+      "file": "portal_server.py",
+      "function": "Controller.work",
+      "line": 87,
+      "source_line": "if models._field(message,'tool_calls') or models._field(response,'done_reason')=='length':"
+    },
+    {
+      "limit": "Cancellation discards late model replies",
+      "file": "portal_server.py",
+      "function": "Controller.work",
+      "line": 85,
+      "source_line": "if event.is_set() or self.closed.is_set():continue"
+    },
+    {
+      "limit": "Expired/revoked sessions refuse",
+      "file": "portal_server.py",
+      "function": "API.session",
+      "line": 115,
+      "source_line": "if not found:raise ValueError('Sign in required')"
+    },
+    {
+      "limit": "Peer/Host/Origin/Fetch Metadata checks",
+      "file": "portal_server.py",
+      "function": "API.dispatch",
+      "line": 123,
+      "source_line": "if (peer!='127.0.0.1' or headers.get('host')!=urlsplit(self.origin).netloc"
+    },
+    {
+      "limit": "Only GET/POST; API body \u226416000 bytes",
+      "file": "portal_server.py",
+      "function": "API.dispatch",
+      "line": 128,
+      "source_line": "if len(body)>16000:return reply(413,{'error':'Request exceeds 16000 bytes'})"
+    },
+    {
+      "limit": "Only four fixed public assets; no static project/generated directory",
+      "file": "portal_server.py",
+      "function": "API.dispatch",
+      "line": 131,
+      "source_line": "static={'/':('index.html','text/html; charset=utf-8'),'/app.js':('app.js','text/javascript; charset=utf-8'),"
+    },
+    {
+      "limit": "Duplicate JSON keys refuse",
+      "file": "portal_server.py",
+      "function": "unique_object",
+      "line": 26,
+      "source_line": "if key in result:raise ValueError('Duplicate JSON field')"
+    },
+    {
+      "limit": "Every POST needs exact same-origin JSON",
+      "file": "portal_server.py",
+      "function": "API.dispatch",
+      "line": 138,
+      "source_line": "if headers.get('origin')!=self.origin or headers.get('content-type')!='application/json':return reply(403,{'error':'Same-origin JSON is required'})"
+    },
+    {
+      "limit": "Five failed sign-ins per 60 s; constant-time temporary-key comparison",
+      "file": "portal_server.py",
+      "function": "API.dispatch",
+      "line": 145,
+      "source_line": "if len(self.failures)>=5:return reply(429,{'error':'Sign-in temporarily limited'})"
+    },
+    {
+      "limit": "At most 8 sessions, absolute 30-minute expiry, HttpOnly/SameSite Strict cookie",
+      "file": "portal_server.py",
+      "function": "API.dispatch",
+      "line": 149,
+      "source_line": "if len(self.sessions)>=8:return reply(429,{'error':'Preview session limit reached'})"
+    },
+    {
+      "limit": "Authenticated mutations need CSRF token",
+      "file": "portal_server.py",
+      "function": "API.dispatch",
+      "line": 155,
+      "source_line": "if method=='POST' and not hmac.compare_digest(headers.get('x-csrf-token',''),csrf):return reply(403,{'error':'CSRF check failed'})"
+    },
+    {
+      "limit": "Exact endpoint schemas; no remote browser/shell/tool endpoint",
+      "file": "portal_server.py",
+      "function": "API.dispatch",
+      "line": 170,
+      "source_line": "if set(data)!=expected[path]:raise ValueError('Unknown or missing request fields')"
+    },
+    {
+      "limit": "Sign-out revokes server session",
+      "file": "portal_server.py",
+      "function": "API.dispatch",
+      "line": 176,
+      "source_line": "with self.lock:self.sessions.pop(key,None)"
+    },
+    {
+      "limit": "Eight HTTP slots/backlog and three-second connection timeout",
+      "file": "portal_server.py",
+      "function": "LocalServer.__init__",
+      "line": 189,
+      "source_line": "self.slots=threading.BoundedSemaphore(8);super().__init__(address,handler)"
+    },
+    {
+      "limit": "Reject duplicate critical headers/chunked transfer and oversized declared body",
+      "file": "portal_server.py",
+      "function": "Handler.handle_request",
+      "line": 207,
+      "source_line": "or self.headers.get('Transfer-Encoding')):"
+    },
+    {
+      "limit": "Rendered replies/Artifacts use inert textContent, no execution",
+      "file": "portal_web/app.js",
+      "function": "el",
+      "line": 24,
+      "source_line": "function el(tag, content, className) { const node = document.createElement(tag); node.textContent = content; if (className) node.className = className; return node; }"
+    },
+    {
+      "limit": "Async render response generation guards after logout; clears private DOM",
+      "file": "portal_web/app.js",
+      "function": "signedOut",
+      "line": 6,
+      "source_line": "function signedOut(message) {"
+    },
+    {
+      "limit": "Authorized Artifact refetch before inert .txt download",
+      "file": "portal_web/app.js",
+      "function": "download handler",
+      "line": 77,
+      "source_line": "const result=await api(\"/api/artifacts/\"+selectedArtifact.id); if(epoch!==generation) return;"
+    },
+    {
+      "limit": "Shared process model slot checks Stop while queued",
+      "file": "model_router.py",
+      "function": "inference_slot",
+      "line": 72,
+      "source_line": "if stop_event is not None and stop_event.is_set():raise ValueError('Model request cancelled while queued')"
+    },
+    {
+      "limit": "Raw reply is stored, but displayed/copied last_answer is cleaned (known failing path)",
+      "file": "chat_window.py",
+      "function": "poll",
+      "line": 1221,
+      "source_line": "last_answer = clean(item[1])"
+    },
+    {
+      "limit": "clean removes backticks and bold markers (student-owned fix)",
+      "file": "chat_window.py",
+      "function": "clean",
+      "line": 346,
+      "source_line": "return re.sub(r\"\\*\\*(.+?)\\*\\*\", r\"\\1\", str(text or \"\")).replace(\"`\", \"\")"
+    },
+    {
+      "limit": "Copy button uses altered last_answer (unchanged)",
+      "file": "chat_window.py",
+      "function": "build_window",
+      "line": 1494,
+      "source_line": "copy_button=make_button(conversation_header,\"Copy last answer\",lambda:copy_text(last_answer))"
+    }
+  ],
+  "source_sha256": {
+    "agent_core.py": "af67259990f2e2530a4c52922fe1085a94ec5ab913be8389569ce3b67be95314",
+    "artifact_web_preview.py": "043052a66839207802a9bc7fc82cb3a497ca24831fa60041e4061ff3cf7df6dd",
+    "artifacts.py": "946de51bf4c8a136daaf8fcfb988c614f190d31df961adeb2251b6308c85e61e",
+    "chat_archive_service.py": "da3675fdcbe8613102b90c2ada7493f40a6d8be4b0de306438964cb3637fd97b",
+    "chat_archives.py": "6dc46cc131424f85370dc3902f3ff61d49ec736ba365ed31d78872a3aac69129",
+    "chat_library.py": "c4c24509fc535091007f61cb4227f7d338c150be77c74a6dbecd56bb07069f45",
+    "chat_window.py": "2d07e2c9c376fe2204dfef5cbdbd611ec6731b6329c50253ee5c3c9b978eeabd",
+    "document_qa.py": "fdf38c7d81991e2c291a7a37e2432804a1a877359ff4753980bad60605dcd299",
+    "document_sources.py": "ecd0a2bf845a784535b43504257330025d6767328725b50bd24ad9dfd6ca6493",
+    "model_router.py": "255c6f6f109e3fc27de00d6abd0f8a111353b1dce0b64000a6662d9e15c3c08c",
+    "portal_server.py": "102de315496b243b8f496c9da7a2cc5ac7b26d0d530a035c9765c39fea052b50",
+    "portal_store.py": "e2f5860673455fa6305963d990eeaa22af0c9351ec9ea75a81202cb77ee16ccd",
+    "portal_web/app.js": "4898000391652350dabda290b5c0549458ca312c219713aab4da2b0d8544b96a",
+    "process_guard.py": "05766a023368cecb9a5262633cb47eecab374f2a2b17e448aac02aae3d499f3e",
+    "workspace_documents.py": "a2209045a0673e555a7cc867090d9bf737367c836902187ce3b9520903c50e28"
+  }
+}
