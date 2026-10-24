@@ -27,7 +27,9 @@ filesystem browsing or access to the existing desktop tool dispatcher.
   at school or on his own phone. No special client should be required for the
   browser-only option. School/device policy can still prevent access; this plan
   does not bypass it. Desktop and web should refer to one owner's saved jobs and
-  chats once that shared storage exists; the current RAM-only chat is not synced.
+  chats once owner-bound remote storage exists. The local saved-chat library now
+  persists explicit snapshots, but web sync and account authorization are not
+  implemented. A local library ID is not an authenticated remote owner.
 - Restrict access to one provisioned owner, with no public signup. Use a maintained
   login system or identity provider, password/passkey support and MFA. An emailed
   one-time code alone is not automatically two-factor authentication. A shared

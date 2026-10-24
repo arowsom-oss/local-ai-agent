@@ -68,7 +68,7 @@ def test_all_custom_popup_constructors_have_close_handling():
     expected={'chat_window.py':{'high_risk_confirm','preview_image','share_personal_edge_tab',
               'connect_edge_tab','choose_edge_work_tab','show_log'},
               'progress_panel.py':{'details'},'workspace_panel.py':{'show_documents'},
-              'popup_windows.py':{'askyesno'}}
+              'popup_windows.py':{'askyesno'},'chat_library_panel.py':{'__init__','project_editor'}}
     for name,functions in expected.items():
         tree=ast.parse(Path(__file__).with_name(name).read_text(encoding='utf-8'))
         found=set()
@@ -82,7 +82,7 @@ def test_all_custom_popup_constructors_have_close_handling():
 
 
 def test_native_dialogs_have_explicit_parent_and_default_no():
-    for name in ('chat_window.py','artifact_panel.py'):
+    for name in ('chat_window.py','artifact_panel.py','chat_library_panel.py'):
         tree=ast.parse(Path(__file__).with_name(name).read_text(encoding='utf-8'))
         for call in ast.walk(tree):
             if not isinstance(call,ast.Call) or not isinstance(call.func,ast.Attribute):continue

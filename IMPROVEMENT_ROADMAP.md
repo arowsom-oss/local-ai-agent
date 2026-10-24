@@ -105,3 +105,13 @@ study tools and inspectable research. It lists exact small embedding, Qwen3.5
 and optional OCR model candidates, with current download sizes distinguished
 from unmeasured RAM/VRAM usage. No model is downloaded or integrated. Current
 Gemma defaults, capability gates and the deferred scorecard stay unchanged.
+
+## Saved chats and Projects v1 delivered (October 22)
+
+The first product-plan stage is implemented: explicit local chat/Artifact saves,
+title search, reopen with fresh permissions and IDs, transcript export, deletion
+and Project notes/grouping. No autosave, secret vault, remote sync or model tool
+was added. SAVED_CHATS.md has the limits and 378-offline/10-native evidence,
+retained failures and one synthetic real-model recall. Selected-document Q&A,
+context/cancellation work and model comparisons remain next stages. The human
+main scorecard is still deferred and no proposed model has been downloaded.

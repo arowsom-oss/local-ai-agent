@@ -4,7 +4,7 @@ A safe local AI assistant for Alexander's Windows laptop
 
 Running record updated October 22, 2026. Earlier measurements remain labeled by milestone; later chapters record subsequent changes and failures.
 
-Current handoff: the latest chapters expand the private school-access portal plan and propose assistant features and small open-weight model trials. These are not deployed or downloaded. The preceding chapter records implemented static HTML/CSS Preview / Code. PRODUCT_FEATURE_PLAN.md and REMOTE_ACCESS_PLAN.md provide Claude with the proposed next steps. Earlier measurements stay historical; the human main scorecard remains deferred.
+Current handoff: the latest chapters deliver explicit local saved chats and Projects, with safe fresh-session reopening and retained Artifact versions/media. SAVED_CHATS.md explains use, bounds, privacy and tests for Claude. The private portal, document Q&A and model candidates remain plans; no new model was downloaded. Earlier measurements stay historical and the human main scorecard remains deferred.
 
 ## Purpose and current position
 
@@ -975,3 +975,37 @@ Primary Ollama pages list qwen3-embedding:0.6b at 639 MB, qwen3.5:9b-q4_K_M at 6
 For the 12 GB VRAM/32 GB RAM laptop, test one heavy GPU job at a time with the existing 8192-token context. Runtime workspace, context cache, image tokens and Windows use require additional headroom beyond weight size. Installation alone does not consume all models' VRAM at once. No new candidate has been downloaded, integrated, benchmarked or proven better than the current Gemma models. No new memory or latency figure is claimed.
 
 Keep Gemma as the default while comparing fixed synthetic task success, tool/schema refusals, cold/warm timing, sampled memory and model/media handoff. Verify installed Ollama/backend/client compatibility and exact tags/digests. Embedding/OCR work must join the same lifecycle policy rather than bypass it. Source links and rollout gates are in PRODUCT_FEATURE_PLAN.md. This is research and documentation only; no runtime file, model allowlist, scorecard result, permission or student-owned fix changed.
+
+<!-- PAGE -->
+# Saved chats and Projects: first delivered stage
+
+## Behavior - October 22, 2026
+
+Alexander agreed to start the assistant feature plan. The first milestone adds Chats & Projects to the sidebar. A person can explicitly save a new copy, update the opened saved chat, search titles, reopen, export a transcript and delete a saved copy. Projects group chats and hold bounded reference notes. New chat in Project starts with those notes. There is no automatic conversation saving on every turn or exit.
+
+The saved snapshot contains raw visible user/assistant text and every retained Artifact version, including immutable images/videos. Tool-call objects, tool results, hidden reasoning, system messages, approval decisions and browser sessions are not saved. An unsaved Artifact editor buffer must first use Save edit; chat saving refuses rather than silently dropping it. Updating checks the saved version and commits transactionally. List selection affects Open/Export/Delete; it does not retarget the independently opened conversation's Update button.
+
+## Local persistence and controls
+
+The fixed SQLite database is chat_library/library.sqlite3 beside the app, excluded from git. It is unencrypted local data under ordinary Windows file permissions, not an authenticated or encrypted vault. A title never becomes a file path. Stored input is schema-validated and SQL uses parameters. Chats are limited to 400 messages/1 MB transcript, 100 stored conversations, 20 Projects, 2000-character notes and the existing Artifact budgets. Encoded snapshots are limited to 96 MB and total retained payload to 256 MB, with an additional database page limit. Temporary journals and process memory are separate.
+
+New chat clears RAM but keeps saved copies. Delete saved has a No-default prompt and removes only the selected stored version; open drafts and generated/exported originals remain. Removing a Project moves its chats to Unfiled. Deletion is not secure erasure and SQLite/backups may retain bytes. Export transcript uses a person-selected new .txt path and refuses overwrite; Artifacts retain their own export controls.
+
+Database jobs run off Tk. Main chat actions wait while one is active. Close/Escape/X and a fixed footer/status remain accessible, with scrollable content for short windows. A late Open result cannot replace a chat after the library closes or Stop intervenes. An already committed Save/Delete/Export is not rolled back by Close or Stop. No model can invoke library operations, and no cloud service, model download or remote listener is added. SAVED_CHATS.md documents the limits and retry behavior.
+
+<!-- PAGE -->
+# Safe reopening and saved-chat evidence
+
+## Fresh session, historical data
+
+Snapshot validation completes before the active conversation is cleared. Reopening revokes/closes existing automation sessions, clears website/workspace permission, voice/media attachments, pending plans and task checkpoints, and assigns fresh Artifact IDs. If the browser cannot close, the old chat stays in place. Full saved text is displayed, but only a marked untrusted tail of at most 4000 serialized characters plus up to 2000 characters of Project notes is supplied as model context. Older details may be omitted. This is not unlimited memory, PDF retrieval or an executable replay of old roles/tools.
+
+The person must send a new request. Restored and Project sessions use the existing core fresh-read gate before target-dependent changes. No model inference, tool action or spoken reply starts just because a saved conversation opens. Old numbers and claimed permissions in archived text remain stale. Project notes are reference data, not authorization.
+
+## Tests, failures and limits
+
+All 378 cases in 22 offline suites pass. Nine library cases cover a real fresh Python process reading stored text/history, immutable media, malformed/extra schemas, budgets, literal title search, stale updates/deletion, concurrent Library instances and corrupt/linked paths. Both new popup constructors and No-default prompts join the inventory. Ten affected native suites pass, including actual Tk library workflows, existing Artifact media/static previews, efficiency, popups, speech, vision, progress and both Documents suites. The library fixture also passes in the full app runtime. A synthetic library screenshot was visually inspected and short-window access checked.
+
+Initial offline harness mistakes used a stat fake missing st_mode and the wrong core menu attribute; their logs remain. Native tests found two actual defects: reopening incorrectly requested a paused-task progress checkpoint, and Project removal left the list filtered by the deleted Project. Repairs separate core fresh-read enforcement from UI checkpoint resume and resolve a removed filter to Unfiled/all. Visual QA also found white controls and clipped Save content; themed entries/lists, a scrollable body and fixed status/footer were rechecked. These are retained failures, not erased or counted as initial passes.
+
+One actual local gemma4:e2b smoke reopened a temporary synthetic saved conversation and correctly answered its stored fruit, with zero tool calls. It saved the continued four-message conversation as version 2 and took 12.47 seconds including cold model loading. This is not a broad memory/quality claim or a scorecard run. Main scoring remains deferred and Alexander still owns the threat model and small copy fix. Next work remains selected-document Q&A, context/cancellation improvements and measured model comparisons; the private portal is not deployed. Restart the Local Studio shortcut for this feature.
