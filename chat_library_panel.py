@@ -8,6 +8,7 @@ from tkinter import ttk,filedialog
 
 from popup_windows import dismissible,decisions,scrolling_frame
 import chat_library as saved
+from chat_archive_service import report_text
 
 
 class LibraryPanel:
@@ -36,8 +37,8 @@ class LibraryPanel:
                 ('Remove Project',self.delete_project),('New chat in Project',self.new_project_chat))):
             ttk.Button(projects,text=text,command=callback).grid(row=index//2,column=index%2,sticky='ew',padx=(0,6),pady=3)
         holder=ttk.Frame(frame);holder.pack(fill='both',expand=True)
-        self.tree=ttk.Treeview(holder,columns=('title','project','updated'),show='headings',selectmode='browse',height=5)
-        for name,width in (('title',300),('project',130),('updated',130)):
+        self.tree=ttk.Treeview(holder,columns=('title','project','updated','storage'),show='headings',selectmode='browse',height=5)
+        for name,width in (('title',240),('project',115),('updated',120),('storage',80)):
             self.tree.heading(name,text=name.title());self.tree.column(name,width=width,minwidth=80)
         self.tree.pack(side='left',fill='both',expand=True)
         scrollbar=ttk.Scrollbar(holder,command=self.tree.yview);scrollbar.pack(side='right',fill='y')
@@ -46,6 +47,11 @@ class LibraryPanel:
         actions=ttk.Frame(frame);actions.pack(fill='x',pady=10)
         for text,callback in (('Open selected',self.open_selected),('Export transcript',self.export_selected),('Delete saved',self.delete_selected)):
             ttk.Button(actions,text=text,command=callback).pack(side='left',padx=(0,6))
+        storage=ttk.Frame(frame);storage.pack(fill='x',pady=(0,8))
+        self.auto_zip=tk.BooleanVar(value=True);self.archive_setting=True
+        ttk.Checkbutton(storage,text='Auto ZIP saved chats unused for 7 days',variable=self.auto_zip,
+                        command=self.toggle_archive,style='Archive.TCheckbutton').pack(anchor='w')
+        ttk.Button(storage,text='Check unused chats now',command=self.archive_unused).pack(anchor='w',pady=(4,0))
         ttk.Separator(frame).pack(fill='x',pady=6)
         ttk.Label(frame,text='Save the current conversation',style='Muted.TLabel').pack(anchor='w')
         self.save_target=ttk.Label(frame,text=('Opened saved chat: '+ui.saved_chat['title']) if ui.saved_chat else 'Current chat has no opened saved copy.',
@@ -97,18 +103,35 @@ class LibraryPanel:
         def read():
             projects=saved.library.projects()
             current=selected if any(p['id']==selected for p in projects) else None
-            return projects,saved.library.list_chats(query,current)
+            return projects,saved.library.list_chats(query,current),saved.library.archive_enabled()
         def done(result):
-            self.projects,self.rows=result
+            self.projects,self.rows,self.archive_setting=result
+            self.auto_zip.set(self.archive_setting)
             self.project.configure(values=['All / Unfiled']+[p['title'] for p in self.projects])
             self.project.current(next((i+1 for i,p in enumerate(self.projects) if p['id']==selected),0))
             self.tree.delete(*self.tree.get_children())
             names={p['id']:p['title'] for p in self.projects}
             for row in self.rows:
                 self.tree.insert('', 'end',iid=str(row['id']),values=(row['title'],names.get(row['project'],'Unfiled'),
-                    datetime.fromtimestamp(row['updated']).strftime('%b %d %H:%M')))
+                    datetime.fromtimestamp(row['updated']).strftime('%b %d %H:%M'),'ZIP' if row['archived'] else 'Plain'))
             self.status.set(notice or f'{len(self.rows)} saved chats. Saving is explicit; closing this panel changes no chat.')
         self.run(read,done)
+
+    def toggle_archive(self):
+        if self.ui.busy:
+            self.auto_zip.set(self.archive_setting);self.status.set('Wait for the current operation.');return
+        enabled=self.auto_zip.get()
+        def done(value):
+            self.archive_setting=value;self.auto_zip.set(value)
+            self.status.set('Automatic ZIP '+('enabled: unused saved snapshots after seven days.' if value else 'disabled. Existing ZIP chats still open normally.'))
+        self.run(lambda:saved.library.set_archive_enabled(enabled),done)
+
+    def archive_unused(self):
+        if self.ui.busy:return
+        exclude=(self.ui.saved_chat['id'],) if self.ui.saved_chat else ()
+        self.ui.stop_event.clear()
+        self.run(lambda:saved.library.archive_unused(exclude=exclude,cancelled=self.ui.stop_event.is_set),
+                 lambda report:self.refresh(report_text(report)))
 
     def chosen(self):
         selection=self.tree.selection()

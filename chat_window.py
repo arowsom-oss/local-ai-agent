@@ -1509,6 +1509,9 @@ def build_window():
 
 if __name__ == "__main__":
     build_window()
+    from chat_archive_service import start_maintenance
+    import sys
+    start_maintenance(sys.modules[__name__])
     entry.focus_set()
     poll()
     root.mainloop()

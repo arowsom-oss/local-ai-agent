@@ -15,7 +15,7 @@ OFFLINE=(
     'test_task_progress.py','test_workspace_io.py','test_reliability.py',
     'test_document_edit.py','test_generated_artifacts.py','test_speech_reference.py',
     'test_model_timing.py','test_efficiency.py','test_prompt_injection.py',
-    'test_edge_tools.py','test_popup_windows.py','test_artifact_web_preview.py','test_chat_library.py',
+    'test_edge_tools.py','test_popup_windows.py','test_artifact_web_preview.py','test_chat_library.py','test_chat_archives.py',
 )
 NATIVE={
     'test_artifact_ui.py','test_browser_live.py','test_desktop_live.py',

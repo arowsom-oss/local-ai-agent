@@ -7,6 +7,9 @@ import sqlite3
 import stat
 import threading
 import time
+import shutil
+
+from chat_archives import pack as zip_payload,unpack as unzip_payload
 
 from artifacts import Artifact, Version, Store, MAX_ARTIFACTS, MAX_VERSIONS, MAX_MEDIA, MAX_TOTAL, valid_text
 
@@ -17,6 +20,7 @@ MAX_MESSAGES = 400
 MAX_TRANSCRIPT = 1_000_000
 MAX_SNAPSHOT = 96_000_000
 MAX_LIBRARY = 256_000_000
+ARCHIVE_AGE=7*24*60*60
 
 
 def title_text(text):
@@ -143,6 +147,19 @@ class Library:
                 db.execute('PRAGMA max_page_count=65536')
                 db.execute('CREATE TABLE IF NOT EXISTS projects(id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,notes TEXT NOT NULL)')
                 db.execute('CREATE TABLE IF NOT EXISTS chats(id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,project INTEGER REFERENCES projects(id) ON DELETE SET NULL,version INTEGER NOT NULL,updated REAL NOT NULL,payload TEXT NOT NULL)')
+                # Atomic, idempotent migration. Existing chats get a seven-day grace
+                # period because their true historical last-use time was not recorded.
+                db.execute('BEGIN IMMEDIATE')
+                columns={row[1] for row in db.execute('PRAGMA table_info(chats)')}
+                if 'last_used' not in columns:
+                    db.execute('ALTER TABLE chats ADD COLUMN last_used REAL NOT NULL DEFAULT 0')
+                    db.execute('UPDATE chats SET last_used=?',(time.time(),))
+                if 'last_archive_attempt' not in columns:
+                    db.execute('ALTER TABLE chats ADD COLUMN last_archive_attempt REAL NOT NULL DEFAULT 0')
+                db.execute('CREATE TABLE IF NOT EXISTS storage_settings(key TEXT PRIMARY KEY,value INTEGER NOT NULL)')
+                db.execute("INSERT OR IGNORE INTO storage_settings VALUES('auto_zip',1)")
+                db.execute("INSERT OR IGNORE INTO storage_settings VALUES('needs_compact',0)")
+                db.commit()
                 yield db
                 db.commit()
             except Exception:
@@ -183,10 +200,10 @@ class Library:
         if project is not None:identifier(project)
         with self.connection() as db:
             # Literal search: '%' and '_' are not wildcards and input is never SQL.
-            rows=db.execute('SELECT id,title,project,version,updated FROM chats '
+            rows=db.execute("SELECT id,title,project,version,updated,typeof(payload)='blob' FROM chats "
                 'WHERE instr(lower(title),lower(?))>0 AND (? IS NULL OR project=?) ORDER BY updated DESC LIMIT 100',
                 (query,project,project)).fetchall()
-            return [{'id':identifier(i),'title':title_text(t),'project':p,'version':identifier(v),'updated':u} for i,t,p,v,u in rows]
+            return [{'id':identifier(i),'title':title_text(t),'project':p,'version':identifier(v),'updated':u,'archived':bool(z)} for i,t,p,v,u,z in rows]
 
     def save(self,title,project,messages,items,chat=None,expected_version=0):
         title=title_text(title);payload=snapshot(messages,items)
@@ -207,11 +224,13 @@ class Library:
                 used-=old[1];version=expected_version+1
             if used+len(payload.encode('utf-8'))>MAX_LIBRARY:raise ValueError('Library exceeds 256 MB; delete a saved chat before saving more')
             if chat is None:
-                chat=db.execute('INSERT INTO chats(title,project,version,updated,payload) VALUES(?,?,?,?,?)',
-                    (title,project,version,time.time(),payload)).lastrowid
+                now=time.time()
+                chat=db.execute('INSERT INTO chats(title,project,version,updated,payload,last_used) VALUES(?,?,?,?,?,?)',
+                    (title,project,version,now,payload,now)).lastrowid
             else:
-                db.execute('UPDATE chats SET title=?,project=?,version=?,updated=?,payload=? WHERE id=?',
-                    (title,project,version,time.time(),payload,chat))
+                now=time.time()
+                db.execute('UPDATE chats SET title=?,project=?,version=?,updated=?,payload=?,last_used=?,last_archive_attempt=0 WHERE id=?',
+                    (title,project,version,now,payload,now,chat))
             return {'id':chat,'version':version,'project':project,'title':title}
 
     def load(self,chat):
@@ -220,7 +239,8 @@ class Library:
                 'LEFT JOIN projects p ON p.id=c.project WHERE c.id=?',(identifier(chat),)).fetchone()
             if row is None:raise ValueError('Saved chat no longer exists')
             title,project,version,payload,notes=row
-            messages,items=decode_snapshot(payload)
+            messages,items=decode_snapshot(unzip_payload(payload))
+            db.execute('UPDATE chats SET last_used=? WHERE id=?',(time.time(),chat))
             return {'id':chat,'title':title_text(title),'project':project,'version':identifier(version),
                     'messages':messages,'items':items,'notes':self.notes(notes)}
 
@@ -228,6 +248,84 @@ class Library:
         with self.connection() as db:
             if db.execute('DELETE FROM chats WHERE id=? AND version=?',(identifier(chat),identifier(version))).rowcount!=1:
                 raise ValueError('Saved chat changed or no longer exists; refresh first')
+
+    def archive_enabled(self):
+        with self.connection() as db:
+            value=db.execute("SELECT value FROM storage_settings WHERE key='auto_zip'").fetchone()[0]
+            if value not in (0,1):raise ValueError('Invalid archive setting')
+            return bool(value)
+
+    def set_archive_enabled(self,enabled):
+        if type(enabled) is not bool:raise ValueError('Invalid archive setting')
+        with self.connection() as db:
+            db.execute("UPDATE storage_settings SET value=? WHERE key='auto_zip'",(int(enabled),))
+        return enabled
+
+    def archive_unused(self,exclude=(),cancelled=lambda:False,now=None):
+        """Verified ZIP replacement in one transaction; compact only after commit."""
+        if not isinstance(exclude,tuple) or len(exclude)>MAX_CHATS:raise ValueError('Invalid active chat list')
+        for chat in exclude:identifier(chat)
+        now=time.time() if now is None else now
+        if type(now) not in (float,int) or not 0<now<float('inf'):raise ValueError('Invalid archive clock')
+        report={'archived':0,'skipped':0,'cancelled':False,'payload_bytes_saved':0,'disk_bytes_reclaimed':0,'compacted':False}
+        with self.connection() as db:
+            enabled=db.execute("SELECT value FROM storage_settings WHERE key='auto_zip'").fetchone()[0]
+            if enabled not in (0,1):raise ValueError('Invalid archive setting')
+            if not enabled:
+                report['disabled']=True;return report
+            before=(self.root/'library.sqlite3').stat().st_size
+            db.execute('BEGIN IMMEDIATE')
+            rows=db.execute("SELECT id,payload FROM chats WHERE typeof(payload)='text' AND last_used<=? "
+                'AND updated<=? AND last_archive_attempt<=? ORDER BY last_archive_attempt,last_used,id LIMIT 8',
+                (now-ARCHIVE_AGE,now-ARCHIVE_AGE,now-86400)).fetchall()
+            try:
+                processed=0
+                for chat,payload in rows:
+                    if cancelled():raise ValueError('Archive check cancelled')
+                    if chat in exclude:continue
+                    if processed>=3:break
+                    processed+=1
+                    # Validate the full source before any replacement. Byte-for-byte
+                    # ZIP verification is independent of snapshot schema validation.
+                    decode_snapshot(payload)
+                    compressed=zip_payload(payload,cancelled)
+                    size=len(payload.encode('utf-8'));saving=size-len(compressed)
+                    db.execute('UPDATE chats SET last_archive_attempt=? WHERE id=?',(now,chat))
+                    if saving<4096 or len(compressed)>size*.95:
+                        report['skipped']+=1;continue
+                    db.execute('UPDATE chats SET payload=? WHERE id=?',(sqlite3.Binary(compressed),chat))
+                    report['archived']+=1;report['payload_bytes_saved']+=saving
+                if cancelled():raise ValueError('Archive check cancelled')
+                if report['archived']:
+                    db.execute("UPDATE storage_settings SET value=1 WHERE key='needs_compact'")
+                db.commit()
+            except ValueError:
+                db.rollback()
+                if cancelled():
+                    report.update(archived=0,skipped=0,payload_bytes_saved=0,cancelled=True)
+                    return report
+                raise
+            needs=db.execute("SELECT value FROM storage_settings WHERE key='needs_compact'").fetchone()[0]
+            if needs and not cancelled():
+                # VACUUM needs temporary disk space. SQLite owns its transactional
+                # rewrite; Python never deletes or replaces the live database file.
+                if shutil.disk_usage(self.root).free < before*2+8_000_000:
+                    report['compaction_deferred']='Not enough temporary disk space'
+                else:
+                    deadline=time.monotonic()+10
+                    db.set_progress_handler(lambda:int(cancelled() or time.monotonic()>deadline),1000)
+                    try:
+                        db.execute('VACUUM')
+                        db.set_progress_handler(None,0)
+                        db.execute("UPDATE storage_settings SET value=0 WHERE key='needs_compact'")
+                        db.commit();report['compacted']=True
+                    except sqlite3.Error:
+                        db.set_progress_handler(None,0);db.rollback()
+                        report['compaction_deferred']='Compaction interrupted or unavailable; ZIP data remains readable'
+                    finally:
+                        db.set_progress_handler(None,0)
+            report['disk_bytes_reclaimed']=max(0,before-(self.root/'library.sqlite3').stat().st_size)
+        return report
 
 
 library=Library()
