@@ -1,3 +1,26 @@
+# Local website preview (October 23, 2026)
+
+422 cases/25 offline suites pass, including 18 portal tests for session/CSRF/owner
+gates, bounded records/queue, idempotency, cancellation, restart and context.
+Five affected native suites pass: portal/Tk/HTTP, Sources, library, popups and
+efficiency. Portal checks pass in lean/full runtimes. Shared GPU-lock cancellation
+is tested against a simulated desktop media lease. Desktop Auto/manual and
+Sources queued Stop prevent inference; cancelled compaction keeps history. This is a local prototype,
+not a security audit, remote-auth validation or school-network test.
+
+In-app Chromium with fake inference verified chat, keep/inspect, reconnect on
+reload, a 188-byte authenticated text download, inert script markup and cleared
+private DOM after sign-out. DOM fits 1280/390px layouts. Full-page/overridden-size
+capture failed in tooling; normal viewport capture succeeded and was inspected.
+One actual e2b HTTP request returns exact synthetic text in 9.719 s; retry gives
+the same job with only one inference. No new models or real media jobs used.
+
+LOCAL_WEB_PORTAL.md explains bounds, unencrypted automatic web saves, local
+temporary keys, HTTP-only preview and required maintained server/owner-MFA/HTTPS
+next stage. No public deployment. Main scorecard 526497f submitted its first
+prompt and waits for person site permission; no step is graded. Student-owned
+threat model and copy fix untouched. Older historical evidence remains below.
+
 # Sources document Q&A (October 23, 2026)
 
 404 cases/24 offline suites pass. Fifteen Q&A cases plus a timing-label regression

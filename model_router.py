@@ -66,14 +66,24 @@ def _log_timing(response, model, request, callback):
         pass  # Observability must not change model results or cause an automatic retry.
 
 
-def chat(*, model, timing_log=None, **kwargs):
+@contextmanager
+def inference_slot(stop_event=None):
+    while not _lock.acquire(timeout=.05):
+        if stop_event is not None and stop_event.is_set():raise ValueError('Model request cancelled while queued')
+    try:
+        if stop_event is not None and stop_event.is_set():raise ValueError('Model request cancelled')
+        yield
+    finally:_lock.release()
+
+
+def chat(*, model, timing_log=None, stop_event=None, **kwargs):
     """Run one serialized request to a fixed local model, unloading our previous one."""
     global _active
     if model not in ALLOWED_MODELS:
         raise ValueError("model is not in the local allowlist")
     if kwargs.get("stream"):
         raise ValueError("streaming is not supported by this serialized lifecycle")
-    with _lock:
+    with inference_slot(stop_event):
         client = _get_client()
         if not _installed(client, model):
             raise RuntimeError(f"Local model {model} is not installed; no download was attempted.")
@@ -87,6 +97,7 @@ def chat(*, model, timing_log=None, **kwargs):
                 raise RuntimeError("The selected installed model does not advertise vision support.")
         _active = model  # Track even a failed/partially loaded request for cleanup.
         kwargs["keep_alive"] = IDLE_KEEP_ALIVE
+        if stop_event is not None and stop_event.is_set():raise ValueError('Model request cancelled')
         response = client.chat(model=model, **kwargs)
         _log_timing(response, model, kwargs, timing_log)
         return response
@@ -132,17 +143,17 @@ def greeting_route_hint(text):
                         text.lower()) is not None
 
 
-def choose_model(text: str, *, has_image=False, log=lambda line: None) -> str:
+def choose_model(text: str, *, has_image=False, log=lambda line: None, stop_event=None) -> str:
     """Use fixed hints/retained reasoning, exact greetings, then a validated classifier."""
     global _reasoning_hold
     if has_image:
         log(f"[route] image -> {VISION_MODEL} (fixed vision route)")
         return VISION_MODEL
     if document_route_hint(text):
-        with _lock:_reasoning_hold=2
+        with inference_slot(stop_event):_reasoning_hold=2
         log(f"[route] document wording -> {REASONING_MODEL} (fixed routing hint)")
         return REASONING_MODEL
-    with _lock:
+    with inference_slot(stop_event):
         if _active == REASONING_MODEL and _reasoning_hold > 0:
             _reasoning_hold -= 1
             log(f"[route] reuse {REASONING_MODEL}; {_reasoning_hold} follow-up holds remain")
@@ -154,7 +165,7 @@ def choose_model(text: str, *, has_image=False, log=lambda line: None) -> str:
             return FAST_MODEL
     task = "general"
     try:
-        response = chat(model=FAST_MODEL, tools=[], think=False, format=_SCHEMA, timing_log=log,
+        response = chat(model=FAST_MODEL, tools=[], think=False, format=_SCHEMA, timing_log=log,stop_event=stop_event,
                         options={"temperature": 0, "num_ctx": TEXT_CONTEXT, "num_predict": 40},
                         messages=[{"role": "system", "content":
                             "Classify the user's task only. Choose reasoning for saved-document creation or editing, "
@@ -175,7 +186,7 @@ def choose_model(text: str, *, has_image=False, log=lambda line: None) -> str:
     except Exception:
         log("[route] classifier unavailable or invalid; using the small local model")
     model = REASONING_MODEL if task == "reasoning" else FAST_MODEL
-    with _lock:
+    with inference_slot(stop_event):
         _reasoning_hold = 2 if model == REASONING_MODEL else 0
     log(f"[route] {task} -> {model}")
     return model

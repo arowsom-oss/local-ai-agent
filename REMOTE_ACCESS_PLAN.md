@@ -1,10 +1,11 @@
 # Private remote chat and media: planned next stage
 
 Status: roadmap recorded 2026-10-19 and expanded 2026-10-22 at Alexander's
-request. Not an implemented or deployed web service. The local app has static
+request. October 23 adds a local-only working preview (LOCAL_WEB_PORTAL.md);
+remote authentication, connectivity and deployment remain planned. The local app has static
 HTML/CSS Artifact previews; that is separate from exposing the AI on a website.
-This documentation update opens no socket, installs no tunnel/model, creates no
-account and changes no firewall/router setting.
+The desktop can explicitly start a loopback-only preview. No tunnel/model or
+account was added, and no firewall/router setting changed.
 
 ## Intended experience
 
@@ -112,7 +113,8 @@ filesystem browsing or access to the existing desktop tool dispatcher.
 
 Authentication reduces unauthorized access; it is not a promise of perfect
 security. Remote use adds an attack surface and needs its own review and tests.
-The current local app and this media fix have not passed those future gates.
+The local website preview has not passed those deployment gates and must not
+be forwarded publicly as a remote service.
 
 ## Design references
 
@@ -130,3 +132,15 @@ Current connectivity references checked October 22, 2026:
 [Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve).
 PRODUCT_FEATURE_PLAN.md proposes the broader saved-chat, document-search and
 model evaluation stages. All remain planned unless explicitly marked delivered.
+
+## First local stage delivered - October 23
+
+More > Local website starts an explicitly controlled loopback-only chat/Artifact
+preview in the desktop process. It uses the same model lock, bounded persistent
+web jobs, idempotency keys and temporary local sessions. This avoids separate
+Python locks, but it is not a broker for other apps/processes. No remote identity,
+MFA, HTTPS gateway, media endpoint or account creation is implemented. The
+standard-library HTTP preview is not the production server. LOCAL_WEB_PORTAL.md
+records 422 offline cases, five native suites, synthetic browser checks and a
+real e2b HTTP smoke. Next is maintained authentication/transport and deployment
+review, with the human scorecard still unfinished. No school reachability claimed.

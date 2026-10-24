@@ -42,7 +42,7 @@ matches the reasoning quality or service scale of ChatGPT or Claude.
    sources, show citations and unsupported claims, keep a short source list and
    support human review. Existing web research is available; it is not a broad
    factual-accuracy guarantee. No model self-rating counts as verification.
-8. Private web/mobile portal: one owner's login plus MFA, chat, explicit media
+8. Private web/mobile portal (local-only preview delivered; LOCAL_WEB_PORTAL.md): one owner's login plus MFA, chat, explicit media
    requests and owned Artifacts, with a shared bounded GPU queue. No remote
    computer use. REMOTE_ACCESS_PLAN.md records the expanded school-access plan.
 
@@ -50,8 +50,8 @@ Saved chats/Projects and selected-document Q&A v1 are delivered. Next: run the
 prepared human scorecard, expand retrieval tests, improve context/cancellation
 reliability, then measure whether a specialist/model comparison is worthwhile. The private portal
 depends on persistent owner-bound records, shared GPU scheduling and tested auth.
-The human main scorecard remains deferred at Alexander's request; do not invent
-results or use these proposals as a reason to merge unreviewed work.
+The current main scorecard has one submitted prompt waiting for person site
+permission, with no graded steps. Do not invent results or merge unreviewed work.
 
 ## Open-weight model shortlist
 

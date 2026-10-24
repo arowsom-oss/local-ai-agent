@@ -408,6 +408,8 @@ def stop_agent():
     """Kill owned automation workers and revoke pending images/approvals."""
     global pending_image, pending_media
     stop_event.set()
+    from portal_server import stop_jobs
+    stop_jobs()
     close_edge()
     reset_voice()
     task_progress.stop()
@@ -989,6 +991,12 @@ def show_sources():
     return open_sources(sys.modules[__name__])
 
 
+def show_website():
+    from portal_ui import show_portal
+    import sys
+    return show_portal(sys.modules[__name__])
+
+
 LOG_LINES = 50   # how many of the newest log lines the viewer shows
 
 
@@ -1423,6 +1431,7 @@ def build_window():
     more_menu.add_command(label="Practice",command=open_practice)
     more_menu.add_command(label="Notepad",command=open_notepad)
     more_menu.add_command(label="Activity",command=show_log)
+    more_menu.add_command(label='Local website',command=show_website)
     more_menu.add_command(label='Disconnect Edge tab',command=close_edge)
     more_menu.add_separator()
     more_menu.add_command(label="Model check",command=model_check)
