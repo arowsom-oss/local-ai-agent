@@ -5,11 +5,17 @@ main, using Windows and Python 3.12. It installs requirements-ci.txt, then runs
 scripts/run_offline_tests.py without -O. No GPU packages, model weights or
 Chromium download are required.
 
-The runner executes all twenty-five classified offline suites in separate
+The runner executes all twenty-seven classified offline suites in separate
 processes. It refuses unclassified new test files, so adding a suite requires
-an explicit offline/native classification. Sixteen native/GUI suites are excluded
+an explicit offline/native classification. Seventeen native/GUI suites are excluded
 because they require actual applications or desktop integration. These checks
 do not run the scorecard or assess model quality.
+
+This branch deliberately includes the student-owned failing Copy last answer
+regression. Current local result: 26/27 suites pass, 438 passing cases and one
+failure. CI should fail on test_copy_last_answer.py until the student fixes it.
+Do not skip, xfail, delete or invert it to turn CI green. GATE_EVIDENCE.md maps
+the enforced limits, adversarial checks and retained failures.
 
 Each test process gets a Python audit hook rejecting real socket/DNS
 operations. A startup probe confirms it is active. This is a test tripwire,

@@ -1,0 +1,77 @@
+[
+  {
+    "gate": "Q&A tool-output refusal",
+    "detected": true,
+    "assertion": "Gate missing: adversarial input was accepted"
+  },
+  {
+    "gate": "Q&A quote membership",
+    "detected": true,
+    "assertion": "Gate missing: adversarial input was accepted"
+  },
+  {
+    "gate": "Saved transcript role/schema gate",
+    "detected": true,
+    "assertion": "Gate missing: adversarial input was accepted"
+  },
+  {
+    "gate": "Saved snapshot authority-field gate",
+    "detected": true,
+    "assertion": "Gate missing: adversarial input was accepted"
+  },
+  {
+    "gate": "Reopen permission revocation",
+    "detected": true,
+    "assertion": "Workspace permission/ticket survived reopen"
+  },
+  {
+    "gate": "ZIP input byte cap",
+    "detected": true,
+    "assertion": "Oversized container reached parser"
+  },
+  {
+    "gate": "HTML script reduction",
+    "detected": true,
+    "assertion": ""
+  },
+  {
+    "gate": "HTML disabled JavaScript",
+    "detected": true,
+    "assertion": ""
+  },
+  {
+    "gate": "HTML offline context",
+    "detected": true,
+    "assertion": ""
+  },
+  {
+    "gate": "HTML CSP",
+    "detected": true,
+    "assertion": ""
+  },
+  {
+    "gate": "HTML navigation postcondition",
+    "detected": true,
+    "assertion": "Gate missing: adversarial input was accepted"
+  },
+  {
+    "gate": "ZIP fixed member name",
+    "detected": true,
+    "assertion": "Gate missing: adversarial input was accepted"
+  },
+  {
+    "gate": "ZIP declared expansion cap",
+    "detected": true,
+    "assertion": "Oversized member opened"
+  },
+  {
+    "gate": "ZIP bounded inflate read",
+    "detected": true,
+    "assertion": "Inflater must request only limit + 1, not an unbounded read"
+  },
+  {
+    "gate": "HTML abort unauthorized routes",
+    "detected": true,
+    "assertion": ""
+  }
+]

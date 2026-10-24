@@ -4,7 +4,7 @@ A safe local AI assistant for Alexander's Windows laptop
 
 Running record updated October 23, 2026. Earlier measurements remain labeled by milestone; later chapters record subsequent changes and failures.
 
-Current handoff: Local website stage 1 adds a laptop-only browser chat/Artifact preview, saved web records, bounded idempotent jobs and a shared in-process model lock. LOCAL_WEB_PORTAL.md explains use, temporary local sessions, limits and 422-offline/5-native/browser/real-e2b evidence for Claude. It is not deployed or reachable at school; maintained owner/MFA authentication and HTTPS connectivity remain prerequisites. Main scorecard 526497f has one submitted prompt waiting for person site permission, with no graded steps.
+Current handoff: Test-only review adds the intentionally failing Copy last answer regression, 16 passing adversarial cases and a gate map for Claude in GATE_EVIDENCE.md. Current offline result is 438 pass / 1 fail across 27 suites; real Chromium checks pass and all 15 in-memory gate removals are detected. No application source changed. Alexander owns the Copy fix and THREAT_MODEL.md. The website remains laptop-only; owner/MFA/HTTPS deployment and the human main scorecard remain unfinished.
 
 ## Purpose and current position
 
@@ -1113,3 +1113,22 @@ In-app Chromium with synthetic data/fake inference completed chat, kept and insp
 One real e2b request through the genuine HTTP API returned the exact synthetic requested text in 9.719 seconds. Repeating its request ID returned the same job, with one inference call total, no tools and context 8192. No new model or real media job was used. This small example is not a broad security, quality or performance benchmark. Sessions are local development access only, with no remote identity provider configured. Review the stacked draft before merging; replace/verify production server, identity, sessions and HTTPS before any off-laptop exposure.
 
 Main's actual scorecard attempt now targets 526497f, separate from this feature branch and the earlier unrun 58adaf fixture. Its first exact prompt reached a New website permission and waits for Alexander's input. No step is graded and no scorecard failure/pass was invented. The observer's normal UI event poll was started without changing exported main source. Alexander still owns the threat-model writing and Copy last answer fix. The website can be developed in parallel, but scorecard completion and deployment review remain outstanding gates.
+
+<!-- PAGE -->
+# Adversarial checks and the unfixed Copy regression
+
+## Test-only scope - October 23, 2026
+
+Alexander requested evidence without new features or application fixes. The actual reply handler and Copy button command run against fake widgets/clipboard in one new regression. A reply containing fenced Python, inline and literal backticks, bold markers and Unicode must copy as identical UTF-8 bytes. It currently fails: clean removes markup before last_answer is copied. The test remains a normal failing assert, included in the offline runner. No skip, expected-failure decorator, assertion inversion or fix was added. Alexander owns that change and THREAT_MODEL.md; neither student-owned implementation was written.
+
+Sixteen adversarial cases test a real temporary text file telling the model to ignore its rules, a deliberately disobedient fake model returning an action call, an invented quote under a valid citation and quote laundering between sources. Saved chat names containing traversal syntax stay inert SQL metadata; path selectors refuse. Actual save/load/reopen runs with plain and ZIP storage, old workspace permission/tickets and host approvals seeded before reset. A hostile next model call still needs a new site popup, and old Artifact IDs cannot be reused. Forged system roles, tool protocol and authority fields refuse.
+
+ZIP probes cover path/absolute/encoded/Windows member names, the actual 96 MB container boundary, forged over-limit expansion metadata refusing before decompression, and a lying stream with a bounded read. HTML reduction and browser gates are tested separately. Raw hostile HTML bypasses reduction in real Chromium: script/event handlers cannot alter the pixel canary, resources cannot reach the owned loopback server and a forced second main-frame navigation is blocked. No Internet, personal data or real model is used for this pass.
+
+## Honest results and code-reading handoff
+
+The socket-guarded offline run reports 438 passing cases and one failing Copy case: 26 of 27 suites pass and the runner exits nonzero. The new real Chromium case passes. A separate sensitivity script temporarily removes 15 gates in memory; unchanged adversarial assertions detect all 15. Those are negative controls, not 15 more product passes. Source files on disk are never weakened. The first harness run had two wiring errors: a nonexistent download attribute and a different workspace module instance. The wiring was corrected without relaxing refusal assertions; initial and release logs are retained.
+
+GATE_EVIDENCE.md maps 138 exact enforcing function/line locations for selected-document Q&A, saved chats, automatic ZIP, HTML preview and the newest laptop-only website. Machine-readable gate lines and source hashes accompany the reports in test_evidence/adversarial_2026_10_23. Existing application files, including chat_window.py, remain identical to commit 4a02efc. Only tests, the test runner and evidence/documentation change. The draft should stay red until the student makes the Copy fix; no automatic merge is authorized.
+
+These checks establish exercised code boundaries, not perfect resistance to prompt injection, truth of an answer or semantic support from a matching quote. Quote membership normalizes whitespace. Malicious references can still influence text, while actions require separate code gates. This is not an exhaustive audit, OS sandbox or remote-authentication test. No public website or new model was added. The human scorecard remains at its first site permission with no graded steps. Existing earlier green results remain historical evidence, not the current all-suite result.
