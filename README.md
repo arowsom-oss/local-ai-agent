@@ -1,9 +1,8 @@
 # Local Studio: local AI, Artifacts and practice computer use
 
-**Test-only branch status:** one intentionally failing, student-owned Copy last
-answer regression. 438 cases pass; the byte-for-byte Copy case fails. No feature
-or application-source changes. [GATE_EVIDENCE.md](GATE_EVIDENCE.md) has the attack
-results, exact enforcing functions/lines and instructions. CI is expected to be red.
+[GATE_EVIDENCE.md](GATE_EVIDENCE.md) has the attack results and the exact
+functions and lines that enforce each limit. [SCORECARD.md](SCORECARD.md) has the
+first human test run, including what failed.
 
 Python 3.12 on Windows. Ollama runs locally; Python decides which tools can run.
 This is a working first version of the ten improvements in TOP10_STATUS.md.
@@ -85,7 +84,7 @@ and newer unsaved text survives validation.
 [PROJECT_RECORD.md](PROJECT_RECORD.md) contains the complete running record,
 latest Claude handoff, branch stack, tests, failed experiments and open work.
 Read its latest handoff/review chapters for current status; earlier chapters are
-historical. This branch includes unmerged features that main does not.
+historical.
 
 ## Window and appearance
 
