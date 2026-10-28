@@ -1,3 +1,21 @@
+# Local Studio
+
+A local AI agent in Python that can control my Windows laptop, but only within limits that my code enforces. The AI model is not trusted. Python checks every action the model asks for and decides whether it can run, and risky actions need my approval first.
+
+I keep the approval popups to a minimum on purpose, because too many of them teach you to click Yes without reading. Models can state wrong things with confidence. My own scorecard caught one making up a fact and another claiming it finished a task it never did. So the safety comes from code limiting what the agent can do, not from trusting the model. That is a much safer option than letting an AI run loose on your device.
+
+## Run it
+
+You need Windows, Python 3.12, and Ollama with the models pulled. Install the dependencies with `pip install -r requirements.txt`, then double-click `start_chat.bat` or run `python chat_window.py` from this folder.
+
+## How it was built
+
+AI helped write most of the code. The goals, the rules about what the agent may do, and the testing are mine. Right now I am focused on reviewing the code and learning to explain every part of it.
+
+## Start here
+
+- [GATE_EVIDENCE.md](GATE_EVIDENCE.md): the attack tests and the exact lines of code that enforce each limit.
+- [SCORECARD.md](SCORECARD.md): my first test run, including what passed, what failed, and how long each step took.
 # Local Studio: local AI, Artifacts and practice computer use
 
 [GATE_EVIDENCE.md](GATE_EVIDENCE.md) has the attack results and the exact
