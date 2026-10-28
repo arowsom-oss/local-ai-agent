@@ -16,6 +16,7 @@ AI helped write most of the code. The goals, the rules about what the agent may 
 
 - [GATE_EVIDENCE.md](GATE_EVIDENCE.md): the attack tests and the exact lines of code that enforce each limit.
 - [SCORECARD.md](SCORECARD.md): my first test run, including what passed, what failed, and how long each step took.
+
 ## Details
 
 Python 3.12 on Windows. Ollama runs locally; Python decides which tools can run.
